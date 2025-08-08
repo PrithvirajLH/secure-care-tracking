@@ -435,7 +435,7 @@ export default function Employees() {
                   </div>
                 </Button>
               </TableHead>
-              <TableHead className="w-[20%] font-semibold text-gray-700">Current Status</TableHead>
+                             <TableHead className="w-[15%] font-semibold text-gray-700">Current Status</TableHead>
             </TableRow>
           </TableHeader>
                      <TableBody>
