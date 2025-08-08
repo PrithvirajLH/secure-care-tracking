@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { BarChart3, Users2, Award, GraduationCap, CalendarClock, LineChart, Settings, Home } from "lucide-react";
+import { BarChart3, Users2, GraduationCap, CalendarClock, Settings, Home } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -18,7 +18,6 @@ export default function AppSidebar() {
     { title: "Dashboard", url: "/", icon: Home },
     { title: "Employees", url: "/employees", icon: Users2 },
     { title: "Training", url: "/training", icon: GraduationCap },
-    { title: "Certifications", url: "/certifications", icon: Award },
     { title: "Advisors", url: "/advisors", icon: CalendarClock },
     { title: "Analytics", url: "/analytics", icon: BarChart3 },
     { title: "Settings", url: "/settings", icon: Settings },

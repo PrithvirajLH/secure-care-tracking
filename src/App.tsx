@@ -8,7 +8,6 @@ import Dashboard from "./pages/Dashboard";
 import Employees from "./pages/Employees";
 import NotFound from "./pages/NotFound";
 import Training from "./pages/Training";
-import Certifications from "./pages/Certifications";
 import Advisors from "./pages/Advisors";
 import Analytics from "./pages/Analytics";
 import Settings from "./pages/Settings";
@@ -26,7 +25,7 @@ const App = () => (
             <Route path="/" element={<Dashboard />} />
             <Route path="/employees" element={<Employees />} />
             <Route path="/training" element={<Training />} />
-            <Route path="/certifications" element={<Certifications />} />
+            {/* Certifications page removed per request */}
             <Route path="/advisors" element={<Advisors />} />
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/settings" element={<Settings />} />

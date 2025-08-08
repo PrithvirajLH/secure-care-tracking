@@ -1,4 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -6,6 +7,15 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import Papa from "papaparse";
 import { toast } from "sonner";
 import { CheckCircle, Clock, Award, Star, Trophy, Medal, Crown, Filter, X, Eye, ChevronUp, ChevronDown } from "lucide-react";
@@ -14,6 +24,7 @@ import { Pagination, PaginationContent, PaginationItem, PaginationLink, Paginati
 
 export default function Employees() {
   const { state, dispatch } = useApp();
+  const [searchParams, setSearchParams] = useSearchParams();
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [selectedFacility, setSelectedFacility] = useState<string>("all");
   const [selectedArea, setSelectedArea] = useState<string>("all");
@@ -22,6 +33,48 @@ export default function Employees() {
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [itemsPerPage] = useState<number>(10);
+  const [density, setDensity] = useState<"comfortable" | "compact">("comfortable");
+  const [visibleCols, setVisibleCols] = useState({
+    employeeId: true,
+    facility: true,
+    area: true,
+    status: true,
+  });
+
+  // Load initial state from URL
+  useEffect(() => {
+    const q = searchParams.get("q") ?? "";
+    const fac = searchParams.get("facility") ?? "all";
+    const ar = searchParams.get("area") ?? "all";
+    const st = searchParams.get("status") ?? "all";
+    const sf = searchParams.get("sort") ?? "name";
+    const sd = (searchParams.get("dir") as "asc" | "desc") ?? "asc";
+    const pg = Number(searchParams.get("page") ?? 1);
+    const dn = (searchParams.get("density") as "comfortable" | "compact") ?? "comfortable";
+    if (q) dispatch({ type: "setQuery", payload: q });
+    setSelectedFacility(fac);
+    setSelectedArea(ar);
+    setSelectedStatus(st);
+    setSortField(sf);
+    setSortDirection(sd);
+    setCurrentPage(Number.isFinite(pg) && pg > 0 ? pg : 1);
+    setDensity(dn);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Persist to URL when key states change
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams);
+    params.set("q", state.filters.query ?? "");
+    params.set("facility", selectedFacility);
+    params.set("area", selectedArea);
+    params.set("status", selectedStatus);
+    params.set("sort", sortField);
+    params.set("dir", sortDirection);
+    params.set("page", String(currentPage));
+    params.set("density", density);
+    setSearchParams(params, { replace: true });
+  }, [state.filters.query, selectedFacility, selectedArea, selectedStatus, sortField, sortDirection, currentPage, density]);
 
     const getCurrentLevel = (employee: any) => {
     // Check for current progress first (what they're working on now)
@@ -283,7 +336,26 @@ export default function Employees() {
             onChange={(e) => dispatch({ type: "setQuery", payload: e.target.value })}
             className="w-full sm:max-w-sm"
           />
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
+            {/* Density toggle */}
+            <div className="hidden sm:flex items-center gap-2 pr-2 border-r">
+              <Label className="text-xs text-gray-600">Compact</Label>
+              <Switch checked={density === "compact"} onCheckedChange={(v) => setDensity(v ? "compact" : "comfortable")} />
+            </div>
+            {/* Column visibility */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline">View</Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Columns</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuCheckboxItem checked={visibleCols.employeeId} onCheckedChange={(c) => setVisibleCols(v => ({...v, employeeId: Boolean(c)}))}>Employee ID</DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem checked={visibleCols.facility} onCheckedChange={(c) => setVisibleCols(v => ({...v, facility: Boolean(c)}))}>Facility</DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem checked={visibleCols.area} onCheckedChange={(c) => setVisibleCols(v => ({...v, area: Boolean(c)}))}>Area</DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem checked={visibleCols.status} onCheckedChange={(c) => setVisibleCols(v => ({...v, status: Boolean(c)}))}>Current Status</DropdownMenuCheckboxItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={(e) => e.target.files && onImport(e.target.files[0])} />
             <Button variant="outline" onClick={() => fileRef.current?.click()}>Import CSV</Button>
             <Button variant="secondary">Export</Button>
@@ -383,9 +455,9 @@ export default function Employees() {
           </div>
       </div>
 
-      <div className="rounded-lg border bg-white shadow-sm">
+      <div className="rounded-lg border bg-white shadow-sm overflow-auto">
         <Table>
-          <TableHeader>
+          <TableHeader className="sticky top-0 z-10">
             <TableRow className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
               <TableHead className="w-[25%] font-semibold text-gray-700">
                 <Button
@@ -399,6 +471,7 @@ export default function Employees() {
                   </div>
                 </Button>
               </TableHead>
+              {visibleCols.employeeId && (
               <TableHead className="w-[15%] font-semibold text-gray-700">
                 <Button
                   variant="ghost"
@@ -411,6 +484,8 @@ export default function Employees() {
                   </div>
                 </Button>
               </TableHead>
+              )}
+              {visibleCols.facility && (
               <TableHead className="w-[20%] font-semibold text-gray-700">
                 <Button
                   variant="ghost"
@@ -423,6 +498,8 @@ export default function Employees() {
                   </div>
                 </Button>
               </TableHead>
+              )}
+              {visibleCols.area && (
               <TableHead className="w-[20%] font-semibold text-gray-700">
                 <Button
                   variant="ghost"
@@ -435,7 +512,10 @@ export default function Employees() {
                   </div>
                 </Button>
               </TableHead>
-                             <TableHead className="w-[15%] font-semibold text-gray-700">Current Status</TableHead>
+              )}
+              {visibleCols.status && (
+                <TableHead className="w-[15%] font-semibold text-gray-700">Current Status</TableHead>
+              )}
             </TableRow>
           </TableHeader>
                      <TableBody>
@@ -443,7 +523,7 @@ export default function Employees() {
                const currentLevel = getCurrentLevel(e);
                return (
                  <TableRow key={e.employeeId} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'} hover:bg-gray-100/50 transition-colors`}>
-                   <TableCell className="font-medium">
+                   <TableCell className={`font-medium ${density === 'compact' ? 'py-2' : 'py-3'}`}>
                      <EmployeeDetailModal employee={e}>
                        <Button variant="ghost" className="h-auto p-0 justify-start hover:bg-transparent group">
                          <div className="text-left">
@@ -454,10 +534,17 @@ export default function Employees() {
                        </Button>
                      </EmployeeDetailModal>
                    </TableCell>
-                   <TableCell className="text-gray-600 font-mono text-sm">{e.employeeId}</TableCell>
-                   <TableCell className="text-gray-700">{e.facility}</TableCell>
-                   <TableCell className="text-gray-700">{e.area}</TableCell>
-                   <TableCell>
+                   {visibleCols.employeeId && (
+                     <TableCell className={`text-gray-600 font-mono text-sm ${density === 'compact' ? 'py-2' : 'py-3'}`}>{e.employeeId}</TableCell>
+                   )}
+                   {visibleCols.facility && (
+                     <TableCell className={`text-gray-700 ${density === 'compact' ? 'py-2' : 'py-3'}`}>{e.facility}</TableCell>
+                   )}
+                   {visibleCols.area && (
+                     <TableCell className={`text-gray-700 ${density === 'compact' ? 'py-2' : 'py-3'}`}>{e.area}</TableCell>
+                   )}
+                   {visibleCols.status && (
+                   <TableCell className={`${density === 'compact' ? 'py-2' : 'py-3'}`}>
                      <Badge 
                        variant={currentLevel.variant as any} 
                        className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium ${currentLevel.bgColor} ${currentLevel.borderColor} ${currentLevel.textColor} ${currentLevel.className}`}
@@ -465,7 +552,8 @@ export default function Employees() {
                        <currentLevel.icon className={`w-5 h-5 ${currentLevel.iconColor}`} />
                        {currentLevel.level}
                      </Badge>
-                   </TableCell>
+                    </TableCell>
+                   )}
                  </TableRow>
                );
              })}
