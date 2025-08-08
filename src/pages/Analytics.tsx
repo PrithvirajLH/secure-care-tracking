@@ -453,6 +453,83 @@ export default function Analytics() {
 
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
 
+  function csvEscape(value: unknown): string {
+    const str = value === undefined || value === null ? "" : String(value);
+    if (/[",\n]/.test(str)) {
+      return '"' + str.replace(/"/g, '""') + '"';
+    }
+    return str;
+  }
+
+  const handleExport = () => {
+    const lines: string[] = [];
+
+    // Overview
+    lines.push("Overview Metrics");
+    lines.push(["Metric","Value"].map(csvEscape).join(","));
+    lines.push(["Total Employees", analyticsData.totalEmployees].map(csvEscape).join(","));
+    lines.push(["Completed Certifications", analyticsData.completedCertifications].map(csvEscape).join(","));
+    lines.push(["In Progress", analyticsData.inProgress].map(csvEscape).join(","));
+    lines.push(["Not Started", analyticsData.notStarted].map(csvEscape).join(","));
+    lines.push(["Avg Completion Time (days)", analyticsData.averageCompletionTime].map(csvEscape).join(","));
+    lines.push(["Certification Velocity (per day)", analyticsData.certificationVelocity].map(csvEscape).join(","));
+    lines.push(["Retention Rate (%)", analyticsData.retentionRate].map(csvEscape).join(","));
+    lines.push("");
+
+    // Level completions
+    lines.push("Level Completions");
+    lines.push(["Level","Completed"].map(csvEscape).join(","));
+    lines.push(["Level 1", analyticsData.level1Completed].map(csvEscape).join(","));
+    lines.push(["Level 2", analyticsData.level2Completed].map(csvEscape).join(","));
+    lines.push(["Level 3", analyticsData.level3Completed].map(csvEscape).join(","));
+    lines.push(["Consultant", analyticsData.consultantCompleted].map(csvEscape).join(","));
+    lines.push(["Coach", analyticsData.coachCompleted].map(csvEscape).join(","));
+    lines.push("");
+
+    // Top facilities (overall, already unfiltered)
+    lines.push("Top Facilities");
+    lines.push(["Facility","Completion Rate (%)","Completed","Total","Avg Time (days)"].map(csvEscape).join(","));
+    analyticsData.topFacilities.forEach(f => {
+      lines.push([
+        f.facility,
+        f.completionRate.toFixed(1),
+        f.completed,
+        f.total,
+        f.avgTime
+      ].map(csvEscape).join(","));
+    });
+    lines.push("");
+
+    // Recent achievements
+    lines.push("Recent Achievements");
+    lines.push(["Employee","Facility","Achievement","Date","Time To Complete (days)","Performance"].map(csvEscape).join(","));
+    analyticsData.recentActivity.forEach(a => {
+      lines.push([
+        a.employee,
+        a.facility,
+        a.achievement,
+        a.date ? new Date(a.date).toLocaleDateString() : "",
+        a.timeToComplete,
+        a.performance
+      ].map(csvEscape).join(","));
+    });
+
+    const csvContent = lines.join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const ts = new Date();
+    const y = ts.getFullYear();
+    const m = String(ts.getMonth() + 1).padStart(2, "0");
+    const d = String(ts.getDate()).padStart(2, "0");
+    a.download = `analytics-report-${y}${m}${d}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-6">
       <header className="mb-6">
@@ -497,7 +574,7 @@ export default function Analytics() {
             </Select>
           </div>
         </div>
-        <Button variant="outline" className="flex items-center gap-2">
+        <Button variant="outline" className="flex items-center gap-2" onClick={handleExport}>
           <Download className="w-4 h-4" />
           Export Report
         </Button>
