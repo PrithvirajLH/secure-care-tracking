@@ -8,7 +8,7 @@ import Dashboard from "./pages/Dashboard";
 import Employees from "./pages/Employees";
 import NotFound from "./pages/NotFound";
 import Training from "./pages/Training";
-import Advisors from "./pages/Advisors";
+import Advisors from "./pages/Advisors"; 
 import Analytics from "./pages/Analytics";
 import Settings from "./pages/Settings";
 

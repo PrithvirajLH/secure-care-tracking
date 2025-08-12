@@ -28,6 +28,8 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 
+// Comprehensive Settings Page for SecureCare Training Dashboard
+// Features: User Preferences, Notifications, Training Configuration, System Settings, Data Management
 export default function Settings() {
   const [notifications, setNotifications] = useState({
     email: true,
