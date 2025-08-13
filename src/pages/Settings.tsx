@@ -30,6 +30,7 @@ import { motion } from "framer-motion";
 
 // Comprehensive Settings Page for SecureCare Training Dashboard
 // Features: User Preferences, Notifications, Training Configuration, System Settings, Data Management
+// Last updated: December 2024
 export default function Settings() {
   const [notifications, setNotifications] = useState({
     email: true,
