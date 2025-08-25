@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -19,7 +19,7 @@ import {
   Star,
   TrendingUp
 } from "lucide-react";
-import { motion } from "framer-motion";
+
 import { useApp } from "@/context/AppContext";
 import TrainingAssignmentWizard from "@/components/TrainingAssignmentWizard";
 import { toast } from "sonner";
@@ -36,6 +36,12 @@ interface LevelStats {
 export default function Training() {
   const { state } = useApp();
   const [activeTab, setActiveTab] = useState("care-partner");
+
+  // Dispatch level change event to update header
+  useEffect(() => {
+    const event = new CustomEvent('levelChange', { detail: { level: activeTab } });
+    window.dispatchEvent(event);
+  }, [activeTab]);
 
   const handleTrainingAssignment = (assignments: any[]) => {
     // In a real application, this would update the backend
@@ -166,52 +172,52 @@ export default function Training() {
     }
   };
 
-  const getStatusBadge = (employee: any, requirement: any) => {
-    const value = employee[requirement.key];
-    if (requirement.key.includes("Awarded")) {
-      const awardDateKey = requirement.key.replace("Awarded", "AwardedDate");
-      const awardDate = employee[awardDateKey];
-      
-      return value ? (
-        <div className="flex flex-col gap-2">
-          <div className="inline-flex items-center gap-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white px-3 py-1.5 rounded-full text-xs font-semibold shadow-sm">
-            <CheckCircle className="w-3 h-3" />
-            Awarded
-          </div>
-          {awardDate && (
-            <div className="bg-green-50 border border-green-200 rounded-lg px-2 py-1">
-              <span className="text-xs text-green-700 font-medium">
-                {awardDate.toLocaleDateString()}
-              </span>
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className="inline-flex items-center gap-2 bg-gray-100 text-gray-600 px-3 py-1.5 rounded-full text-xs font-semibold">
-          <Clock className="w-3 h-3" />
-          Pending
-        </div>
-      );
-    }
-    
-         if (value) {
+     const getStatusBadge = (employee: any, requirement: any) => {
+     const value = employee[requirement.key];
+     if (requirement.key.includes("Awarded")) {
+       const awardDateKey = requirement.key.replace("Awarded", "AwardedDate");
+       const awardDate = employee[awardDateKey];
+       
+       return value ? (
+         <div className="flex flex-col gap-1">
+           <div className="inline-flex items-center gap-1 bg-gradient-to-r from-green-500 to-emerald-500 text-white px-2 py-1 rounded-full text-xs font-semibold shadow-sm">
+             <CheckCircle className="w-2 h-2" />
+             <span className="text-xs">Awarded</span>
+           </div>
+           {awardDate && (
+             <div className="bg-green-50 border border-green-200 rounded px-1 py-0.5">
+               <span className="text-xs text-green-700 font-medium">
+                 {awardDate.toLocaleDateString()}
+               </span>
+             </div>
+           )}
+         </div>
+       ) : (
+         <div className="inline-flex items-center gap-1 bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-xs font-semibold">
+           <Clock className="w-2 h-2" />
+           <span className="text-xs">Pending</span>
+         </div>
+       );
+     }
+     
+     if (value) {
        return (
-         <div className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-3 py-1.5 rounded-full text-xs font-semibold shadow-sm">
-           <CheckCircle className="w-3 h-3" />
+         <div className="inline-flex items-center gap-1 bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-2 py-1 rounded-full text-xs font-semibold shadow-sm">
+           <CheckCircle className="w-2 h-2" />
            <span className="text-xs font-medium">
              {value.toLocaleDateString()}
            </span>
          </div>
        );
      }
-    
-    return (
-      <div className="inline-flex items-center gap-2 bg-gray-100 text-gray-600 px-3 py-1.5 rounded-full text-xs font-semibold">
-        <Clock className="w-3 h-3" />
-        Pending
-      </div>
-    );
-  };
+     
+     return (
+       <div className="inline-flex items-center gap-1 bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-xs font-semibold">
+         <Clock className="w-2 h-2" />
+         <span className="text-xs">Pending</span>
+       </div>
+     );
+   };
 
   const levelConfig = {
     "care-partner": { title: "Level 1", icon: Users, color: "text-blue-600" },
@@ -222,37 +228,11 @@ export default function Training() {
   };
 
   return (
-    <div className="space-y-8">
-      {/* Enhanced Header */}
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-8 border border-blue-100">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-              Training Progress
-            </h1>
-            <p className="text-lg text-muted-foreground mt-2">
-              Track employee progress through certification levels with detailed analytics
-            </p>
-          </div>
-          <div className="hidden lg:flex items-center gap-4">
-            <div className="text-right">
-              <div className="text-2xl font-bold text-blue-600">{state.employees.length}</div>
-              <div className="text-sm text-muted-foreground">Total Employees</div>
-            </div>
-            <div className="w-px h-12 bg-gray-200"></div>
-            <div className="text-right">
-              <div className="text-2xl font-bold text-green-600">
-                {state.employees.filter(e => e.level1Awarded || e.level2Awarded || e.level3Awarded || e.consultantAwarded || e.coachAwarded).length}
-              </div>
-              <div className="text-sm text-muted-foreground">Certified</div>
-            </div>
-          </div>
-        </div>
-      </div>
+    <div className="h-screen flex flex-col">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
 
-      {/* Enhanced Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <div className="bg-white rounded-xl border border-gray-200 p-2 shadow-sm">
+        {/* Fixed Tab Container */}
+        <div className="bg-white rounded-xl border border-gray-200 p-2 shadow-sm mb-0">
           <TabsList className="grid w-full grid-cols-5 h-16">
             <TabsTrigger value="care-partner" className="flex items-center gap-3 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 data-[state=active]:border-blue-200">
               <div className="p-2 rounded-lg bg-blue-100 data-[state=active]:bg-blue-200">
@@ -302,232 +282,110 @@ export default function Training() {
           </TabsList>
         </div>
 
-        {Object.entries(levelConfig).map(([level, config]) => (
-          <TabsContent key={level} value={level} className="space-y-8">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3 }}
-            >
-              {/* Enhanced Level Header */}
-              <div className="bg-gradient-to-r from-gray-50 to-white rounded-xl p-6 border border-gray-200">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className={`p-3 rounded-xl ${config.color.replace('text-', 'bg-').replace('-600', '-100')}`}>
-                      <config.icon className={`w-8 h-8 ${config.color}`} />
-                    </div>
-                    <div>
-                      <h2 className="text-3xl font-bold">{config.title} Level</h2>
-                      <p className="text-muted-foreground text-lg">
-                        {levelStats[level]?.total} eligible employees • {levelStats[level]?.completionRate}% completion rate
-                      </p>
-                    </div>
-                  </div>
-                  <TrainingAssignmentWizard 
-                    employees={state.employees} 
-                    onAssign={handleTrainingAssignment}
-                  >
-                    <Button size="lg" className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700">
-                      <PlayCircle className="w-5 h-5 mr-2" />
-                      Assign Training
-                    </Button>
-                  </TrainingAssignmentWizard>
-                </div>
-              </div>
+        {/* Fixed Header Container */}
+        {activeTab && (
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100 bg-white shadow-sm">
+            <table className="w-full">
+              <thead>
+                <tr>
+                                     <th className="font-bold text-blue-900 py-3 px-3 text-left w-[8%] text-sm">Employee</th>
+                   <th className="font-bold text-blue-900 py-3 px-3 text-left w-[6%] text-sm">Facility</th>
+                   <th className="font-bold text-blue-900 py-3 px-3 text-left w-[6%] text-sm">Area</th>
+                  {getLevelRequirements(activeTab).map((req) => (
+                    <th key={req.key} className="font-bold text-blue-900 py-3 px-2 text-left w-[10%] text-sm">{req.name}</th>
+                  ))}
+                  <th className="font-bold text-blue-900 py-3 px-3 text-left w-[10%] text-sm">Progress</th>
+                </tr>
+              </thead>
+            </table>
+          </div>
+        )}
 
-              {/* Enhanced Statistics Cards */}
-              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-5">
-                <Card className="border-0 shadow-lg bg-gradient-to-br from-blue-50 to-blue-100">
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium text-blue-700">Total Eligible</CardTitle>
-                    <div className="p-2 rounded-lg bg-blue-200">
-                      <Users className="h-5 w-5 text-blue-700" />
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-3xl font-bold text-blue-700">{levelStats[level]?.total}</div>
-                    <p className="text-xs text-blue-600 mt-1">Employees</p>
-                  </CardContent>
-                </Card>
-                <Card className="border-0 shadow-lg bg-gradient-to-br from-green-50 to-green-100">
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium text-green-700">Completed</CardTitle>
-                    <div className="p-2 rounded-lg bg-green-200">
-                      <CheckCircle className="h-5 w-5 text-green-700" />
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-3xl font-bold text-green-700">{levelStats[level]?.completed}</div>
-                    <p className="text-xs text-green-600 mt-1">Certified</p>
-                  </CardContent>
-                </Card>
-                <Card className="border-0 shadow-lg bg-gradient-to-br from-yellow-50 to-yellow-100">
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium text-yellow-700">In Progress</CardTitle>
-                    <div className="p-2 rounded-lg bg-yellow-200">
-                      <Clock className="h-5 w-5 text-yellow-700" />
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-3xl font-bold text-yellow-700">{levelStats[level]?.inProgress}</div>
-                    <p className="text-xs text-yellow-600 mt-1">Active</p>
-                  </CardContent>
-                </Card>
-                <Card className="border-0 shadow-lg bg-gradient-to-br from-gray-50 to-gray-100">
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium text-gray-700">Pending</CardTitle>
-                    <div className="p-2 rounded-lg bg-gray-200">
-                      <FileText className="h-5 w-5 text-gray-700" />
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-3xl font-bold text-gray-700">{levelStats[level]?.pending}</div>
-                    <p className="text-xs text-gray-600 mt-1">Awaiting</p>
-                  </CardContent>
-                </Card>
-                <Card className="border-0 shadow-lg bg-gradient-to-br from-red-50 to-red-100">
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium text-red-700">Overdue</CardTitle>
-                    <div className="p-2 rounded-lg bg-red-200">
-                      <AlertCircle className="h-5 w-5 text-red-700" />
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-3xl font-bold text-red-700">{levelStats[level]?.overdue}</div>
-                    <p className="text-xs text-red-600 mt-1">Delayed</p>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Enhanced Progress Overview */}
-              <Card className="border-0 shadow-lg">
-                <CardHeader className="bg-gradient-to-r from-gray-50 to-white border-b border-gray-100">
-                  <CardTitle className="flex items-center gap-2">
-                    <TrendingUp className="w-5 h-5 text-blue-600" />
-                    Completion Progress
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-6">
-                  <div className="space-y-6">
-                    <div className="flex items-center justify-between">
-                      <span className="text-lg font-semibold">Overall Completion Rate</span>
-                      <span className="text-2xl font-bold text-blue-600">{levelStats[level]?.completionRate}%</span>
-                    </div>
-                    <div className="space-y-2">
-                      <Progress value={levelStats[level]?.completionRate} className="h-4" />
-                      <div className="flex items-center justify-between text-sm text-muted-foreground">
-                        <span>0%</span>
-                        <span>100%</span>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-100">
-                      <div className="text-center">
-                        <div className="text-2xl font-bold text-green-600">{levelStats[level]?.completed}</div>
-                        <div className="text-sm text-muted-foreground">Completed</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-2xl font-bold text-yellow-600">{levelStats[level]?.inProgress}</div>
-                        <div className="text-sm text-muted-foreground">In Progress</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-2xl font-bold text-gray-600">{levelStats[level]?.pending}</div>
-                        <div className="text-sm text-muted-foreground">Pending</div>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-                             {/* Enhanced Employee Progress Table */}
-               <Card className="border-0 shadow-lg">
-                                   <CardHeader className="bg-gradient-to-r from-gray-50 to-white border-b border-gray-100">
-                    <CardTitle className="flex items-center gap-2">
-                      <Users className="w-5 h-5 text-blue-600" />
-                      Level Progress Overview
-                    </CardTitle>
-                  </CardHeader>
-                 <CardContent className="p-0">
-                   <div className="overflow-hidden rounded-b-lg">
-                     <Table>
-                                               <TableHeader>
-                          <TableRow className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100">
-                            <TableHead className="font-bold text-blue-900 py-4 px-6 w-[15%]">Employee</TableHead>
-                            <TableHead className="font-bold text-blue-900 py-4 px-6 w-[12%]">Facility</TableHead>
-                            <TableHead className="font-bold text-blue-900 py-4 px-6 w-[12%]">Area</TableHead>
-                            {getLevelRequirements(level).map((req) => (
-                              <TableHead key={req.key} className="font-bold text-blue-900 py-4 px-6 w-[10%]">{req.name}</TableHead>
-                            ))}
-                            <TableHead className="font-bold text-blue-900 py-4 px-6 w-[15%]">Overall Progress</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                       <TableBody>
-                         {getEmployeesForLevel(level).map((employee, index) => {
-                           const completedRequirements = getLevelRequirements(level).filter(req => 
-                             req.key.includes("Awarded") ? employee[req.key] : employee[req.key]
-                           ).length;
-                           const totalRequirements = getLevelRequirements(level).length;
-                           const progressPercentage = Math.round((completedRequirements / totalRequirements) * 100);
-                           
-                           return (
-                             <TableRow key={employee.employeeId} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/40'} hover:bg-blue-50/60 transition-all duration-200 border-b border-gray-100`}>
-                                                               <TableCell className="py-4 px-6">
-                                  <div className="text-left">
-                                    <div className="font-semibold text-gray-900">{employee.name}</div>
-                                    <div className="text-sm text-gray-500">{employee.employeeId}</div>
-                                  </div>
-                                </TableCell>
-                               <TableCell className="py-4 px-6">
-                                 <div className="bg-gray-100 rounded-lg px-3 py-1 inline-block">
-                                   <span className="text-sm font-medium text-gray-700">{employee.facility}</span>
-                                 </div>
-                               </TableCell>
-                               <TableCell className="py-4 px-6">
-                                 <div className="bg-blue-100 rounded-lg px-3 py-1 inline-block">
-                                   <span className="text-sm font-medium text-blue-700">{employee.area}</span>
-                                 </div>
-                               </TableCell>
-                               {getLevelRequirements(level).map((req) => (
-                                 <TableCell key={req.key} className="py-4 px-6">
-                                   {getStatusBadge(employee, req)}
-                                 </TableCell>
-                               ))}
-                               <TableCell className="py-4 px-6">
-                                 <div className="flex items-center gap-3">
-                                   <div className="flex-1 bg-gray-200 rounded-full h-3 overflow-hidden">
-                                     <div 
-                                       className={`h-full rounded-full transition-all duration-300 ${
-                                         progressPercentage >= 80 ? 'bg-gradient-to-r from-green-500 to-emerald-500' :
-                                         progressPercentage >= 60 ? 'bg-gradient-to-r from-blue-500 to-indigo-500' :
-                                         progressPercentage >= 40 ? 'bg-gradient-to-r from-yellow-500 to-orange-500' :
-                                         progressPercentage >= 20 ? 'bg-gradient-to-r from-orange-500 to-red-500' :
-                                         'bg-gradient-to-r from-gray-400 to-gray-500'
-                                       }`}
-                                       style={{ width: `${progressPercentage}%` }}
-                                     />
-                                   </div>
-                                   <span className={`text-sm font-bold min-w-[3rem] ${
-                                     progressPercentage >= 80 ? 'text-green-600' :
-                                     progressPercentage >= 60 ? 'text-blue-600' :
-                                     progressPercentage >= 40 ? 'text-yellow-600' :
-                                     progressPercentage >= 20 ? 'text-orange-600' :
-                                     'text-gray-600'
-                                   }`}>
-                                     {progressPercentage}%
-                                   </span>
-                                 </div>
-                               </TableCell>
-                             </TableRow>
-                           );
-                         })}
-                       </TableBody>
-                     </Table>
-                   </div>
-                 </CardContent>
-               </Card>
-            </motion.div>
+        {/* Scrollable Table Data Container */}
+        <div className="flex-1 overflow-auto">
+          {Object.entries(levelConfig).map(([level, config]) => (
+            <TabsContent key={level} value={level} className="h-full" style={{ display: activeTab === level ? 'block' : 'none' }}>
+              <Card className="border-0 shadow-lg h-full">
+                <CardContent className="p-0 h-full">
+                  <Table className="w-full">
+                    <TableHeader className="hidden">
+                      <TableRow className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100">
+                       <TableHead className="font-bold text-blue-900 py-4 px-6 w-[15%] bg-gradient-to-r from-blue-50 to-indigo-50">Employee</TableHead>
+                       <TableHead className="font-bold text-blue-900 py-4 px-6 w-[12%] bg-gradient-to-r from-blue-50 to-indigo-50">Facility</TableHead>
+                       <TableHead className="font-bold text-blue-900 py-4 px-6 w-[12%] bg-gradient-to-r from-blue-50 to-indigo-50">Area</TableHead>
+                       {getLevelRequirements(level).map((req) => (
+                         <TableHead key={req.key} className="font-bold text-blue-900 py-4 px-6 w-[10%] bg-gradient-to-r from-blue-50 to-indigo-50">{req.name}</TableHead>
+                       ))}
+                       <TableHead className="font-bold text-blue-900 py-4 px-6 w-[15%] bg-gradient-to-r from-blue-50 to-indigo-50">Overall Progress</TableHead>
+                     </TableRow>
+                   </TableHeader>
+                   <TableBody>
+                    {getEmployeesForLevel(level).map((employee, index) => {
+                      const completedRequirements = getLevelRequirements(level).filter(req => 
+                        req.key.includes("Awarded") ? employee[req.key] : employee[req.key]
+                      ).length;
+                      const totalRequirements = getLevelRequirements(level).length;
+                      const progressPercentage = Math.round((completedRequirements / totalRequirements) * 100);
+                      
+                      return (
+                        <TableRow key={employee.employeeId} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/40'} hover:bg-blue-50/60 transition-all duration-200 border-b border-gray-100`}>
+                          <TableCell className="py-3 px-3 w-[8%]">
+                            <div className="text-left">
+                              <div className="font-semibold text-gray-900 text-sm">{employee.name}</div>
+                              <div className="text-xs text-gray-500">{employee.employeeId}</div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-3 px-3 w-[6%]">
+                            <div className="bg-gray-100 rounded-lg px-2 py-1 inline-block">
+                              <span className="text-xs font-medium text-gray-700">{employee.facility}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-3 px-3 w-[6%]">
+                            <div className="bg-blue-100 rounded-lg px-2 py-1 inline-block">
+                              <span className="text-xs font-medium text-blue-700">{employee.area}</span>
+                            </div>
+                          </TableCell>
+                          {getLevelRequirements(level).map((req) => (
+                            <TableCell key={req.key} className="py-3 px-2 w-[10%]">
+                              {getStatusBadge(employee, req)}
+                            </TableCell>
+                          ))}
+                          <TableCell className="py-3 px-3 w-[10%]">
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1 bg-gray-200 rounded-full h-2 overflow-hidden">
+                                <div 
+                                  className={`h-full rounded-full transition-all duration-300 ${
+                                    progressPercentage >= 80 ? 'bg-gradient-to-r from-green-500 to-emerald-500' :
+                                    progressPercentage >= 60 ? 'bg-gradient-to-r from-blue-500 to-indigo-500' :
+                                    progressPercentage >= 40 ? 'bg-gradient-to-r from-yellow-500 to-orange-500' :
+                                    progressPercentage >= 20 ? 'bg-gradient-to-r from-orange-500 to-red-500' :
+                                    'bg-gradient-to-r from-gray-400 to-gray-500'
+                                  }`}
+                                  style={{ width: `${progressPercentage}%` }}
+                                />
+                              </div>
+                              <span className={`text-xs font-bold min-w-[2rem] ${
+                                progressPercentage >= 80 ? 'text-green-600' :
+                                progressPercentage >= 60 ? 'text-blue-600' :
+                                progressPercentage >= 40 ? 'text-yellow-600' :
+                                progressPercentage >= 20 ? 'text-orange-600' :
+                                'text-gray-600'
+                              }`}>
+                                {progressPercentage}%
+                              </span>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
           </TabsContent>
         ))}
-      </Tabs>
-    </div>
-  );
+      </div>
+    </Tabs>
+  </div>
+);
 }
