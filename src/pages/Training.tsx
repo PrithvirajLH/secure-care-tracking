@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { DatePicker } from "@/components/ui/date-picker";
 import { 
   Users, 
   Award, 
@@ -23,6 +24,8 @@ import {
 import { useApp } from "@/context/AppContext";
 import TrainingAssignmentWizard from "@/components/TrainingAssignmentWizard";
 import { toast } from "sonner";
+import { useTrainingData } from "@/hooks/useTrainingData";
+import EmployeeDetailModal from "@/components/EmployeeDetailModal";
 
 interface LevelStats {
   total: number;
@@ -36,6 +39,16 @@ interface LevelStats {
 export default function Training() {
   const { state } = useApp();
   const [activeTab, setActiveTab] = useState("care-partner");
+  
+  // Training data hook for database operations
+  const {
+    scheduleTraining,
+    completeTraining,
+    rescheduleTraining,
+    isScheduling,
+    isCompleting,
+    isRescheduling,
+  } = useTrainingData();
 
   // Dispatch level change event to update header
   useEffect(() => {
@@ -122,49 +135,41 @@ export default function Training() {
     switch (level) {
       case "care-partner":
         return [
-          { name: "Relias Training Assigned", key: "level1ReliasAssigned" },
-          { name: "Relias Training Completed", key: "level1ReliasCompleted" },
-          { name: "Conference Completed", key: "level1ConferenceCompleted" },
+          { name: "Relias Training\nAssigned", key: "level1ReliasAssigned" },
+          { name: "Relias Training\nCompleted", key: "level1ReliasCompleted" },
+          { name: "Conference\nCompleted", key: "level1ConferenceCompleted" },
           { name: "Level 1 Awarded", key: "level1Awarded" }
         ];
       case "associate":
         return [
-          { name: "Relias Training Assigned", key: "level2ReliasAssigned" },
-          { name: "Relias Training Completed", key: "level2ReliasCompleted" },
-          { name: "Conference Completed", key: "level2ConferenceCompleted" },
-          { name: "Standing Video", key: "level2StandingVideo" },
-          { name: "Sleeping/Sitting Video", key: "level2SleepingSittingVideo" },
-          { name: "Feeding Video", key: "level2FeedingVideo" },
+          { name: "Conference\nCompleted", key: "level2ConferenceCompleted" },
+          { name: "Standing\nVideo", key: "level2StandingVideo" },
+          { name: "Sleeping/Sitting\nVideo", key: "level2SleepingSittingVideo" },
+          { name: "Feeding\nVideo", key: "level2FeedingVideo" },
           { name: "Level 2 Awarded", key: "level2Awarded" }
         ];
       case "champion":
         return [
-          { name: "Relias Training Assigned", key: "level3ReliasAssigned" },
-          { name: "Relias Training Completed", key: "level3ReliasCompleted" },
-          { name: "Conference Completed", key: "level3ConferenceCompleted" },
-          { name: "Sitting/ Standing/ Approaching", key: "level3SittingStandingApproaching" },
-          { name: "No Hand/No Speak", key: "level3NoHandNoSpeak" },
-          { name: "Challenge Sleeping", key: "level3ChallengeSleeping" },
+          { name: "Conference\nCompleted", key: "level3ConferenceCompleted" },
+          { name: "Sitting/ Standing/\nApproaching", key: "level3SittingStandingApproaching" },
+          { name: "No Hand/No\nSpeak", key: "level3NoHandNoSpeak" },
+          { name: "Challenge\nSleeping", key: "level3ChallengeSleeping" },
           { name: "Level 3 Awarded", key: "level3Awarded" }
         ];
       case "consultant":
         return [
-          { name: "Relias Training Assigned", key: "consultantReliasAssigned" },
-          { name: "Relias Training Completed", key: "consultantReliasCompleted" },
-          { name: "Conference Completed", key: "consultantConferenceCompleted" },
-          { name: "Coaching Session 1", key: "consultantCoachingSession1" },
-          { name: "Coaching Session 2", key: "consultantCoachingSession2" },
-          { name: "Coaching Session 3", key: "consultantCoachingSession3" },
+          { name: "Conference\nCompleted", key: "consultantConferenceCompleted" },
+          { name: "Coaching Session\n1", key: "consultantCoachingSession1" },
+          { name: "Coaching Session\n2", key: "consultantCoachingSession2" },
+          { name: "Coaching Session\n3", key: "consultantCoachingSession3" },
           { name: "Consultant Awarded", key: "consultantAwarded" }
         ];
       case "coach":
         return [
-          { name: "Relias Training Assigned", key: "coachReliasAssigned" },
-          { name: "Relias Training Completed", key: "coachReliasCompleted" },
-          { name: "Conference Completed", key: "coachConferenceCompleted" },
-          { name: "Coaching Session 1", key: "coachCoachingSession1" },
-          { name: "Coaching Session 2", key: "coachCoachingSession2" },
-          { name: "Coaching Session 3", key: "coachCoachingSession3" },
+          { name: "Conference\nCompleted", key: "coachConferenceCompleted" },
+          { name: "Coaching Session\n1", key: "coachCoachingSession1" },
+          { name: "Coaching Session\n2", key: "coachCoachingSession2" },
+          { name: "Coaching Session\n3", key: "coachCoachingSession3" },
           { name: "Coach Awarded", key: "coachAwarded" }
         ];
       default:
@@ -172,52 +177,314 @@ export default function Training() {
     }
   };
 
-     const getStatusBadge = (employee: any, requirement: any) => {
-     const value = employee[requirement.key];
-     if (requirement.key.includes("Awarded")) {
-       const awardDateKey = requirement.key.replace("Awarded", "AwardedDate");
-       const awardDate = employee[awardDateKey];
+     const [scheduledDates, setScheduledDates] = useState<{[key: string]: Date}>({});
+     const [completedDates, setCompletedDates] = useState<{[key: string]: Date}>({});
+     const [openDatePicker, setOpenDatePicker] = useState<string | null>(null);
+
+     const handleScheduleDate = async (employeeId: string, requirementKey: string, date: Date | undefined) => {
+       const key = `${employeeId}-${requirementKey}`;
+       if (date) {
+         // Temporarily disable API calls for testing
+         // try {
+         //   // Call database API to schedule training
+         //   await scheduleTraining({ employeeId, requirementKey, date });
+         // } catch (error) {
+         //   console.error('Failed to schedule training:', error);
+         // }
+         
+         // Update local state only
+         setScheduledDates(prev => ({ ...prev, [key]: date }));
+         toast.success('Training scheduled successfully!', {
+           description: `Scheduled for ${date.toLocaleDateString()}`,
+         });
+       }
+       setOpenDatePicker(null);
+     };
+
+     const handleMarkComplete = async (employeeId: string, requirementKey: string) => {
+       const key = `${employeeId}-${requirementKey}`;
+       // Get the scheduled date before removing it
+       const scheduledDate = scheduledDates[key];
        
-       return value ? (
-         <div className="flex flex-col gap-1">
-           <div className="inline-flex items-center gap-1 bg-gradient-to-r from-green-500 to-emerald-500 text-white px-2 py-1 rounded-full text-xs font-semibold shadow-sm">
-             <CheckCircle className="w-2 h-2" />
-             <span className="text-xs">Awarded</span>
-           </div>
-           {awardDate && (
-             <div className="bg-green-50 border border-green-200 rounded px-1 py-0.5">
-               <span className="text-xs text-green-700 font-medium">
-                 {awardDate.toLocaleDateString()}
+       if (scheduledDate) {
+         // Temporarily disable API calls for testing
+         // try {
+         //   // Call database API to complete training
+         //   await completeTraining({ employeeId, requirementKey, date: scheduledDate });
+         // } catch (error) {
+         //   console.error('Failed to complete training:', error);
+         // }
+         
+         // Remove from scheduled dates
+         setScheduledDates(prev => {
+           const newDates = { ...prev };
+           delete newDates[key];
+           return newDates;
+         });
+         
+         // Add to completed dates with the scheduled date
+         setCompletedDates(prev => ({
+           ...prev,
+           [key]: scheduledDate
+         }));
+         
+         toast.success('Training marked as complete!', {
+           description: `Completed on ${scheduledDate.toLocaleDateString()}`,
+         });
+       }
+       
+       setOpenDatePicker(null);
+     };
+
+     const openDatePickerFor = (key: string) => {
+       setOpenDatePicker(key);
+     };
+
+     // Close date picker when clicking outside
+     useEffect(() => {
+       const handleClickOutside = (event: MouseEvent) => {
+         const target = event.target as Element;
+         // Check if click is outside the date picker popup
+         // Don't close if clicking on the date picker button or calendar
+         if (openDatePicker && 
+             !target.closest('.date-picker-popup') && 
+             !target.closest('[data-radix-popper-content-wrapper]') &&
+             !target.closest('[role="dialog"]')) {
+           setOpenDatePicker(null);
+         }
+       };
+
+       if (openDatePicker) {
+         document.addEventListener('mousedown', handleClickOutside);
+       }
+
+       return () => {
+         document.removeEventListener('mousedown', handleClickOutside);
+       };
+     }, [openDatePicker]);
+
+     const handleReschedule = async (employeeId: string, requirementKey: string, date: Date | undefined) => {
+       const key = `${employeeId}-${requirementKey}`;
+       if (date) {
+         // Temporarily disable API calls for testing
+         // try {
+         //   // Call database API to reschedule training
+         //   await rescheduleTraining({ employeeId, requirementKey, date });
+         // } catch (error) {
+         //   console.error('Failed to reschedule training:', error);
+         // }
+         
+         // Update local state only
+         setScheduledDates(prev => ({ ...prev, [key]: date }));
+         toast.success('Training rescheduled successfully!', {
+           description: `Rescheduled for ${date.toLocaleDateString()}`,
+         });
+       }
+       setOpenDatePicker(null);
+     };
+
+     const getStatusBadge = (employee: any, requirement: any) => {
+       const value = employee[requirement.key];
+       const key = `${employee.employeeId}-${requirement.key}`;
+       const scheduledDate = scheduledDates[key];
+       const completedDate = completedDates[key];
+       const isDatePickerOpen = openDatePicker === key;
+
+       if (requirement.key.includes("Awarded")) {
+         const awardDateKey = requirement.key.replace("Awarded", "AwardedDate");
+         const awardDate = employee[awardDateKey];
+         
+         // Check for completed date first
+         if (completedDate) {
+           return (
+             <div className="inline-flex items-center gap-1 bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-2 py-1 rounded-full text-sm font-semibold shadow-sm">
+               <CheckCircle className="w-3 h-3" />
+               <span className="text-sm font-medium">
+                 {completedDate.toLocaleDateString()}
                </span>
              </div>
-           )}
-         </div>
-       ) : (
-         <div className="inline-flex items-center gap-1 bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-xs font-semibold">
-           <Clock className="w-2 h-2" />
-           <span className="text-xs">Pending</span>
-         </div>
-       );
-     }
-     
-     if (value) {
+           );
+         }
+         
+         // Check for scheduled date
+         if (scheduledDate) {
+           return (
+             <div className="flex flex-col gap-1">
+               <button
+                 onClick={() => openDatePickerFor(key)}
+                 className="inline-flex items-center justify-center gap-1 bg-gradient-to-r from-yellow-500 to-orange-500 text-white px-2 py-1 rounded-full text-sm font-semibold shadow-sm hover:from-yellow-600 hover:to-orange-600 cursor-pointer transition-colors w-20"
+               >
+                 <Clock className="w-3 h-3" />
+                 <span className="text-sm">Scheduled</span>
+               </button>
+               <div className="inline-flex items-center justify-center gap-1 bg-yellow-50 border border-yellow-200 rounded px-2 py-1 w-20">
+                 <span className="text-sm text-yellow-700 font-medium">
+                   {scheduledDate.toLocaleDateString()}
+                 </span>
+               </div>
+               {isDatePickerOpen && (
+                 <div className="absolute z-50 bg-white border border-gray-300 rounded-lg shadow-lg p-2 mt-1 w-48 date-picker-popup">
+                   <div className="flex flex-col gap-2 mb-3">
+                     <button
+                       onClick={() => handleMarkComplete(employee.employeeId, requirement.key)}
+                       disabled={isCompleting}
+                       className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white px-3 py-2 rounded-lg text-sm font-semibold hover:from-green-600 hover:to-emerald-600 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                     >
+                       <CheckCircle className="w-4 h-4" />
+                       {isCompleting ? 'Completing...' : 'Mark Complete'}
+                     </button>
+                     <button
+                       onClick={() => {
+                         // Keep date picker open for rescheduling
+                       }}
+                       disabled={isRescheduling}
+                       className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-3 py-2 rounded-lg text-sm font-semibold hover:from-blue-600 hover:to-indigo-600 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                     >
+                       <Clock className="w-4 h-4" />
+                       {isRescheduling ? 'Rescheduling...' : 'Reschedule'}
+                     </button>
+                   </div>
+                   <DatePicker
+                     date={scheduledDate}
+                     onDateChange={(date) => handleReschedule(employee.employeeId, requirement.key, date)}
+                     placeholder="Reschedule date"
+                   />
+                 </div>
+               )}
+             </div>
+           );
+         }
+         
+         // Check for existing awarded value
+         return value ? (
+           <div className="flex flex-col gap-1">
+             <div className="inline-flex items-center justify-center gap-1 bg-gradient-to-r from-green-500 to-emerald-500 text-white px-2 py-1 rounded-full text-sm font-semibold shadow-sm w-20">
+               <CheckCircle className="w-3 h-3" />
+               <span className="text-sm">Awarded</span>
+             </div>
+             {awardDate && (
+               <div className="inline-flex items-center justify-center gap-1 bg-green-50 border border-green-200 rounded px-2 py-1 w-20">
+                 <span className="text-sm text-green-700 font-medium">
+                   {awardDate.toLocaleDateString()}
+                 </span>
+               </div>
+             )}
+           </div>
+         ) : (
+           <div className="flex flex-col gap-1">
+             <button
+               onClick={() => openDatePickerFor(key)}
+               disabled={isScheduling}
+               className="inline-flex items-center justify-center gap-1 bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-sm font-semibold hover:bg-gray-200 cursor-pointer transition-colors w-20 disabled:opacity-50 disabled:cursor-not-allowed"
+             >
+               <Clock className="w-3 h-3" />
+               <span className="text-sm">{isScheduling ? 'Scheduling...' : 'Pending'}</span>
+             </button>
+             {isDatePickerOpen && (
+               <div className="absolute z-50 bg-white border border-gray-300 rounded-lg shadow-lg p-2 mt-1 w-48 date-picker-popup">
+                 <DatePicker
+                   date={scheduledDate}
+                   onDateChange={(date) => handleScheduleDate(employee.employeeId, requirement.key, date)}
+                   placeholder="Schedule date"
+                 />
+               </div>
+             )}
+           </div>
+         );
+       }
+       
+       if (scheduledDate) {
+         return (
+           <div className="flex flex-col gap-1">
+             <button
+               onClick={() => openDatePickerFor(key)}
+               className="inline-flex items-center justify-center gap-1 bg-gradient-to-r from-yellow-500 to-orange-500 text-white px-2 py-1 rounded-full text-sm font-semibold shadow-sm hover:from-yellow-600 hover:to-orange-600 cursor-pointer transition-colors w-20"
+             >
+               <Clock className="w-3 h-3" />
+               <span className="text-sm">Scheduled</span>
+             </button>
+             <div className="inline-flex items-center justify-center gap-1 bg-yellow-50 border border-yellow-200 rounded px-2 py-1 w-20">
+               <span className="text-sm text-yellow-700 font-medium">
+                 {scheduledDate.toLocaleDateString()}
+               </span>
+             </div>
+             {isDatePickerOpen && (
+               <div className="absolute z-50 bg-white border border-gray-300 rounded-lg shadow-lg p-2 mt-1 w-48 date-picker-popup">
+                 <div className="flex flex-col gap-2 mb-3">
+                   <button
+                     onClick={() => handleMarkComplete(employee.employeeId, requirement.key)}
+                     disabled={isCompleting}
+                     className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white px-3 py-2 rounded-lg text-sm font-semibold hover:from-green-600 hover:to-emerald-600 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                   >
+                     <CheckCircle className="w-4 h-4" />
+                     {isCompleting ? 'Completing...' : 'Mark Complete'}
+                   </button>
+                   <button
+                     onClick={() => {
+                       // Keep date picker open for rescheduling
+                     }}
+                     disabled={isRescheduling}
+                     className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-3 py-2 rounded-lg text-sm font-semibold hover:from-blue-600 hover:to-indigo-600 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                   >
+                     <Clock className="w-4 h-4" />
+                     {isRescheduling ? 'Rescheduling...' : 'Reschedule'}
+                   </button>
+                 </div>
+                 <DatePicker
+                   date={scheduledDate}
+                   onDateChange={(date) => handleReschedule(employee.employeeId, requirement.key, date)}
+                   placeholder="Reschedule date"
+                 />
+               </div>
+             )}
+           </div>
+         );
+       }
+       
+       if (completedDate) {
+         return (
+           <div className="inline-flex items-center gap-1 bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-2 py-1 rounded-full text-sm font-semibold shadow-sm">
+             <CheckCircle className="w-3 h-3" />
+             <span className="text-sm font-medium">
+               {completedDate.toLocaleDateString()}
+             </span>
+           </div>
+         );
+       }
+       
+       if (value) {
+         return (
+           <div className="inline-flex items-center gap-1 bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-2 py-1 rounded-full text-sm font-semibold shadow-sm">
+             <CheckCircle className="w-3 h-3" />
+             <span className="text-sm font-medium">
+               {value.toLocaleDateString()}
+             </span>
+           </div>
+         );
+       }
+       
        return (
-         <div className="inline-flex items-center gap-1 bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-2 py-1 rounded-full text-xs font-semibold shadow-sm">
-           <CheckCircle className="w-2 h-2" />
-           <span className="text-xs font-medium">
-             {value.toLocaleDateString()}
-           </span>
+         <div className="flex flex-col gap-1">
+                        <button
+               onClick={() => openDatePickerFor(key)}
+               disabled={isScheduling}
+               className="inline-flex items-center justify-center gap-1 bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-sm font-semibold hover:bg-gray-200 cursor-pointer transition-colors w-20 disabled:opacity-50 disabled:cursor-not-allowed"
+             >
+               <Clock className="w-3 h-3" />
+               <span className="text-sm">{isScheduling ? 'Scheduling...' : 'Pending'}</span>
+             </button>
+                        {isDatePickerOpen && (
+               <div className="absolute z-50 bg-white border border-gray-300 rounded-lg shadow-lg p-2 mt-1 w-48 date-picker-popup">
+                 <DatePicker
+                   date={scheduledDate}
+                   onDateChange={(date) => handleScheduleDate(employee.employeeId, requirement.key, date)}
+                   placeholder="Schedule date"
+                 />
+               </div>
+             )}
          </div>
        );
-     }
-     
-     return (
-       <div className="inline-flex items-center gap-1 bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-xs font-semibold">
-         <Clock className="w-2 h-2" />
-         <span className="text-xs">Pending</span>
-       </div>
-     );
-   };
+     };
 
   const levelConfig = {
     "care-partner": { title: "Level 1", icon: Users, color: "text-blue-600" },
@@ -234,49 +501,49 @@ export default function Training() {
         {/* Fixed Tab Container */}
         <div className="bg-white rounded-xl border border-gray-200 p-2 shadow-sm mb-0">
           <TabsList className="grid w-full grid-cols-5 h-16">
-            <TabsTrigger value="care-partner" className="flex items-center gap-3 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 data-[state=active]:border-blue-200">
-              <div className="p-2 rounded-lg bg-blue-100 data-[state=active]:bg-blue-200">
-                <Users className="w-5 h-5" />
+            <TabsTrigger value="care-partner" className="flex items-center gap-2 data-[state=active]:bg-blue-100 data-[state=active]:text-blue-800 data-[state=active]:border-blue-300 data-[state=active]:shadow-lg data-[state=active]:scale-105 transition-all duration-200 px-2">
+              <div className="p-1.5 rounded-lg bg-blue-100 data-[state=active]:bg-blue-300 data-[state=active]:shadow-md">
+                <Users className="w-4 h-4" />
               </div>
               <div className="text-left">
-                <div className="font-semibold">Level 1</div>
-                <div className="text-xs text-muted-foreground">Foundation</div>
+                <div className="font-semibold data-[state=active]:font-bold text-sm">Level 1</div>
+                <div className="text-xs text-muted-foreground data-[state=active]:text-blue-600">Foundation</div>
               </div>
             </TabsTrigger>
-            <TabsTrigger value="associate" className="flex items-center gap-3 data-[state=active]:bg-green-50 data-[state=active]:text-green-700 data-[state=active]:border-green-200">
-              <div className="p-2 rounded-lg bg-green-100 data-[state=active]:bg-green-200">
-                <Award className="w-5 h-5" />
+            <TabsTrigger value="associate" className="flex items-center gap-2 data-[state=active]:bg-green-100 data-[state=active]:text-green-800 data-[state=active]:border-green-300 data-[state=active]:shadow-lg data-[state=active]:scale-105 transition-all duration-200 px-2">
+              <div className="p-1.5 rounded-lg bg-green-100 data-[state=active]:bg-green-300 data-[state=active]:shadow-md">
+                <Award className="w-4 h-4" />
               </div>
               <div className="text-left">
-                <div className="font-semibold">Level 2</div>
-                <div className="text-xs text-muted-foreground">Advanced</div>
+                <div className="font-semibold data-[state=active]:font-bold text-sm">Level 2</div>
+                <div className="text-xs text-muted-foreground data-[state=active]:text-green-600">Advanced</div>
               </div>
             </TabsTrigger>
-            <TabsTrigger value="champion" className="flex items-center gap-3 data-[state=active]:bg-purple-50 data-[state=active]:text-purple-700 data-[state=active]:border-purple-200">
-              <div className="p-2 rounded-lg bg-purple-100 data-[state=active]:bg-purple-200">
-                <Star className="w-5 h-5" />
+            <TabsTrigger value="champion" className="flex items-center gap-2 data-[state=active]:bg-purple-100 data-[state=active]:text-purple-800 data-[state=active]:border-purple-300 data-[state=active]:shadow-lg data-[state=active]:scale-105 transition-all duration-200 px-2">
+              <div className="p-1.5 rounded-lg bg-purple-100 data-[state=active]:bg-purple-300 data-[state=active]:shadow-md">
+                <Star className="w-4 h-4" />
               </div>
               <div className="text-left">
-                <div className="font-semibold">Level 3</div>
-                <div className="text-xs text-muted-foreground">Expert</div>
+                <div className="font-semibold data-[state=active]:font-bold text-sm">Level 3</div>
+                <div className="text-xs text-muted-foreground data-[state=active]:text-purple-600">Expert</div>
               </div>
             </TabsTrigger>
-            <TabsTrigger value="consultant" className="flex items-center gap-3 data-[state=active]:bg-orange-50 data-[state=active]:text-orange-700 data-[state=active]:border-orange-200">
-              <div className="p-2 rounded-lg bg-orange-100 data-[state=active]:bg-orange-200">
-                <GraduationCap className="w-5 h-5" />
+            <TabsTrigger value="consultant" className="flex items-center gap-2 data-[state=active]:bg-orange-100 data-[state=active]:text-orange-800 data-[state=active]:border-orange-300 data-[state=active]:shadow-lg data-[state=active]:scale-105 transition-all duration-200 px-2">
+              <div className="p-1.5 rounded-lg bg-orange-100 data-[state=active]:bg-orange-300 data-[state=active]:shadow-md">
+                <GraduationCap className="w-4 h-4" />
               </div>
               <div className="text-left">
-                <div className="font-semibold">Consultant</div>
-                <div className="text-xs text-muted-foreground">Mentor</div>
+                <div className="font-semibold data-[state=active]:font-bold text-sm">Consultant</div>
+                <div className="text-xs text-muted-foreground data-[state=active]:text-orange-600">Mentor</div>
               </div>
             </TabsTrigger>
-            <TabsTrigger value="coach" className="flex items-center gap-3 data-[state=active]:bg-teal-50 data-[state=active]:text-teal-700 data-[state=active]:border-teal-200">
-              <div className="p-2 rounded-lg bg-teal-100 data-[state=active]:bg-teal-200">
-                <TrendingUp className="w-5 h-5" />
+            <TabsTrigger value="coach" className="flex items-center gap-2 data-[state=active]:bg-teal-100 data-[state=active]:text-teal-800 data-[state=active]:border-teal-300 data-[state=active]:shadow-lg data-[state=active]:scale-105 transition-all duration-200 px-2">
+              <div className="p-1.5 rounded-lg bg-teal-100 data-[state=active]:bg-teal-300 data-[state=active]:shadow-md">
+                <TrendingUp className="w-4 h-4" />
               </div>
               <div className="text-left">
-                <div className="font-semibold">Coach</div>
-                <div className="text-xs text-muted-foreground">Leader</div>
+                <div className="font-semibold data-[state=active]:font-bold text-sm">Coach</div>
+                <div className="text-xs text-muted-foreground data-[state=active]:text-teal-600">Leader</div>
               </div>
             </TabsTrigger>
           </TabsList>
@@ -288,13 +555,15 @@ export default function Training() {
             <table className="w-full">
               <thead>
                 <tr>
-                                     <th className="font-bold text-blue-900 py-3 px-3 text-left w-[8%] text-sm">Employee</th>
-                   <th className="font-bold text-blue-900 py-3 px-3 text-left w-[6%] text-sm">Facility</th>
-                   <th className="font-bold text-blue-900 py-3 px-3 text-left w-[6%] text-sm">Area</th>
+                                                      <th className="font-bold text-blue-900 py-3 px-3 text-left w-[8%] text-base">Employee</th>
+                 <th className="font-bold text-blue-900 py-3 px-3 text-left w-[6%] text-base">Facility</th>
+                 <th className="font-bold text-blue-900 py-3 px-3 text-left w-[6%] text-base">Area</th>
                   {getLevelRequirements(activeTab).map((req) => (
-                    <th key={req.key} className="font-bold text-blue-900 py-3 px-2 text-left w-[10%] text-sm">{req.name}</th>
+                    <th key={req.key} className={`font-bold text-blue-900 py-3 px-2 text-left text-base whitespace-pre-line ${
+                      req.key.includes("Awarded") ? "w-[12%]" : "w-[10%]"
+                    }`}>{req.name}</th>
                   ))}
-                  <th className="font-bold text-blue-900 py-3 px-3 text-left w-[10%] text-sm">Progress</th>
+                  <th className="font-bold text-blue-900 py-3 px-3 text-left w-[10%] text-base">Progress</th>
                 </tr>
               </thead>
             </table>
@@ -331,22 +600,28 @@ export default function Training() {
                         <TableRow key={employee.employeeId} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/40'} hover:bg-blue-50/60 transition-all duration-200 border-b border-gray-100`}>
                           <TableCell className="py-3 px-3 w-[8%]">
                             <div className="text-left">
-                              <div className="font-semibold text-gray-900 text-sm">{employee.name}</div>
-                              <div className="text-xs text-gray-500">{employee.employeeId}</div>
+                              <EmployeeDetailModal employee={employee}>
+                                <div className="font-semibold text-gray-900 text-base cursor-pointer hover:text-blue-600 hover:underline transition-colors">
+                                  {employee.name}
+                                </div>
+                              </EmployeeDetailModal>
+                              <div className="text-sm text-gray-500">{employee.employeeId}</div>
                             </div>
                           </TableCell>
                           <TableCell className="py-3 px-3 w-[6%]">
                             <div className="bg-gray-100 rounded-lg px-2 py-1 inline-block">
-                              <span className="text-xs font-medium text-gray-700">{employee.facility}</span>
+                              <span className="text-sm font-medium text-gray-700">{employee.facility}</span>
                             </div>
                           </TableCell>
                           <TableCell className="py-3 px-3 w-[6%]">
                             <div className="bg-blue-100 rounded-lg px-2 py-1 inline-block">
-                              <span className="text-xs font-medium text-blue-700">{employee.area}</span>
+                              <span className="text-sm font-medium text-blue-700">{employee.area}</span>
                             </div>
                           </TableCell>
                           {getLevelRequirements(level).map((req) => (
-                            <TableCell key={req.key} className="py-3 px-2 w-[10%]">
+                            <TableCell key={req.key} className={`py-3 px-2 ${
+                              req.key.includes("Awarded") ? "w-[12%]" : "w-[10%]"
+                            }`}>
                               {getStatusBadge(employee, req)}
                             </TableCell>
                           ))}
@@ -364,7 +639,7 @@ export default function Training() {
                                   style={{ width: `${progressPercentage}%` }}
                                 />
                               </div>
-                              <span className={`text-xs font-bold min-w-[2rem] ${
+                              <span className={`text-sm font-bold min-w-[2rem] ${
                                 progressPercentage >= 80 ? 'text-green-600' :
                                 progressPercentage >= 60 ? 'text-blue-600' :
                                 progressPercentage >= 40 ? 'text-yellow-600' :
