@@ -43,6 +43,7 @@ export default function Training() {
   const [activeTab, setActiveTab] = useState("care-partner");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10); // Reduced for testing pagination
+  const [isModalOpen, setIsModalOpen] = useState(false);
   
   // Training data hook for database operations
   const {
@@ -530,19 +531,21 @@ export default function Training() {
 
   return (
     <div className="flex flex-col h-full">
-      <FloatingNav
-        navItems={[
-          { name: "Level 1", link: "#care-partner", icon: <Users className="h-4 w-4" /> },
-          { name: "Level 2", link: "#associate", icon: <Award className="h-4 w-4" /> },
-          { name: "Level 3", link: "#champion", icon: <Star className="h-4 w-4" /> },
-          { name: "Consultant", link: "#consultant", icon: <GraduationCap className="h-4 w-4" /> },
-          { name: "Coach", link: "#coach", icon: <TrendingUp className="h-4 w-4" /> },
-        ]}
-        className="top-4"
-        alwaysVisible
-        activeTab={activeTab}
-      />
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col mt-20">
+      {!isModalOpen && (
+        <FloatingNav
+          navItems={[
+            { name: "Level 1", link: "#care-partner", icon: <Users className="h-4 w-4" /> },
+            { name: "Level 2", link: "#associate", icon: <Award className="h-4 w-4" /> },
+            { name: "Level 3", link: "#champion", icon: <Star className="h-4 w-4" /> },
+            { name: "Consultant", link: "#consultant", icon: <GraduationCap className="h-4 w-4" /> },
+            { name: "Coach", link: "#coach", icon: <TrendingUp className="h-4 w-4" /> },
+          ]}
+          className="top-4"
+          alwaysVisible
+          activeTab={activeTab}
+        />
+      )}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className={`flex-1 flex flex-col ${isModalOpen ? 'mt-0' : 'mt-20'}`}>
 
         {/* Table Container with Fixed Header and Scrollable Body */}
         <div className="flex-1 flex flex-col min-h-0">
@@ -576,12 +579,15 @@ export default function Training() {
                           return (
                             <TableRow key={employee.employeeId} className={`${index % 2 === 0 ? 'bg-white' : 'bg-purple-50/30'} hover:bg-purple-50/60 transition-all duration-200 border-b border-purple-100`}>
                               <TableCell className="py-3 px-6 w-[15%]">
-                                <div className="text-left">
-                                  <EmployeeDetailModal employee={employee}>
-                                    <div className="font-semibold text-purple-900 text-base cursor-pointer hover:text-purple-600 hover:underline transition-colors">
-                                      {employee.name}
-                                    </div>
-                                  </EmployeeDetailModal>
+                                                                 <div className="text-left">
+                                   <EmployeeDetailModal 
+                                     employee={employee}
+                                     onModalOpenChange={setIsModalOpen}
+                                   >
+                                     <div className="font-semibold text-purple-900 text-base cursor-pointer hover:text-purple-600 hover:underline transition-colors">
+                                       {employee.name}
+                                     </div>
+                                   </EmployeeDetailModal>
                                   <div className="text-sm text-gray-500">{employee.employeeId}</div>
                                 </div>
                               </TableCell>

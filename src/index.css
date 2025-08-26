@@ -98,6 +98,17 @@ All colors MUST be HSL.
     --sidebar-ring: 270 50% 60%; /* Soft Lavender Ring */
 
     /* Brand colors - lavender variations */
+
+  /* Inline date picker styling */
+  .inline-date-picker {
+    background: white;
+    border: 2px solid #e9d5ff;
+    border-radius: 0.5rem;
+    padding: 0.5rem;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+    margin-top: 0.5rem;
+    width: 200px;
+  }
     --brand-gold: 270 50% 60%; /* Soft Lavender */
     --brand-purple: 270 50% 60%; /* Soft Lavender */
     --brand-teal: 270 50% 60%; /* Soft Lavender */

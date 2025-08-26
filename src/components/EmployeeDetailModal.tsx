@@ -4,9 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { DatePicker } from "@/components/ui/date-picker";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import { 
   Calendar, 
   Clock, 
@@ -30,15 +31,22 @@ import { format } from "date-fns";
 interface EmployeeDetailModalProps {
   employee: Employee;
   children: React.ReactNode;
+  onModalOpenChange?: (isOpen: boolean) => void;
 }
 
-export default function EmployeeDetailModal({ employee, children }: EmployeeDetailModalProps) {
+export default function EmployeeDetailModal({ employee, children, onModalOpenChange }: EmployeeDetailModalProps) {
   const [open, setOpen] = useState(false);
+
+  // Notify parent component when modal opens/closes
+  useEffect(() => {
+    if (onModalOpenChange) {
+      onModalOpenChange(open);
+    }
+  }, [open, onModalOpenChange]);
   const [scheduledDates, setScheduledDates] = useState<{[key: string]: Date}>({});
   const [completedDates, setCompletedDates] = useState<{[key: string]: Date}>({});
-  const [openDatePicker, setOpenDatePicker] = useState<string | null>(null);
+  const [inlineDatePicker, setInlineDatePicker] = useState<string | null>(null);
   const [currentLevel, setCurrentLevel] = useState("care-partner");
-  const [datePickerPosition, setDatePickerPosition] = useState({ x: 0, y: 0 });
 
   const getLevelProgress = (level: string) => {
     switch (level) {
@@ -58,16 +66,14 @@ export default function EmployeeDetailModal({ employee, children }: EmployeeDeta
       case "associate":
         return {
           requirements: [
-            { name: "Relias Training Assigned", key: "level2ReliasAssigned", completed: !!employee.level2ReliasAssigned, date: employee.level2ReliasAssigned },
-            { name: "Relias Training Completed", key: "level2ReliasCompleted", completed: !!employee.level2ReliasCompleted, date: employee.level2ReliasCompleted },
             { name: "Conference Completed", key: "level2ConferenceCompleted", completed: !!employee.level2ConferenceCompleted, date: employee.level2ConferenceCompleted },
             { name: "Standing Video", key: "level2StandingVideo", completed: !!employee.level2StandingVideo, date: employee.level2StandingVideo },
             { name: "Sleeping/Sitting Video", key: "level2SleepingSittingVideo", completed: !!employee.level2SleepingSittingVideo, date: employee.level2SleepingSittingVideo },
             { name: "Feeding Video", key: "level2FeedingVideo", completed: !!employee.level2FeedingVideo, date: employee.level2FeedingVideo },
             { name: "Level 2 Awarded", key: "level2Awarded", completed: employee.level2Awarded, date: employee.level2AwardedDate }
           ],
-          total: 7,
-          completed: [!!employee.level2ReliasAssigned, !!employee.level2ReliasCompleted, !!employee.level2ConferenceCompleted, 
+          total: 5,
+          completed: [!!employee.level2ConferenceCompleted, 
                      !!employee.level2StandingVideo, !!employee.level2SleepingSittingVideo, !!employee.level2FeedingVideo, employee.level2Awarded].filter(Boolean).length,
           color: "text-green-600",
           icon: Award
@@ -75,16 +81,14 @@ export default function EmployeeDetailModal({ employee, children }: EmployeeDeta
       case "champion":
         return {
           requirements: [
-            { name: "Relias Training Assigned", key: "level3ReliasAssigned", completed: !!employee.level3ReliasAssigned, date: employee.level3ReliasAssigned },
-            { name: "Relias Training Completed", key: "level3ReliasCompleted", completed: !!employee.level3ReliasCompleted, date: employee.level3ReliasCompleted },
             { name: "Conference Completed", key: "level3ConferenceCompleted", completed: !!employee.level3ConferenceCompleted, date: employee.level3ConferenceCompleted },
             { name: "Sitting/Standing/Approaching", key: "level3SittingStandingApproaching", completed: !!employee.level3SittingStandingApproaching, date: employee.level3SittingStandingApproaching },
             { name: "No Hand/No Speak", key: "level3NoHandNoSpeak", completed: !!employee.level3NoHandNoSpeak, date: employee.level3NoHandNoSpeak },
             { name: "Challenge Sleeping", key: "level3ChallengeSleeping", completed: !!employee.level3ChallengeSleeping, date: employee.level3ChallengeSleeping },
             { name: "Level 3 Awarded", key: "level3Awarded", completed: employee.level3Awarded, date: employee.level3AwardedDate }
           ],
-          total: 7,
-          completed: [!!employee.level3ReliasAssigned, !!employee.level3ReliasCompleted, !!employee.level3ConferenceCompleted,
+          total: 5,
+          completed: [!!employee.level3ConferenceCompleted,
                      !!employee.level3SittingStandingApproaching, !!employee.level3NoHandNoSpeak, !!employee.level3ChallengeSleeping, employee.level3Awarded].filter(Boolean).length,
           color: "text-purple-600",
           icon: Star
@@ -92,16 +96,14 @@ export default function EmployeeDetailModal({ employee, children }: EmployeeDeta
       case "consultant":
         return {
           requirements: [
-            { name: "Relias Training Assigned", key: "consultantReliasAssigned", completed: !!employee.consultantReliasAssigned, date: employee.consultantReliasAssigned },
-            { name: "Relias Training Completed", key: "consultantReliasCompleted", completed: !!employee.consultantReliasCompleted, date: employee.consultantReliasCompleted },
             { name: "Conference Completed", key: "consultantConferenceCompleted", completed: !!employee.consultantConferenceCompleted, date: employee.consultantConferenceCompleted },
             { name: "Coaching Session 1", key: "consultantCoachingSession1", completed: !!employee.consultantCoachingSession1, date: employee.consultantCoachingSession1 },
             { name: "Coaching Session 2", key: "consultantCoachingSession2", completed: !!employee.consultantCoachingSession2, date: employee.consultantCoachingSession2 },
             { name: "Coaching Session 3", key: "consultantCoachingSession3", completed: !!employee.consultantCoachingSession3, date: employee.consultantCoachingSession3 },
             { name: "Consultant Awarded", key: "consultantAwarded", completed: employee.consultantAwarded, date: employee.consultantAwardedDate }
           ],
-          total: 7,
-          completed: [!!employee.consultantReliasAssigned, !!employee.consultantReliasCompleted, !!employee.consultantConferenceCompleted,
+          total: 5,
+          completed: [!!employee.consultantConferenceCompleted,
                      !!employee.consultantCoachingSession1, !!employee.consultantCoachingSession2, !!employee.consultantCoachingSession3, employee.consultantAwarded].filter(Boolean).length,
           color: "text-orange-600",
           icon: GraduationCap
@@ -109,16 +111,14 @@ export default function EmployeeDetailModal({ employee, children }: EmployeeDeta
       case "coach":
         return {
           requirements: [
-            { name: "Relias Training Assigned", key: "coachReliasAssigned", completed: !!employee.coachReliasAssigned, date: employee.coachReliasAssigned },
-            { name: "Relias Training Completed", key: "coachReliasCompleted", completed: !!employee.coachReliasCompleted, date: employee.coachReliasCompleted },
             { name: "Conference Completed", key: "coachConferenceCompleted", completed: !!employee.coachConferenceCompleted, date: employee.coachConferenceCompleted },
             { name: "Coaching Session 1", key: "coachCoachingSession1", completed: !!employee.coachCoachingSession1, date: employee.coachCoachingSession1 },
             { name: "Coaching Session 2", key: "coachCoachingSession2", completed: !!employee.coachCoachingSession2, date: employee.coachCoachingSession2 },
             { name: "Coaching Session 3", key: "coachCoachingSession3", completed: !!employee.coachCoachingSession3, date: employee.coachCoachingSession3 },
             { name: "Coach Awarded", key: "coachAwarded", completed: employee.coachAwarded, date: employee.coachAwardedDate }
           ],
-          total: 7,
-          completed: [!!employee.coachReliasAssigned, !!employee.coachReliasCompleted, !!employee.coachConferenceCompleted,
+          total: 5,
+          completed: [!!employee.coachConferenceCompleted,
                      !!employee.coachCoachingSession1, !!employee.coachCoachingSession2, !!employee.coachCoachingSession3, employee.coachAwarded].filter(Boolean).length,
           color: "text-teal-600",
           icon: TrendingUp
@@ -153,13 +153,12 @@ export default function EmployeeDetailModal({ employee, children }: EmployeeDeta
   const handleScheduleDate = async (employeeId: string, requirementKey: string, date: Date | undefined) => {
     const key = `${employeeId}-${requirementKey}`;
     if (date) {
-      // Temporarily disable API calls for testing
       setScheduledDates(prev => ({ ...prev, [key]: date }));
       toast.success('Training scheduled successfully!', {
         description: `Scheduled for ${date.toLocaleDateString()}`,
       });
     }
-    setOpenDatePicker(null);
+    setInlineDatePicker(null);
   };
 
   const handleMarkComplete = async (employeeId: string, requirementKey: string) => {
@@ -182,8 +181,6 @@ export default function EmployeeDetailModal({ employee, children }: EmployeeDeta
         description: `Completed on ${scheduledDate.toLocaleDateString()}`,
       });
     }
-    
-    setOpenDatePicker(null);
   };
 
   const handleReschedule = async (employeeId: string, requirementKey: string, date: Date | undefined) => {
@@ -194,57 +191,43 @@ export default function EmployeeDetailModal({ employee, children }: EmployeeDeta
         description: `Rescheduled for ${date.toLocaleDateString()}`,
       });
     }
-    setOpenDatePicker(null);
   };
 
-  const openDatePickerFor = (key: string, event: React.MouseEvent) => {
-    console.log('Button clicked for key:', key);
-    const rect = event.currentTarget.getBoundingClientRect();
-    const modalRect = document.querySelector('[role="dialog"]')?.getBoundingClientRect();
-    
-    if (modalRect) {
-      setDatePickerPosition({
-        x: rect.left - modalRect.left + 20, // Offset from modal left
-        y: rect.bottom - modalRect.top + 10  // Offset from modal top
-      });
-    } else {
-      setDatePickerPosition({
-        x: rect.left,
-        y: rect.bottom + 5
-      });
-    }
-    console.log('Opening date picker for:', key, 'Position:', datePickerPosition);
-    setOpenDatePicker(key);
+  const openInlineDatePicker = (key: string) => {
+    setInlineDatePicker(key);
   };
 
-  // Click outside handler for date picker
+  const closeInlineDatePicker = () => {
+    setInlineDatePicker(null);
+  };
+
+  // Click outside handler for inline date picker
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Element;
-      if (openDatePicker && 
-          !target.closest('.date-picker-popup') && 
-          !target.closest('[data-radix-popper-content-wrapper]') &&
-          !target.closest('[role="dialog"]')) {
-        setOpenDatePicker(null);
+      if (inlineDatePicker && 
+          !target.closest('.inline-date-picker') && 
+          !target.closest('[data-radix-popper-content-wrapper]')) {
+        closeInlineDatePicker();
       }
     };
 
-    if (openDatePicker) {
+    if (inlineDatePicker) {
       document.addEventListener('mousedown', handleClickOutside);
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-    }, [openDatePicker]);
+  }, [inlineDatePicker]);
 
-  // Get status badge for requirements (similar to Training page)
+  // Get status badge for requirements
   const getStatusBadge = (requirement: any) => {
     const value = employee[requirement.key];
     const key = `${employee.employeeId}-${requirement.key}`;
     const scheduledDate = scheduledDates[key];
     const completedDate = completedDates[key];
-    const isDatePickerOpen = openDatePicker === key;
+    const isInlineDatePickerOpen = inlineDatePicker === key;
 
     if (requirement.key.includes("Awarded")) {
       const awardDateKey = requirement.key.replace("Awarded", "AwardedDate");
@@ -267,7 +250,7 @@ export default function EmployeeDetailModal({ employee, children }: EmployeeDeta
         return (
           <div className="flex flex-col gap-1">
             <button
-              onClick={(e) => openDatePickerFor(key, e)}
+              onClick={() => openInlineDatePicker(key)}
               className="inline-flex items-center justify-center gap-1 bg-gradient-to-r from-yellow-500 to-orange-500 text-white px-2 py-1 rounded-full text-sm font-semibold shadow-sm hover:from-yellow-600 hover:to-orange-600 cursor-pointer transition-colors w-20"
             >
               <Clock className="w-3 h-3" />
@@ -278,8 +261,8 @@ export default function EmployeeDetailModal({ employee, children }: EmployeeDeta
                 {scheduledDate.toLocaleDateString()}
               </span>
             </div>
-            {isDatePickerOpen && (
-              <div className="absolute z-[9999] bg-white border border-gray-300 rounded-lg shadow-lg p-2 mt-1 w-48 date-picker-popup" style={{ top: datePickerPosition.y, left: datePickerPosition.x }}>
+            {isInlineDatePickerOpen && (
+              <div className="inline-date-picker">
                 <div className="flex flex-col gap-2 mb-3">
                   <button
                     onClick={() => handleMarkComplete(employee.employeeId, requirement.key)}
@@ -287,15 +270,6 @@ export default function EmployeeDetailModal({ employee, children }: EmployeeDeta
                   >
                     <CheckCircle className="w-4 h-4" />
                     Mark Complete
-                  </button>
-                  <button
-                    onClick={() => {
-                      // Keep date picker open for rescheduling
-                    }}
-                    className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-3 py-2 rounded-lg text-sm font-semibold hover:from-blue-600 hover:to-indigo-600 transition-colors shadow-sm"
-                  >
-                    <Clock className="w-4 h-4" />
-                    Reschedule
                   </button>
                 </div>
                 <DatePicker
@@ -326,21 +300,22 @@ export default function EmployeeDetailModal({ employee, children }: EmployeeDeta
         </div>
       ) : (
         <div className="flex flex-col gap-1">
-          <button
-            onClick={(e) => openDatePickerFor(key, e)}
-            className="inline-flex items-center justify-center gap-1 bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-sm font-semibold hover:bg-gray-200 cursor-pointer transition-colors w-20"
-          >
-            <Clock className="w-3 h-3" />
-            <span className="text-sm">Pending</span>
-          </button>
-          {isDatePickerOpen && (
-            <div className="absolute z-[9999] bg-white border border-gray-300 rounded-lg shadow-lg p-2 mt-1 w-48 date-picker-popup" style={{ top: datePickerPosition.y, left: datePickerPosition.x }}>
+          {isInlineDatePickerOpen ? (
+            <div className="inline-date-picker">
               <DatePicker
                 date={scheduledDate}
                 onDateChange={(date) => handleScheduleDate(employee.employeeId, requirement.key, date)}
-                placeholder="Schedule date"
+                placeholder="Select date"
               />
             </div>
+          ) : (
+            <button
+              onClick={() => openInlineDatePicker(key)}
+              className="inline-flex items-center justify-center gap-1 bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-sm font-semibold hover:bg-gray-200 cursor-pointer transition-colors w-20"
+            >
+              <Clock className="w-3 h-3" />
+              <span className="text-sm">Pending</span>
+            </button>
           )}
         </div>
       );
@@ -361,7 +336,7 @@ export default function EmployeeDetailModal({ employee, children }: EmployeeDeta
       return (
         <div className="flex flex-col gap-1">
           <button
-            onClick={(e) => openDatePickerFor(key, e)}
+            onClick={() => openInlineDatePicker(key)}
             className="inline-flex items-center justify-center gap-1 bg-gradient-to-r from-yellow-500 to-orange-500 text-white px-2 py-1 rounded-full text-sm font-semibold shadow-sm hover:from-yellow-600 hover:to-orange-600 cursor-pointer transition-colors w-20"
           >
             <Clock className="w-3 h-3" />
@@ -372,33 +347,24 @@ export default function EmployeeDetailModal({ employee, children }: EmployeeDeta
               {scheduledDate.toLocaleDateString()}
             </span>
           </div>
-                                           {isDatePickerOpen && (
-              <div className="absolute z-[9999] bg-white border border-gray-300 rounded-lg shadow-lg p-2 mt-1 w-48 date-picker-popup" style={{ top: datePickerPosition.y, left: datePickerPosition.x }}>
-                <div className="flex flex-col gap-2 mb-3">
-                  <button
-                    onClick={() => handleMarkComplete(employee.employeeId, requirement.key)}
-                    className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white px-3 py-2 rounded-lg text-sm font-semibold hover:from-green-600 hover:to-emerald-600 transition-colors shadow-sm"
-                  >
-                    <CheckCircle className="w-4 h-4" />
-                    Mark Complete
-                  </button>
-                  <button
-                    onClick={() => {
-                      // Keep date picker open for rescheduling
-                    }}
-                    className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-3 py-2 rounded-lg text-sm font-semibold hover:from-blue-600 hover:to-indigo-600 transition-colors shadow-sm"
-                  >
-                    <Clock className="w-4 h-4" />
-                    Reschedule
-                  </button>
-                </div>
-                <DatePicker
-                  date={scheduledDate}
-                  onDateChange={(date) => handleReschedule(employee.employeeId, requirement.key, date)}
-                  placeholder="Reschedule date"
-                />
+          {isInlineDatePickerOpen && (
+            <div className="inline-date-picker">
+              <div className="flex flex-col gap-2 mb-3">
+                <button
+                  onClick={() => handleMarkComplete(employee.employeeId, requirement.key)}
+                  className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white px-3 py-2 rounded-lg text-sm font-semibold hover:from-green-600 hover:to-emerald-600 transition-colors shadow-sm"
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  Mark Complete
+                </button>
               </div>
-            )}
+              <DatePicker
+                date={scheduledDate}
+                onDateChange={(date) => handleReschedule(employee.employeeId, requirement.key, date)}
+                placeholder="Reschedule date"
+              />
+            </div>
+          )}
         </div>
       );
     }
@@ -416,22 +382,23 @@ export default function EmployeeDetailModal({ employee, children }: EmployeeDeta
     
     return (
       <div className="flex flex-col gap-1">
-                 <button
-           onClick={(e) => openDatePickerFor(key, e)}
-           className="inline-flex items-center justify-center gap-1 bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-sm font-semibold hover:bg-gray-200 cursor-pointer transition-colors w-20"
-         >
-           <Clock className="w-3 h-3" />
-           <span className="text-sm">Pending</span>
-         </button>
-                                   {isDatePickerOpen && (
-            <div className="absolute z-[9999] bg-white border border-gray-300 rounded-lg shadow-lg p-2 mt-1 w-48 date-picker-popup" style={{ top: datePickerPosition.y, left: datePickerPosition.x }}>
-              <DatePicker
-                date={scheduledDate}
-                onDateChange={(date) => handleScheduleDate(employee.employeeId, requirement.key, date)}
-                placeholder="Schedule date"
-              />
-            </div>
-          )}
+        {isInlineDatePickerOpen ? (
+          <div className="inline-date-picker">
+            <DatePicker
+              date={scheduledDate}
+              onDateChange={(date) => handleScheduleDate(employee.employeeId, requirement.key, date)}
+              placeholder="Select date"
+            />
+          </div>
+        ) : (
+          <button
+            onClick={() => openInlineDatePicker(key)}
+            className="inline-flex items-center justify-center gap-1 bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-sm font-semibold hover:bg-gray-200 cursor-pointer transition-colors w-20"
+          >
+            <Clock className="w-3 h-3" />
+            <span className="text-sm">Pending</span>
+          </button>
+        )}
       </div>
     );
   };
@@ -481,14 +448,48 @@ export default function EmployeeDetailModal({ employee, children }: EmployeeDeta
             </CardHeader>
             <CardContent>
               <Tabs value={currentLevel} onValueChange={setCurrentLevel} className="space-y-4">
-                <TabsList className="grid w-full grid-cols-5">
-                  {levels.map((level) => (
-                    <TabsTrigger key={level.key} value={level.key} className="flex items-center gap-2">
-                      <level.progress.icon className="w-4 h-4" />
-                      {level.name}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
+                <div className="flex max-w-fit mx-auto border border-transparent rounded-full bg-white shadow-[0px_2px_3px_-1px_rgba(0,0,0,0.1),0px_1px_0px_0px_rgba(25,28,33,0.02),0px_0px_0px_1px_rgba(25,28,33,0.08)] px-6 py-3 items-center justify-center space-x-6 mb-6">
+                  {levels.map((level, idx) => {
+                    const isActive = currentLevel === level.key;
+                    return (
+                      <button
+                        key={`level-${idx}`}
+                        onClick={() => setCurrentLevel(level.key)}
+                        className="relative items-center flex space-x-2 text-neutral-600 hover:text-neutral-500 transition-all duration-300 group"
+                      >
+                        <div
+                          className={cn(
+                            "relative p-2 rounded-lg transition-all duration-300",
+                            isActive 
+                              ? "bg-accent text-accent-foreground shadow-lg scale-110" 
+                              : "hover:bg-accent/60"
+                          )}
+                        >
+                          <span className={cn(
+                            "block sm:hidden transition-colors duration-300",
+                            isActive ? "text-white" : "text-neutral-600"
+                          )}>
+                            <level.progress.icon className="w-4 h-4" />
+                          </span>
+                          <span className={cn(
+                            "hidden sm:block text-sm font-medium transition-colors duration-300",
+                            isActive ? "text-white" : "text-neutral-600"
+                          )}>
+                            {level.name}
+                          </span>
+                          
+                          {/* Active indicator */}
+                          {isActive && (
+                            <div className="absolute inset-0 bg-accent/20 rounded-lg" />
+                          )}
+                          
+                          {/* Hover glow effect */}
+                          <div className="absolute inset-0 bg-accent/10 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
 
                 {levels.map((level) => (
                   <TabsContent key={level.key} value={level.key} className="space-y-4">
