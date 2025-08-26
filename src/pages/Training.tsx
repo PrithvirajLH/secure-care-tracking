@@ -6,6 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DatePicker } from "@/components/ui/date-picker";
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import { 
   Users, 
   Award, 
@@ -26,6 +27,7 @@ import TrainingAssignmentWizard from "@/components/TrainingAssignmentWizard";
 import { toast } from "sonner";
 import { useTrainingData } from "@/hooks/useTrainingData";
 import EmployeeDetailModal from "@/components/EmployeeDetailModal";
+import { FloatingNav } from "@/components/ui/floating-navbar";
 
 interface LevelStats {
   total: number;
@@ -39,6 +41,8 @@ interface LevelStats {
 export default function Training() {
   const { state } = useApp();
   const [activeTab, setActiveTab] = useState("care-partner");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10); // Reduced for testing pagination
   
   // Training data hook for database operations
   const {
@@ -50,11 +54,27 @@ export default function Training() {
     isRescheduling,
   } = useTrainingData();
 
-  // Dispatch level change event to update header
+  // Sync active tab with URL hash and dispatch header update
   useEffect(() => {
     const event = new CustomEvent('levelChange', { detail: { level: activeTab } });
     window.dispatchEvent(event);
+    // keep hash in sync for FloatingNav anchor links
+    if (window.location.hash !== `#${activeTab}`) {
+      window.location.hash = `#${activeTab}`;
+    }
+    // Reset pagination when tab changes
+    setCurrentPage(1);
   }, [activeTab]);
+
+  useEffect(() => {
+    const applyHash = () => {
+      const hash = window.location.hash?.replace('#', '') || 'care-partner';
+      setActiveTab(hash as any);
+    };
+    applyHash();
+    window.addEventListener('hashchange', applyHash);
+    return () => window.removeEventListener('hashchange', applyHash);
+  }, []);
 
   const handleTrainingAssignment = (assignments: any[]) => {
     // In a real application, this would update the backend
@@ -130,6 +150,20 @@ export default function Training() {
         return [];
     }
   };
+
+  // Pagination logic
+  const currentEmployees = useMemo(() => {
+    const allEmployees = getEmployeesForLevel(activeTab);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return allEmployees.slice(startIndex, endIndex);
+  }, [activeTab, currentPage, itemsPerPage, state.employees]);
+
+  const totalEmployees = useMemo(() => {
+    return getEmployeesForLevel(activeTab).length;
+  }, [activeTab, state.employees]);
+
+  const totalPages = Math.ceil(totalEmployees / itemsPerPage);
 
   const getLevelRequirements = (level: string) => {
     switch (level) {
@@ -495,171 +529,156 @@ export default function Training() {
   };
 
   return (
-    <div className="h-screen flex flex-col">
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
+    <div className="flex flex-col h-full">
+      <FloatingNav
+        navItems={[
+          { name: "Level 1", link: "#care-partner", icon: <Users className="h-4 w-4" /> },
+          { name: "Level 2", link: "#associate", icon: <Award className="h-4 w-4" /> },
+          { name: "Level 3", link: "#champion", icon: <Star className="h-4 w-4" /> },
+          { name: "Consultant", link: "#consultant", icon: <GraduationCap className="h-4 w-4" /> },
+          { name: "Coach", link: "#coach", icon: <TrendingUp className="h-4 w-4" /> },
+        ]}
+        className="top-4"
+        alwaysVisible
+        activeTab={activeTab}
+      />
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col mt-20">
 
-        {/* Fixed Tab Container */}
-        <div className="bg-white rounded-xl border border-gray-200 p-2 shadow-sm mb-0">
-          <TabsList className="grid w-full grid-cols-5 h-16">
-            <TabsTrigger value="care-partner" className="flex items-center gap-2 data-[state=active]:bg-blue-100 data-[state=active]:text-blue-800 data-[state=active]:border-blue-300 data-[state=active]:shadow-lg data-[state=active]:scale-105 transition-all duration-200 px-2">
-              <div className="p-1.5 rounded-lg bg-blue-100 data-[state=active]:bg-blue-300 data-[state=active]:shadow-md">
-                <Users className="w-4 h-4" />
-              </div>
-              <div className="text-left">
-                <div className="font-semibold data-[state=active]:font-bold text-sm">Level 1</div>
-                <div className="text-xs text-muted-foreground data-[state=active]:text-blue-600">Foundation</div>
-              </div>
-            </TabsTrigger>
-            <TabsTrigger value="associate" className="flex items-center gap-2 data-[state=active]:bg-green-100 data-[state=active]:text-green-800 data-[state=active]:border-green-300 data-[state=active]:shadow-lg data-[state=active]:scale-105 transition-all duration-200 px-2">
-              <div className="p-1.5 rounded-lg bg-green-100 data-[state=active]:bg-green-300 data-[state=active]:shadow-md">
-                <Award className="w-4 h-4" />
-              </div>
-              <div className="text-left">
-                <div className="font-semibold data-[state=active]:font-bold text-sm">Level 2</div>
-                <div className="text-xs text-muted-foreground data-[state=active]:text-green-600">Advanced</div>
-              </div>
-            </TabsTrigger>
-            <TabsTrigger value="champion" className="flex items-center gap-2 data-[state=active]:bg-purple-100 data-[state=active]:text-purple-800 data-[state=active]:border-purple-300 data-[state=active]:shadow-lg data-[state=active]:scale-105 transition-all duration-200 px-2">
-              <div className="p-1.5 rounded-lg bg-purple-100 data-[state=active]:bg-purple-300 data-[state=active]:shadow-md">
-                <Star className="w-4 h-4" />
-              </div>
-              <div className="text-left">
-                <div className="font-semibold data-[state=active]:font-bold text-sm">Level 3</div>
-                <div className="text-xs text-muted-foreground data-[state=active]:text-purple-600">Expert</div>
-              </div>
-            </TabsTrigger>
-            <TabsTrigger value="consultant" className="flex items-center gap-2 data-[state=active]:bg-orange-100 data-[state=active]:text-orange-800 data-[state=active]:border-orange-300 data-[state=active]:shadow-lg data-[state=active]:scale-105 transition-all duration-200 px-2">
-              <div className="p-1.5 rounded-lg bg-orange-100 data-[state=active]:bg-orange-300 data-[state=active]:shadow-md">
-                <GraduationCap className="w-4 h-4" />
-              </div>
-              <div className="text-left">
-                <div className="font-semibold data-[state=active]:font-bold text-sm">Consultant</div>
-                <div className="text-xs text-muted-foreground data-[state=active]:text-orange-600">Mentor</div>
-              </div>
-            </TabsTrigger>
-            <TabsTrigger value="coach" className="flex items-center gap-2 data-[state=active]:bg-teal-100 data-[state=active]:text-teal-800 data-[state=active]:border-teal-300 data-[state=active]:shadow-lg data-[state=active]:scale-105 transition-all duration-200 px-2">
-              <div className="p-1.5 rounded-lg bg-teal-100 data-[state=active]:bg-teal-300 data-[state=active]:shadow-md">
-                <TrendingUp className="w-4 h-4" />
-              </div>
-              <div className="text-left">
-                <div className="font-semibold data-[state=active]:font-bold text-sm">Coach</div>
-                <div className="text-xs text-muted-foreground data-[state=active]:text-teal-600">Leader</div>
-              </div>
-            </TabsTrigger>
-          </TabsList>
-        </div>
-
-        {/* Fixed Header Container */}
-        {activeTab && (
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100 bg-white shadow-sm">
-            <table className="w-full">
-              <thead>
-                <tr>
-                                                      <th className="font-bold text-blue-900 py-3 px-3 text-left w-[8%] text-base">Employee</th>
-                 <th className="font-bold text-blue-900 py-3 px-3 text-left w-[6%] text-base">Facility</th>
-                 <th className="font-bold text-blue-900 py-3 px-3 text-left w-[6%] text-base">Area</th>
-                  {getLevelRequirements(activeTab).map((req) => (
-                    <th key={req.key} className={`font-bold text-blue-900 py-3 px-2 text-left text-base whitespace-pre-line ${
-                      req.key.includes("Awarded") ? "w-[12%]" : "w-[10%]"
-                    }`}>{req.name}</th>
-                  ))}
-                  <th className="font-bold text-blue-900 py-3 px-3 text-left w-[10%] text-base">Progress</th>
-                </tr>
-              </thead>
-            </table>
-          </div>
-        )}
-
-        {/* Scrollable Table Data Container */}
-        <div className="flex-1 overflow-auto">
+        {/* Table Container with Fixed Header and Scrollable Body */}
+        <div className="flex-1 flex flex-col min-h-0">
           {Object.entries(levelConfig).map(([level, config]) => (
-            <TabsContent key={level} value={level} className="h-full" style={{ display: activeTab === level ? 'block' : 'none' }}>
-              <Card className="border-0 shadow-lg h-full">
-                <CardContent className="p-0 h-full">
-                  <Table className="w-full">
-                    <TableHeader className="hidden">
-                      <TableRow className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100">
-                       <TableHead className="font-bold text-blue-900 py-4 px-6 w-[15%] bg-gradient-to-r from-blue-50 to-indigo-50">Employee</TableHead>
-                       <TableHead className="font-bold text-blue-900 py-4 px-6 w-[12%] bg-gradient-to-r from-blue-50 to-indigo-50">Facility</TableHead>
-                       <TableHead className="font-bold text-blue-900 py-4 px-6 w-[12%] bg-gradient-to-r from-blue-50 to-indigo-50">Area</TableHead>
-                       {getLevelRequirements(level).map((req) => (
-                         <TableHead key={req.key} className="font-bold text-blue-900 py-4 px-6 w-[10%] bg-gradient-to-r from-blue-50 to-indigo-50">{req.name}</TableHead>
-                       ))}
-                       <TableHead className="font-bold text-blue-900 py-4 px-6 w-[15%] bg-gradient-to-r from-blue-50 to-indigo-50">Overall Progress</TableHead>
-                     </TableRow>
-                   </TableHeader>
-                   <TableBody>
-                    {getEmployeesForLevel(level).map((employee, index) => {
-                      const completedRequirements = getLevelRequirements(level).filter(req => 
-                        req.key.includes("Awarded") ? employee[req.key] : employee[req.key]
-                      ).length;
-                      const totalRequirements = getLevelRequirements(level).length;
-                      const progressPercentage = Math.round((completedRequirements / totalRequirements) * 100);
-                      
-                      return (
-                        <TableRow key={employee.employeeId} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/40'} hover:bg-blue-50/60 transition-all duration-200 border-b border-gray-100`}>
-                          <TableCell className="py-3 px-3 w-[8%]">
-                            <div className="text-left">
-                              <EmployeeDetailModal employee={employee}>
-                                <div className="font-semibold text-gray-900 text-base cursor-pointer hover:text-blue-600 hover:underline transition-colors">
-                                  {employee.name}
-                                </div>
-                              </EmployeeDetailModal>
-                              <div className="text-sm text-gray-500">{employee.employeeId}</div>
-                            </div>
-                          </TableCell>
-                          <TableCell className="py-3 px-3 w-[6%]">
-                            <div className="bg-gray-100 rounded-lg px-2 py-1 inline-block">
-                              <span className="text-sm font-medium text-gray-700">{employee.facility}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="py-3 px-3 w-[6%]">
-                            <div className="bg-blue-100 rounded-lg px-2 py-1 inline-block">
-                              <span className="text-sm font-medium text-blue-700">{employee.area}</span>
-                            </div>
-                          </TableCell>
+            <TabsContent key={level} value={level} className="flex-1 flex flex-col min-h-0" style={{ display: activeTab === level ? 'flex' : 'none' }}>
+              <Card className="border-0 shadow-lg flex-1 flex flex-col min-h-0">
+                <CardContent className="p-0 flex-1 flex flex-col min-h-0">
+                  {/* Fixed Header */}
+                  <div className="flex-shrink-0 bg-gradient-to-r from-purple-50 to-lavender-50 border-b border-purple-100 shadow-sm">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-gradient-to-r from-purple-50 to-lavender-50 border-b border-purple-100">
+                          <TableHead className="font-bold text-purple-900 py-4 px-6 w-[15%] bg-gradient-to-r from-purple-50 to-lavender-50 text-base">Employee</TableHead>
+                          <TableHead className="font-bold text-purple-900 py-4 px-6 w-[12%] bg-gradient-to-r from-purple-50 to-lavender-50 text-base">Facility</TableHead>
+                          <TableHead className="font-bold text-purple-900 py-4 px-6 w-[12%] bg-gradient-to-r from-purple-50 to-lavender-50 text-base">Area</TableHead>
                           {getLevelRequirements(level).map((req) => (
-                            <TableCell key={req.key} className={`py-3 px-2 ${
+                            <TableHead key={req.key} className={`font-bold text-purple-900 py-4 px-6 bg-gradient-to-r from-purple-50 to-lavender-50 text-base whitespace-pre-line ${
                               req.key.includes("Awarded") ? "w-[12%]" : "w-[10%]"
-                            }`}>
-                              {getStatusBadge(employee, req)}
-                            </TableCell>
+                            }`}>{req.name}</TableHead>
                           ))}
-                          <TableCell className="py-3 px-3 w-[10%]">
-                            <div className="flex items-center gap-2">
-                              <div className="flex-1 bg-gray-200 rounded-full h-2 overflow-hidden">
-                                <div 
-                                  className={`h-full rounded-full transition-all duration-300 ${
-                                    progressPercentage >= 80 ? 'bg-gradient-to-r from-green-500 to-emerald-500' :
-                                    progressPercentage >= 60 ? 'bg-gradient-to-r from-blue-500 to-indigo-500' :
-                                    progressPercentage >= 40 ? 'bg-gradient-to-r from-yellow-500 to-orange-500' :
-                                    progressPercentage >= 20 ? 'bg-gradient-to-r from-orange-500 to-red-500' :
-                                    'bg-gradient-to-r from-gray-400 to-gray-500'
-                                  }`}
-                                  style={{ width: `${progressPercentage}%` }}
-                                />
-                              </div>
-                              <span className={`text-sm font-bold min-w-[2rem] ${
-                                progressPercentage >= 80 ? 'text-green-600' :
-                                progressPercentage >= 60 ? 'text-blue-600' :
-                                progressPercentage >= 40 ? 'text-yellow-600' :
-                                progressPercentage >= 20 ? 'text-orange-600' :
-                                'text-gray-600'
-                              }`}>
-                                {progressPercentage}%
-                              </span>
-                            </div>
-                          </TableCell>
                         </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        ))}
-      </div>
+                      </TableHeader>
+                    </Table>
+                  </div>
+
+                  {/* Scrollable Table Body */}
+                  <div className="flex-1 overflow-auto min-h-0">
+                    <Table>
+                      <TableBody>
+                        {currentEmployees.map((employee, index) => {
+                          return (
+                            <TableRow key={employee.employeeId} className={`${index % 2 === 0 ? 'bg-white' : 'bg-purple-50/30'} hover:bg-purple-50/60 transition-all duration-200 border-b border-purple-100`}>
+                              <TableCell className="py-3 px-6 w-[15%]">
+                                <div className="text-left">
+                                  <EmployeeDetailModal employee={employee}>
+                                    <div className="font-semibold text-purple-900 text-base cursor-pointer hover:text-purple-600 hover:underline transition-colors">
+                                      {employee.name}
+                                    </div>
+                                  </EmployeeDetailModal>
+                                  <div className="text-sm text-gray-500">{employee.employeeId}</div>
+                                </div>
+                              </TableCell>
+                              <TableCell className="py-3 px-6 w-[12%]">
+                                <div className="bg-purple-100 rounded-lg px-2 py-1 inline-block">
+                                  <span className="text-sm font-medium text-purple-700">{employee.facility}</span>
+                                </div>
+                              </TableCell>
+                              <TableCell className="py-3 px-6 w-[12%]">
+                                <div className="bg-lavender-100 rounded-lg px-2 py-1 inline-block">
+                                  <span className="text-sm font-medium text-lavender-700">{employee.area}</span>
+                                </div>
+                              </TableCell>
+                              {getLevelRequirements(level).map((req) => (
+                                <TableCell key={req.key} className={`py-3 px-6 ${
+                                  req.key.includes("Awarded") ? "w-[12%]" : "w-[10%]"
+                                }`}>
+                                  {getStatusBadge(employee, req)}
+                                </TableCell>
+                              ))}
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  {/* Pagination */}
+                  <div className="flex-shrink-0 border-t border-gray-200 bg-white px-6 py-4">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm text-gray-600">
+                        Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, totalEmployees)} of {totalEmployees} employees
+                        {totalPages > 1 && ` (Page ${currentPage} of ${totalPages})`}
+                      </div>
+                        {totalPages > 1 && (
+                          <Pagination>
+                            <PaginationContent>
+                              <PaginationItem>
+                                <PaginationPrevious 
+                                  href="#"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    if (currentPage > 1) setCurrentPage(currentPage - 1);
+                                  }}
+                                  className={currentPage <= 1 ? "pointer-events-none opacity-50" : ""}
+                                />
+                              </PaginationItem>
+                              
+                              {/* Page numbers */}
+                              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                                let pageNum;
+                                if (totalPages <= 5) {
+                                  pageNum = i + 1;
+                                } else if (currentPage <= 3) {
+                                  pageNum = i + 1;
+                                } else if (currentPage >= totalPages - 2) {
+                                  pageNum = totalPages - 4 + i;
+                                } else {
+                                  pageNum = currentPage - 2 + i;
+                                }
+                                
+                                return (
+                                  <PaginationItem key={pageNum}>
+                                    <PaginationLink
+                                      href="#"
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        setCurrentPage(pageNum);
+                                      }}
+                                      isActive={currentPage === pageNum}
+                                    >
+                                      {pageNum}
+                                    </PaginationLink>
+                                  </PaginationItem>
+                                );
+                              })}
+                              
+                              <PaginationItem>
+                                <PaginationNext 
+                                  href="#"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    if (currentPage < totalPages) setCurrentPage(currentPage + 1);
+                                  }}
+                                  className={currentPage >= totalPages ? "pointer-events-none opacity-50" : ""}
+                                />
+                              </PaginationItem>
+                            </PaginationContent>
+                          </Pagination>
+                        )}
+                      </div>
+                    </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          ))}
+        </div>
     </Tabs>
   </div>
 );

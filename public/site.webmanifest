@@ -1,0 +1,23 @@
+{
+  "name": "SecureCare Training Dashboard",
+  "short_name": "SecureCare",
+  "description": "HR-friendly SecureCare training & certification management dashboard",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1e3a8a",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "32x32",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "120x120",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

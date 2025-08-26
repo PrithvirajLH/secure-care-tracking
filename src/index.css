@@ -1,6 +1,44 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,100..900;1,100..900&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  :root {
+    --animate-aurora: aurora 60s linear infinite;
+  }
+
+  @keyframes aurora {
+    from {
+      background-position:
+        50% 50%,
+        50% 50%;
+    }
+    to {
+      background-position:
+        350% 50%,
+        350% 50%;
+    }
+  }
+
+  /* Apply Futura-style font (Inter) globally */
+  * {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  }
+
+  html, body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  }
+
+  /* Ensure all text elements use the Futura-style font */
+  h1, h2, h3, h4, h5, h6, p, span, div, button, input, textarea, select, label, a {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  }
+  .theme {
+    --animate-shine: shine var(--duration) infinite linear;
+  }
+}
 
 /* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
 All colors MUST be HSL.
@@ -8,62 +46,66 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    /* Core palette (HSL) */
-    --background: 213 100% 97%; /* Light Blue #eff6ff */
-    --foreground: 222 84% 5%;
+    /* Soft Lavender & White Color Palette */
+    --background: 0 0% 100%; /* Pure White */
+    --foreground: 270 20% 25%; /* Soft Dark Lavender */
 
-    --card: 0 0% 100%;
-    --card-foreground: 222 84% 5%;
+    /* Subtle surface variations */
+    --card: 270 15% 98%; /* Very Light Lavender */
+    --card-foreground: 270 20% 25%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222 84% 5%;
+    --popover: 270 15% 98%; /* Very Light Lavender */
+    --popover-foreground: 270 20% 25%;
 
-    --primary: 226 71% 40%; /* Deep Blue #1e40af */
-    --primary-foreground: 210 40% 98%;
+    /* Primary Lavender */
+    --primary: 270 50% 60%; /* Soft Lavender */
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 210 20% 98%; /* Light Gray #f9fafb */
-    --secondary-foreground: 222 47% 11%;
+    --secondary: 270 20% 95%; /* Very Light Lavender */
+    --secondary-foreground: 270 20% 25%;
 
-    --muted: 210 20% 98%;
-    --muted-foreground: 220 9% 46%; /* Neutral Gray #6b7280 */
+    --muted: 270 15% 92%; /* Light Lavender */
+    --muted-foreground: 270 15% 45%;
 
-    --accent: 38 92% 50%; /* Gold #f59e0b */
-    --accent-foreground: 210 40% 98%;
+    /* Accent - same as primary for consistency */
+    --accent: 270 50% 60%; /* Soft Lavender */
+    --accent-foreground: 0 0% 100%;
 
-    --success: 161 94% 30%; /* Green #059669 */
-    --success-foreground: 210 40% 98%;
+    /* Status colors - lavender variations */
+    --success: 270 50% 60%; /* Soft Lavender */
+    --success-foreground: 0 0% 100%;
 
-    --warning: 32 94% 44%; /* Orange #d97706 */
-    --warning-foreground: 210 40% 98%;
+    --warning: 270 50% 60%; /* Soft Lavender */
+    --warning-foreground: 0 0% 100%;
 
-    --destructive: 0 72% 51%; /* Red #dc2626 */
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 270 50% 60%; /* Soft Lavender */
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 226 71% 40%;
+    --border: 270 15% 88%; /* Light Lavender Border */
+    --input: 270 15% 88%; /* Light Lavender Input */
+    --ring: 270 50% 60%; /* Soft Lavender Ring */
 
     --radius: 0.75rem;
 
-    /* Sidebar */
-    --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 222 47% 11%;
-    --sidebar-primary: 226 71% 40%;
-    --sidebar-primary-foreground: 210 40% 98%;
-    --sidebar-accent: 210 20% 98%;
-    --sidebar-accent-foreground: 222 47% 11%;
-    --sidebar-border: 214.3 31.8% 91.4%;
-    --sidebar-ring: 226 71% 40%;
+    /* Sidebar - lavender and white */
+    --sidebar-background: 270 15% 98%; /* Very Light Lavender */
+    --sidebar-foreground: 270 20% 25%;
+    --sidebar-primary: 270 50% 60%; /* Soft Lavender */
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 270 20% 95%; /* Very Light Lavender */
+    --sidebar-accent-foreground: 270 20% 25%;
+    --sidebar-border: 270 15% 88%; /* Light Lavender Border */
+    --sidebar-ring: 270 50% 60%; /* Soft Lavender Ring */
 
-    /* Brand Accents */
-    --brand-gold: 38 92% 50%;
-    --brand-purple: 262 83% 58%;
-    --brand-teal: 173 89% 33%;
+    /* Brand colors - lavender variations */
+    --brand-gold: 270 50% 60%; /* Soft Lavender */
+    --brand-purple: 270 50% 60%; /* Soft Lavender */
+    --brand-teal: 270 50% 60%; /* Soft Lavender */
 
-    /* Motion + depth */
-    --shadow-elegant: 0 10px 30px -10px hsl(var(--primary) / 0.25);
-    --shadow-glow: 0 0 40px hsl(var(--brand-teal) / 0.35);
-    --gradient-primary: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--brand-teal)));
+    /* Subtle shadows */
+    --shadow-elegant: 0 10px 30px -10px hsl(var(--primary) / 0.15);
+    --shadow-glow: 0 0 40px hsl(var(--primary) / 0.2);
+    --gradient-primary: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary) / 0.8));
   }
 
   .dark {
@@ -125,5 +167,99 @@ All colors MUST be HSL.
 @layer utilities {
   .hover-scale {
     @apply transition-transform duration-200 hover:scale-105;
+  }
+
+  .aurora-background {
+    position: relative;
+    /* CSS variables for Soft Lavender & White theme - more vibrant */
+    --lavender-100: #f3f4f6;
+    --lavender-200: #e5e7eb;
+    --lavender-300: #d1d5db;
+    --lavender-400: #9ca3af;
+    --lavender-500: #6b7280;
+    --lavender-600: #4b5563;
+    --soft-lavender: #d8b4fe;
+    --light-lavender: #e9d5ff;
+    --medium-lavender: #c084fc;
+    --deep-lavender: #a855f7;
+    --white: #ffffff;
+    --transparent: transparent;
+
+    --aurora: repeating-linear-gradient(
+      100deg,
+      var(--soft-lavender) 10%,
+      var(--light-lavender) 15%,
+      var(--medium-lavender) 20%,
+      var(--deep-lavender) 25%,
+      var(--soft-lavender) 30%
+    );
+    --dark-gradient: repeating-linear-gradient(
+      100deg,
+      var(--lavender-600) 0%,
+      var(--lavender-600) 7%,
+      var(--transparent) 10%,
+      var(--transparent) 12%,
+      var(--lavender-600) 16%
+    );
+    --white-gradient: repeating-linear-gradient(
+      100deg,
+      var(--white) 0%,
+      var(--white) 7%,
+      var(--transparent) 10%,
+      var(--transparent) 12%,
+      var(--white) 16%
+    );
+    will-change: background-position;
+  }
+
+  /* Blurred, animated overlay for the streak effect */
+  .aurora-background::before {
+    content: "";
+    position: fixed;
+    inset: -10px;
+    pointer-events: none;
+    background-image: var(--white-gradient), var(--aurora);
+    background-size: 300% 200%, 200% 100%;
+    background-position: 50% 50%, 50% 50%;
+    filter: invert(1) blur(10px);
+    opacity: 0.3;
+    mix-blend-mode: difference;
+    animation: var(--animate-aurora);
+    z-index: -1;
+    will-change: background-position;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+@theme inline {
+  @keyframes shine {
+  0% {
+    background-position: 0% 0%;
+    }
+  50% {
+    background-position: 100% 100%;
+    }
+  to {
+    background-position: 0% 0%;
+    }
+  }
+  @keyframes shine {
+  0% {
+    background-position: 0% 0%;
+    }
+  50% {
+    background-position: 100% 100%;
+    }
+  to {
+    background-position: 0% 0%;
+    }
   }
 }

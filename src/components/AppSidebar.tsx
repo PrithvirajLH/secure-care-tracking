@@ -1,55 +1,54 @@
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 import { BarChart3, Users2, GraduationCap, CalendarClock, Settings, Home } from "lucide-react";
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-} from "@/components/ui/sidebar";
+import { useSidebar } from "@/components/ui/sidebar";
+import { motion } from "motion/react";
 
 export default function AppSidebar() {
-  const location = useLocation();
+  const { open, animate } = useSidebar();
   const items = [
-    { title: "Dashboard", url: "/", icon: Home },
-    { title: "Employees", url: "/employees", icon: Users2 },
-    { title: "Training", url: "/training", icon: GraduationCap },
-    { title: "Advisors", url: "/advisors", icon: CalendarClock },
-    { title: "Analytics", url: "/analytics", icon: BarChart3 },
-    { title: "Settings", url: "/settings", icon: Settings },
+    { title: "Dashboard", to: "/", Icon: Home },
+    { title: "Employees", to: "/employees", Icon: Users2 },
+    { title: "Training", to: "/training", Icon: GraduationCap },
+    { title: "Advisors", to: "/advisors", Icon: CalendarClock },
+    { title: "Analytics", to: "/analytics", Icon: BarChart3 },
+    { title: "Settings", to: "/settings", Icon: Settings },
   ];
 
   return (
-    <Sidebar>
-      <SidebarHeader>
-        <div className="px-2 py-1.5">
-          <div className="text-lg font-semibold">SecureCare</div>
-          <div className="text-xs text-muted-foreground">Training Dashboard</div>
-        </div>
-      </SidebarHeader>
-      <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Main</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {items.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={location.pathname === item.url}>
-                    <NavLink to={item.url} end>
-                      <item.icon />
-                      <span>{item.title}</span>
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-      </SidebarContent>
-    </Sidebar>
+    <div className="h-full flex flex-col">
+            <div className="py-2">
+                           <div className="flex items-center justify-center min-w-[80px]">
+           <div className="h-20 w-20 flex items-center justify-center flex-shrink-0">
+             <img src="/logo.svg" alt="SecureCare" className="h-20 w-20" />
+           </div>
+         </div>
+        {/* Removed tagline per request */}
+      </div>
+             <nav className="mt-2 space-y-1">
+         {items.map(({ title, to, Icon }) => (
+           <NavLink
+             key={title}
+             to={to}
+             end={to === "/"}
+             className={({ isActive }) =>
+               `flex items-center justify-center gap-3 rounded-md px-2 py-2 text-sm transition-colors ${
+                 isActive ? "bg-accent text-accent-foreground" : "hover:bg-accent/60"
+               }`
+             }
+           >
+             <Icon className="h-6 w-6" />
+            <motion.span
+              animate={{
+                display: animate ? (open ? "inline-block" : "none") : "inline-block",
+                opacity: animate ? (open ? 1 : 0) : 1,
+              }}
+              className="whitespace-pre text-base font-medium tracking-tight"
+            >
+              {title}
+            </motion.span>
+          </NavLink>
+        ))}
+      </nav>
+    </div>
   );
 }
