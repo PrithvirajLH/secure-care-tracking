@@ -17,24 +17,24 @@ export default function AppSidebar() {
   return (
     <div className="h-full flex flex-col">
             <div className="py-2">
-                           <div className="flex items-center justify-center min-w-[80px]">
-           <div className="h-20 w-20 flex items-center justify-center flex-shrink-0">
-             <img src="/logo.svg" alt="SecureCare" className="h-20 w-20" />
-           </div>
-         </div>
+                                       <div className="flex items-center justify-center w-full">
+            <div className="h-20 w-20 flex items-center justify-center flex-shrink-0">
+              <img src="/logo.svg" alt="SecureCare" className="h-20 w-20" />
+            </div>
+          </div>
         {/* Removed tagline per request */}
       </div>
-             <nav className="mt-2 space-y-1">
+                           <nav className="mt-2 space-y-1 flex flex-col items-center">
          {items.map(({ title, to, Icon }) => (
            <NavLink
              key={title}
              to={to}
              end={to === "/"}
-             className={({ isActive }) =>
-               `flex items-center justify-center gap-3 rounded-md px-2 py-2 text-sm transition-colors ${
-                 isActive ? "bg-accent text-accent-foreground" : "hover:bg-accent/60"
-               }`
-             }
+                           className={({ isActive }) =>
+                `flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm transition-colors w-full max-w-[220px] ${
+                  isActive ? "bg-purple-100 text-purple-700 shadow-sm" : "hover:bg-purple-50"
+                }`
+              }
            >
              <Icon className="h-6 w-6" />
             <motion.span

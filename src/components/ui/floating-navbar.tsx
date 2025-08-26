@@ -73,20 +73,20 @@ export const FloatingNav = ({
               key={`link=${idx}`}
               href={navItem.link}
               className={cn(
-                "relative dark:text-neutral-50 items-center flex space-x-2 text-neutral-600 dark:hover:text-neutral-300 hover:text-neutral-500 transition-all duration-300 group"
+                "relative dark:text-neutral-50 items-center flex space-x-2 dark:hover:text-neutral-300 hover:text-neutral-500 transition-all duration-300 group"
               )}
             >
               <motion.div
                 className={cn(
                   "relative p-2 rounded-lg",
                   isActive 
-                    ? "bg-accent text-accent-foreground shadow-lg" 
-                    : "hover:bg-accent/60"
+                    ? "bg-purple-100 shadow-sm" 
+                    : "hover:bg-purple-50"
                 )}
                 initial={{ scale: 1 }}
                 animate={{ 
-                  scale: isActive ? 1.1 : 1,
-                  backgroundColor: isActive ? "hsl(var(--accent))" : "transparent"
+                  scale: isActive ? 1.05 : 1,
+                  backgroundColor: isActive ? "#f3e8ff" : "transparent"
                 }}
                 whileHover={{ scale: isActive ? 1.15 : 1.05 }}
                 whileTap={{ scale: 0.95 }}
@@ -98,26 +98,18 @@ export const FloatingNav = ({
                 }}
               >
                 <motion.span 
-                  className="block sm:hidden"
-                  animate={{ 
-                    color: isActive ? "#ffffff" : "#52525b"
-                  }}
-                  transition={{ 
-                    duration: 0.3,
-                    ease: "easeInOut"
-                  }}
+                  className={cn(
+                    "block sm:hidden transition-colors duration-300",
+                    isActive ? "text-purple-700" : "text-neutral-900"
+                  )}
                 >
                   {navItem.icon}
                 </motion.span>
                 <motion.span 
-                  className="hidden sm:block text-sm font-medium"
-                  animate={{ 
-                    color: isActive ? "#ffffff" : "#52525b"
-                  }}
-                  transition={{ 
-                    duration: 0.3,
-                    ease: "easeInOut"
-                  }}
+                  className={cn(
+                    "hidden sm:block text-sm font-medium transition-colors duration-300",
+                    isActive ? "text-purple-700" : "text-neutral-900"
+                  )}
                 >
                   {navItem.name}
                 </motion.span>
@@ -125,7 +117,7 @@ export const FloatingNav = ({
                 {/* Active indicator */}
                 {isActive && (
                   <motion.div
-                    className="absolute inset-0 bg-accent/20 rounded-lg"
+                    className="absolute inset-0 bg-purple-200/30 rounded-lg"
                     layoutId="activeTab"
                     initial={{ opacity: 0, scale: 0.8 }}
                     animate={{ opacity: 1, scale: 1 }}
@@ -141,7 +133,7 @@ export const FloatingNav = ({
                 
                 {/* Hover glow effect */}
                 <motion.div
-                  className="absolute inset-0 bg-accent/10 rounded-lg opacity-0 group-hover:opacity-100"
+                  className="absolute inset-0 bg-purple-100/50 rounded-lg opacity-0 group-hover:opacity-100"
                   initial={{ opacity: 0 }}
                   whileHover={{ opacity: 1 }}
                   transition={{ duration: 0.2 }}

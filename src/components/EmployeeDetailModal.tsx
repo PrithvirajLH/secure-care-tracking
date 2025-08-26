@@ -461,30 +461,30 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
                           className={cn(
                             "relative p-2 rounded-lg transition-all duration-300",
                             isActive 
-                              ? "bg-accent text-accent-foreground shadow-lg scale-110" 
-                              : "hover:bg-accent/60"
+                              ? "bg-purple-100 text-purple-700 shadow-sm scale-105" 
+                              : "hover:bg-purple-50"
                           )}
                         >
                           <span className={cn(
                             "block sm:hidden transition-colors duration-300",
-                            isActive ? "text-white" : "text-neutral-600"
+                            isActive ? "text-purple-700" : "text-neutral-600"
                           )}>
                             <level.progress.icon className="w-4 h-4" />
                           </span>
                           <span className={cn(
                             "hidden sm:block text-sm font-medium transition-colors duration-300",
-                            isActive ? "text-white" : "text-neutral-600"
+                            isActive ? "text-purple-700" : "text-neutral-600"
                           )}>
                             {level.name}
                           </span>
                           
                           {/* Active indicator */}
                           {isActive && (
-                            <div className="absolute inset-0 bg-accent/20 rounded-lg" />
+                            <div className="absolute inset-0 bg-purple-200/30 rounded-lg" />
                           )}
                           
                           {/* Hover glow effect */}
-                          <div className="absolute inset-0 bg-accent/10 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
+                          <div className="absolute inset-0 bg-purple-100/50 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
                         </div>
                       </button>
                     );
