@@ -8,6 +8,7 @@ import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { DatePicker } from "@/components/ui/date-picker";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { motion, AnimatePresence } from "framer-motion";
 import { 
   Calendar, 
   Clock, 
@@ -455,37 +456,67 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
                       <button
                         key={`level-${idx}`}
                         onClick={() => setCurrentLevel(level.key)}
-                        className="relative items-center flex space-x-2 text-neutral-600 hover:text-neutral-500 transition-all duration-300 group"
+                        className="relative items-center flex space-x-2 transition-all duration-300 group"
                       >
-                        <div
+                        <motion.div
                           className={cn(
-                            "relative p-2 rounded-lg transition-all duration-300",
+                            "relative p-2 rounded-lg",
                             isActive 
-                              ? "bg-purple-100 text-purple-700 shadow-sm scale-105" 
+                              ? "bg-purple-100 shadow-sm" 
                               : "hover:bg-purple-50"
                           )}
+                          initial={{ scale: 1 }}
+                          animate={{ 
+                            scale: isActive ? 1.05 : 1,
+                            backgroundColor: isActive ? "#f3e8ff" : "transparent"
+                          }}
+                          whileHover={{ scale: isActive ? 1.15 : 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                          transition={{ 
+                            type: "spring", 
+                            bounce: 0.2, 
+                            duration: 0.4,
+                            ease: "easeInOut"
+                          }}
                         >
-                          <span className={cn(
+                          <motion.span className={cn(
                             "block sm:hidden transition-colors duration-300",
-                            isActive ? "text-purple-700" : "text-neutral-600"
+                            isActive ? "text-purple-700" : "text-neutral-900"
                           )}>
                             <level.progress.icon className="w-4 h-4" />
-                          </span>
-                          <span className={cn(
+                          </motion.span>
+                          <motion.span className={cn(
                             "hidden sm:block text-sm font-medium transition-colors duration-300",
-                            isActive ? "text-purple-700" : "text-neutral-600"
+                            isActive ? "text-purple-700" : "text-neutral-900"
                           )}>
                             {level.name}
-                          </span>
+                          </motion.span>
                           
                           {/* Active indicator */}
                           {isActive && (
-                            <div className="absolute inset-0 bg-purple-200/30 rounded-lg" />
+                            <motion.div
+                              className="absolute inset-0 bg-purple-200/30 rounded-lg"
+                              layoutId="activeTab"
+                              initial={{ opacity: 0, scale: 0.8 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              exit={{ opacity: 0, scale: 0.8 }}
+                              transition={{ 
+                                type: "spring", 
+                                bounce: 0.3, 
+                                duration: 0.5,
+                                ease: "easeInOut"
+                              }}
+                            />
                           )}
                           
                           {/* Hover glow effect */}
-                          <div className="absolute inset-0 bg-purple-100/50 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
-                        </div>
+                          <motion.div
+                            className="absolute inset-0 bg-purple-100/50 rounded-lg opacity-0 group-hover:opacity-100"
+                            initial={{ opacity: 0 }}
+                            whileHover={{ opacity: 1 }}
+                            transition={{ duration: 0.2 }}
+                          />
+                        </motion.div>
                       </button>
                     );
                   })}
