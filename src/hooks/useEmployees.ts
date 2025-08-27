@@ -26,8 +26,42 @@ interface EmployeeResponse {
 
 // Mock data generator for testing - simplified to match existing Employee type
 const generateMockEmployees = (count: number = 15000): Employee[] => {
-  const facilities = ['Main Hospital', 'North Clinic', 'South Center', 'East Wing', 'West Facility'];
-  const areas = ['Emergency', 'ICU', 'Pediatrics', 'Surgery', 'Cardiology', 'Neurology', 'Oncology'];
+  const facilities = [
+    'Afton Oaks Nursing and Rehabilitation Center', 'Alvarado Meadows Nursing and Rehab', 'Amarillo Skilled Care', 'Amistad', 'Arboretum of Winnie',
+    'Arlington Heights', 'Atrium of Bellmead', 'Avalon Place Kirbyville', 'Ballinger Healthcare', 'Beaumont Nursing',
+    'Beltline Healthcare Center', 'Bertram Nursing', 'Big Spring', 'Birchwood Nursing', 'Bluebonnet Nursing',
+    'Bluebonnet Point Wellness', 'Brentwood Terrace', 'Brownwood', 'Buena Vida Odessa', 'Buena Vida San Antonio',
+    'Caprock', 'Care Nursing', 'Castle Pines', 'Cedar Creek', 'Cedar Manor', 'Central Texas',
+    'Chatfield', 'Cherokee Rose', 'Chisolm Trail Nursing and Rehabilitation Center', 'Concho Health and Rehab', 'Copperas Hollow Assisted Living',
+    'Copperas Hollow Nursing and Rehab', 'Cottonwood', 'Country View Nursing', 'Crossroads', 'Deerings', 'Deleon',
+    'Desoto Nursing and Rehabilitation Center', 'Devine', 'Dogwood', 'Downtown', 'Eagle Pass', 'El Paso Health and Rehab',
+    'Estates Healthcare', 'Fair Park Health & Rehabilitation Center', 'Fairfield', 'Five Points Amarillo', 'Five Points Desoto',
+    'Five Points of College Station', 'Five Points of Lake Highlands', 'Five Points of Pflugerville', 'Fortress', 'Fountains of Tyler',
+    'Franklin', 'Franklin Heights', 'Ganado', 'Georgia Manor', 'Gilmer Nursing', 'Grace Pointe Wellness Center',
+    'Graham Oaks', 'Granbury Care', 'Great Plains', 'Greenbrier of Tyler', 'Greenbrier Palestine',
+    'Greenhill Villas', 'Heritage House', 'Heritage House of Marshall', 'Heritage Place of Decatur', 'Hillcrest Manor Nursing and Rehabilitation',
+    'Hills Nursing', 'Honey Grove Nursing Center', 'Huebner Creek', 'Interlochen', 'Kemp Care Center',
+    'Kenedy', 'Kerens Care Center', 'La Bahia Nursing', 'La Hacienda', 'La Vida Serena',
+    'Lake Lodge', 'Lampasas Nursing and Rehabilitation Center', 'Lampstand', 'Lancaster Nursing and Rehabilitation', 'Landmark of Amarillo Rehab and Nursing',
+    'Landmark of Plano Rehab and Nursing', 'Legacy at Corsicana Rehabilitation and Healthcare', 'Legacy at Jacksonville', 'Longmeadow', 'Longview',
+    'Lubbock Health', 'Madisonville', 'Madisonville Assisted Living', 'Marine Creek Nursing', 'Matagorda',
+    'McLean Care', 'Memphis Convalescent', 'Mesa Vista', 'Mexia Skilled Care', 'Mineral Wells',
+    'Mission Ridge Nursing', 'Mount Pleasant ALF', 'Mountain View', 'Mullican Care Center', 'Navasota Nursing',
+    'Normandy Terrace', 'North Park', 'North Pointe', 'Oak Ridge Manor', 'Oakmont of Humble',
+    'Oakmont of Katy', 'Oaks at Granbury', 'Oasis', 'Park Highlands', 'Park Place Care Center',
+    'Park Plaza', 'Parkview Manor Nursing and Rehab', 'Peach Tree', 'Pebble Creek', 'Pecan Tree Rehab and Health Care Center',
+    'Pine Tree Lodge', 'Pleasant Springs', 'Premier Memory Care of Alice', 'Premier SNF of Alice', 'River City Care Center',
+    'River Oaks Nursing and Rehabilitation Center', 'Rock Creek', 'Rockwall Nursing Care Center', 'San Saba', 'Seven Oaks Nursing',
+    'Shady Oak', 'Shiner', 'Sienna', 'Silver Tree', 'Slaton Care Center', 'Songbird',
+    'Southern Specialty', 'St Giles', 'St Teresa Nursing and Rehab', 'Sunflower Park', 'Texoma',
+    'The Arbors', 'The Homestead Assisted Living', 'The Park', 'The Plaza at Richardson', 'The Rio at Mission Trails',
+    'The Village at Heritage Oaks', 'The Village at Heritage Oaks - Alf', 'Treemont Healthcare', 'Turner Park', 'Twilight',
+    'Twin Oaks', 'Twin Pines', 'Twin Pines North', 'University Park Nursing', 'University Rehabilitation Center',
+    'Vidor', 'Villa of Toscana', 'Villa of Wolfforth', 'Vintage Assisted Living of Denton', 'Vintage Health Care Center',
+    'Vista Hills', 'Wellington Care', 'Westward Trails', 'Whispering Pines Lodge', 'Whisperwood',
+    'Whitesboro Health & Rehabilitation Center', 'Winnie L Nursing And Rehab', 'Yorktown Nursing & Rehabilitation Center'
+  ];
+  const areas = ['Area 1', 'Area 2', 'Area 3', 'Area 4', 'Area 5', 'Area 6', 'Area 7', 'Area 8', 'Area 9', 'Area 10', 'Area 11', 'Area 12', 'Area 13', 'Area 14', 'Area 15', 'Area 16'];
   const staffRoles = ['Nurse', 'Doctor', 'Technician', 'Therapist', 'Administrator'];
   const names = [
     'John Smith', 'Sarah Johnson', 'Michael Brown', 'Emily Davis', 'David Wilson',
@@ -38,19 +72,53 @@ const generateMockEmployees = (count: number = 15000): Employee[] => {
     'Rachel Carter', 'Timothy Mitchell', 'Heather Perez', 'Jeffrey Roberts', 'Melissa Turner'
   ];
 
+  // Create facility to area mapping for equal distribution
+  // 168 facilities ÷ 16 areas = 10.5 facilities per area
+  // We'll distribute 10 facilities to first 8 areas and 11 facilities to last 8 areas
+  const facilityToAreaMapping: { [facility: string]: string } = {};
+  let facilityIndex = 0;
+  
+  for (let areaIndex = 0; areaIndex < areas.length; areaIndex++) {
+    const facilitiesPerArea = areaIndex < 8 ? 10 : 11; // First 8 areas get 10, last 8 get 11
+    for (let i = 0; i < facilitiesPerArea && facilityIndex < facilities.length; i++) {
+      facilityToAreaMapping[facilities[facilityIndex]] = areas[areaIndex];
+      facilityIndex++;
+    }
+  }
+
   return Array.from({ length: count }, (_, index) => {
     const employeeId = `EMP${String(index + 1).padStart(6, '0')}`;
     const name = names[index % names.length];
-    const facility = facilities[index % facilities.length];
-    const area = areas[index % areas.length];
+    
+    // Distribute employees equally among facilities
+    const facilityIndex = index % facilities.length;
+    const facility = facilities[facilityIndex];
+    
+    // Get area from facility mapping
+    const area = facilityToAreaMapping[facility] || areas[0];
+    
     const staffRole = staffRoles[index % staffRoles.length];
     
-    // Generate random training progress
-    const level1Awarded = Math.random() > 0.3;
-    const level2Awarded = level1Awarded && Math.random() > 0.4;
-    const level3Awarded = level2Awarded && Math.random() > 0.5;
-    const consultantAwarded = level3Awarded && Math.random() > 0.6;
-    const coachAwarded = consultantAwarded && Math.random() > 0.7;
+         // Generate more realistic training progress with various stages
+     const level1Progress = Math.random();
+     const level1Awarded = level1Progress > 0.7; // 30% completed Level 1
+     const level1InProgress = level1Progress > 0.3 && level1Progress <= 0.7; // 40% in progress
+     
+     const level2Progress = level1Awarded ? Math.random() : 0;
+     const level2Awarded = level2Progress > 0.6; // 40% of Level 1 graduates complete Level 2
+     const level2InProgress = level2Progress > 0.2 && level2Progress <= 0.6; // 40% in progress
+     
+     const level3Progress = level2Awarded ? Math.random() : 0;
+     const level3Awarded = level3Progress > 0.5; // 50% of Level 2 graduates complete Level 3
+     const level3InProgress = level3Progress > 0.1 && level3Progress <= 0.5; // 40% in progress
+     
+     const consultantProgress = level3Awarded ? Math.random() : 0;
+     const consultantAwarded = consultantProgress > 0.4; // 60% of Level 3 graduates complete Consultant
+     const consultantInProgress = consultantProgress > 0.1 && consultantProgress <= 0.4; // 30% in progress
+     
+     const coachProgress = consultantAwarded ? Math.random() : 0;
+     const coachAwarded = coachProgress > 0.3; // 70% of Consultant graduates complete Coach
+     const coachInProgress = coachProgress > 0.1 && coachProgress <= 0.3; // 20% in progress
 
     return {
       employeeId,
@@ -58,55 +126,67 @@ const generateMockEmployees = (count: number = 15000): Employee[] => {
       facility,
       area,
       staffRoles: staffRole,
-      level1ReliasAssigned: level1Awarded ? new Date(Date.now() - Math.random() * 90 * 24 * 60 * 60 * 1000) : null,
-      level1ReliasCompleted: level1Awarded ? new Date(Date.now() - Math.random() * 60 * 24 * 60 * 60 * 1000) : null,
-      level1ConferenceCompleted: level1Awarded ? new Date(Date.now() - Math.random() * 45 * 24 * 60 * 60 * 1000) : null,
-      level1Awarded,
-      level1AwardedDate: level1Awarded ? new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000) : null,
+             level1ReliasAssigned: (level1Awarded || level1InProgress) ? new Date(Date.now() - Math.random() * 90 * 24 * 60 * 60 * 1000) : null,
+       level1ReliasCompleted: level1Awarded ? new Date(Date.now() - Math.random() * 60 * 24 * 60 * 60 * 1000) : (level1InProgress ? new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000) : null),
+       level1ConferenceCompleted: level1Awarded ? new Date(Date.now() - Math.random() * 45 * 24 * 60 * 60 * 1000) : (level1InProgress ? new Date(Date.now() - Math.random() * 20 * 24 * 60 * 60 * 1000) : null),
+       level1Awarded,
+       level1AwardedDate: level1Awarded ? new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000) : null,
       level1Notes: '',
       level1Advisor: '',
       level1AwaitingRelias: null,
-      level2ReliasAssigned: level2Awarded ? new Date(Date.now() - Math.random() * 80 * 24 * 60 * 60 * 1000) : null,
-      level2ReliasCompleted: level2Awarded ? new Date(Date.now() - Math.random() * 50 * 24 * 60 * 60 * 1000) : null,
-      level2ConferenceCompleted: level2Awarded ? new Date(Date.now() - Math.random() * 40 * 24 * 60 * 60 * 1000) : null,
-      level2StandingVideo: level2Awarded ? new Date(Date.now() - Math.random() * 35 * 24 * 60 * 60 * 1000) : null,
-      level2SleepingSittingVideo: level2Awarded ? new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000) : null,
-      level2FeedingVideo: level2Awarded ? new Date(Date.now() - Math.random() * 25 * 24 * 60 * 60 * 1000) : null,
-      level2Awarded,
-      level2AwardedDate: level2Awarded ? new Date(Date.now() - Math.random() * 20 * 24 * 60 * 60 * 1000) : null,
+             level2ReliasAssigned: (level2Awarded || level2InProgress) ? new Date(Date.now() - Math.random() * 80 * 24 * 60 * 60 * 1000) : null,
+       level2ReliasCompleted: level2Awarded ? new Date(Date.now() - Math.random() * 50 * 24 * 60 * 60 * 1000) : (level2InProgress ? new Date(Date.now() - Math.random() * 25 * 24 * 60 * 60 * 1000) : null),
+       level2ConferenceCompleted: level2Awarded ? new Date(Date.now() - Math.random() * 40 * 24 * 60 * 60 * 1000) : (level2InProgress ? new Date(Date.now() - Math.random() * 15 * 24 * 60 * 60 * 1000) : null),
+      level2StandingVideo: level2Awarded
+        ? new Date(Date.now() - Math.random() * 35 * 24 * 60 * 60 * 1000)
+        : (level2InProgress && ((index + 0) % 3 !== 0) ? new Date(Date.now() - Math.random() * 10 * 24 * 60 * 60 * 1000) : null),
+      level2SleepingSittingVideo: level2Awarded
+        ? new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000)
+        : (level2InProgress && ((index + 1) % 3 !== 0) ? new Date(Date.now() - Math.random() * 8 * 24 * 60 * 60 * 1000) : null),
+      level2FeedingVideo: level2Awarded
+        ? new Date(Date.now() - Math.random() * 25 * 24 * 60 * 60 * 1000)
+        : (level2InProgress && ((index + 2) % 3 !== 0) ? new Date(Date.now() - Math.random() * 5 * 24 * 60 * 60 * 1000) : null),
+       level2Awarded,
+       level2AwardedDate: level2Awarded ? new Date(Date.now() - Math.random() * 20 * 24 * 60 * 60 * 1000) : null,
       level2Notes: '',
       level2Advisor: '',
       level2AwaitingRelias: null,
-      level3ReliasAssigned: level3Awarded ? new Date(Date.now() - Math.random() * 70 * 24 * 60 * 60 * 1000) : null,
-      level3ReliasCompleted: level3Awarded ? new Date(Date.now() - Math.random() * 40 * 24 * 60 * 60 * 1000) : null,
-      level3ConferenceCompleted: level3Awarded ? new Date(Date.now() - Math.random() * 35 * 24 * 60 * 60 * 1000) : null,
-      level3SittingStandingApproaching: level3Awarded ? new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000) : null,
-      level3NoHandNoSpeak: level3Awarded ? new Date(Date.now() - Math.random() * 25 * 24 * 60 * 60 * 1000) : null,
-      level3ChallengeSleeping: level3Awarded ? new Date(Date.now() - Math.random() * 20 * 24 * 60 * 60 * 1000) : null,
-      level3Awarded,
-      level3AwardedDate: level3Awarded ? new Date(Date.now() - Math.random() * 15 * 24 * 60 * 60 * 1000) : null,
+             level3ReliasAssigned: (level3Awarded || level3InProgress) ? new Date(Date.now() - Math.random() * 70 * 24 * 60 * 60 * 1000) : null,
+       level3ReliasCompleted: level3Awarded ? new Date(Date.now() - Math.random() * 40 * 24 * 60 * 60 * 1000) : (level3InProgress ? new Date(Date.now() - Math.random() * 20 * 24 * 60 * 60 * 1000) : null),
+       level3ConferenceCompleted: level3Awarded ? new Date(Date.now() - Math.random() * 35 * 24 * 60 * 60 * 1000) : (level3InProgress ? new Date(Date.now() - Math.random() * 12 * 24 * 60 * 60 * 1000) : null),
+      level3SittingStandingApproaching: level3Awarded
+        ? new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000)
+        : (level3InProgress && ((index + 0) % 3 !== 0) ? new Date(Date.now() - Math.random() * 8 * 24 * 60 * 60 * 1000) : null),
+      level3NoHandNoSpeak: level3Awarded
+        ? new Date(Date.now() - Math.random() * 25 * 24 * 60 * 60 * 1000)
+        : (level3InProgress && ((index + 1) % 3 !== 0) ? new Date(Date.now() - Math.random() * 5 * 24 * 60 * 60 * 1000) : null),
+      level3ChallengeSleeping: level3Awarded
+        ? new Date(Date.now() - Math.random() * 20 * 24 * 60 * 60 * 1000)
+        : (level3InProgress && ((index + 2) % 3 !== 0) ? new Date(Date.now() - Math.random() * 3 * 24 * 60 * 60 * 1000) : null),
+       level3Awarded,
+       level3AwardedDate: level3Awarded ? new Date(Date.now() - Math.random() * 15 * 24 * 60 * 60 * 1000) : null,
       level3Notes: '',
       level3Advisor: '',
       level3AwaitingRelias: null,
-      consultantReliasAssigned: consultantAwarded ? new Date(Date.now() - Math.random() * 60 * 24 * 60 * 60 * 1000) : null,
-      consultantReliasCompleted: consultantAwarded ? new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000) : null,
-      consultantConferenceCompleted: consultantAwarded ? new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000) : null,
-      consultantCoachingSession1: consultantAwarded ? new Date(Date.now() - Math.random() * 25 * 24 * 60 * 60 * 1000) : null,
-      consultantCoachingSession2: consultantAwarded ? new Date(Date.now() - Math.random() * 20 * 24 * 60 * 60 * 1000) : null,
-      consultantCoachingSession3: consultantAwarded ? new Date(Date.now() - Math.random() * 15 * 24 * 60 * 60 * 1000) : null,
-      consultantAwarded,
-      consultantAwardedDate: consultantAwarded ? new Date(Date.now() - Math.random() * 10 * 24 * 60 * 60 * 1000) : null,
+             consultantReliasAssigned: (consultantAwarded || consultantInProgress) ? new Date(Date.now() - Math.random() * 60 * 24 * 60 * 60 * 1000) : null,
+       consultantReliasCompleted: consultantAwarded ? new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000) : (consultantInProgress ? new Date(Date.now() - Math.random() * 15 * 24 * 60 * 60 * 1000) : null),
+       consultantConferenceCompleted: consultantAwarded ? new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000) : (consultantInProgress ? new Date(Date.now() - Math.random() * 10 * 24 * 60 * 60 * 1000) : null),
+       consultantCoachingSession1: consultantAwarded ? new Date(Date.now() - Math.random() * 25 * 24 * 60 * 60 * 1000) : (consultantInProgress ? new Date(Date.now() - Math.random() * 8 * 24 * 60 * 60 * 1000) : null),
+       consultantCoachingSession2: consultantAwarded ? new Date(Date.now() - Math.random() * 20 * 24 * 60 * 60 * 1000) : (consultantInProgress ? new Date(Date.now() - Math.random() * 5 * 24 * 60 * 60 * 1000) : null),
+       consultantCoachingSession3: consultantAwarded ? new Date(Date.now() - Math.random() * 15 * 24 * 60 * 60 * 1000) : (consultantInProgress ? new Date(Date.now() - Math.random() * 2 * 24 * 60 * 60 * 1000) : null),
+       consultantAwarded,
+       consultantAwardedDate: consultantAwarded ? new Date(Date.now() - Math.random() * 10 * 24 * 60 * 60 * 1000) : null,
       consultantNotes: '',
       consultantAdvisor: '',
       consultantAwaitingRelias: null,
-      coachReliasAssigned: coachAwarded ? new Date(Date.now() - Math.random() * 50 * 24 * 60 * 60 * 1000) : null,
-      coachReliasCompleted: coachAwarded ? new Date(Date.now() - Math.random() * 20 * 24 * 60 * 60 * 1000) : null,
-      coachConferenceCompleted: coachAwarded ? new Date(Date.now() - Math.random() * 25 * 24 * 60 * 60 * 1000) : null,
-      coachCoachingSession1: coachAwarded ? new Date(Date.now() - Math.random() * 20 * 24 * 60 * 60 * 1000) : null,
-      coachCoachingSession2: coachAwarded ? new Date(Date.now() - Math.random() * 15 * 24 * 60 * 60 * 1000) : null,
-      coachCoachingSession3: coachAwarded ? new Date(Date.now() - Math.random() * 10 * 24 * 60 * 60 * 1000) : null,
-      coachAwarded,
-      coachAwardedDate: coachAwarded ? new Date(Date.now() - Math.random() * 5 * 24 * 60 * 60 * 1000) : null,
+             coachReliasAssigned: (coachAwarded || coachInProgress) ? new Date(Date.now() - Math.random() * 50 * 24 * 60 * 60 * 1000) : null,
+       coachReliasCompleted: coachAwarded ? new Date(Date.now() - Math.random() * 20 * 24 * 60 * 60 * 1000) : (coachInProgress ? new Date(Date.now() - Math.random() * 10 * 24 * 60 * 60 * 1000) : null),
+       coachConferenceCompleted: coachAwarded ? new Date(Date.now() - Math.random() * 25 * 24 * 60 * 60 * 1000) : (coachInProgress ? new Date(Date.now() - Math.random() * 8 * 24 * 60 * 60 * 1000) : null),
+       coachCoachingSession1: coachAwarded ? new Date(Date.now() - Math.random() * 20 * 24 * 60 * 60 * 1000) : (coachInProgress ? new Date(Date.now() - Math.random() * 5 * 24 * 60 * 60 * 1000) : null),
+       coachCoachingSession2: coachAwarded ? new Date(Date.now() - Math.random() * 15 * 24 * 60 * 60 * 1000) : (coachInProgress ? new Date(Date.now() - Math.random() * 3 * 24 * 60 * 60 * 1000) : null),
+       coachCoachingSession3: coachAwarded ? new Date(Date.now() - Math.random() * 10 * 24 * 60 * 60 * 1000) : (coachInProgress ? new Date(Date.now() - Math.random() * 1 * 24 * 60 * 60 * 1000) : null),
+       coachAwarded,
+       coachAwardedDate: coachAwarded ? new Date(Date.now() - Math.random() * 5 * 24 * 60 * 60 * 1000) : null,
       coachNotes: '',
       coachAdvisor: '',
       coachAwaitingRelias: null,
@@ -128,19 +208,24 @@ const fetchEmployees = async ({ page, limit, filters }: PaginationParams): Promi
   if (filters.level) {
     switch (filters.level) {
       case 'care-partner':
-        // All employees are eligible for Level 1
+        // Show all employees who haven't completed Level 1 yet
+        filteredEmployees = filteredEmployees.filter(e => !e.level1Awarded);
         break;
       case 'associate':
-        filteredEmployees = filteredEmployees.filter(e => e.level1Awarded);
+        // Show employees who have completed Level 1 but haven't completed Level 2 yet
+        filteredEmployees = filteredEmployees.filter(e => e.level1Awarded && !e.level2Awarded);
         break;
       case 'champion':
-        filteredEmployees = filteredEmployees.filter(e => e.level2Awarded);
+        // Show employees who have completed Level 2 but haven't completed Level 3 yet
+        filteredEmployees = filteredEmployees.filter(e => e.level2Awarded && !e.level3Awarded);
         break;
       case 'consultant':
-        filteredEmployees = filteredEmployees.filter(e => e.level3Awarded);
+        // Show employees who have completed Level 3 but haven't completed Consultant yet
+        filteredEmployees = filteredEmployees.filter(e => e.level3Awarded && !e.consultantAwarded);
         break;
       case 'coach':
-        filteredEmployees = filteredEmployees.filter(e => e.consultantAwarded);
+        // Show employees who have completed Consultant but haven't completed Coach yet
+        filteredEmployees = filteredEmployees.filter(e => e.consultantAwarded && !e.coachAwarded);
         break;
     }
   }

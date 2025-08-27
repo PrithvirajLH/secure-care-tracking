@@ -19,8 +19,12 @@ import {
   Video,
   GraduationCap,
   Star,
-  TrendingUp
+  TrendingUp,
+  Filter,
+  X
 } from "lucide-react";
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 
 import { useApp } from "@/context/AppContext";
 import TrainingAssignmentWizard from "@/components/TrainingAssignmentWizard";
@@ -43,6 +47,13 @@ export default function Training() {
   const [activeTab, setActiveTab] = useState("care-partner");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [itemsPerPage] = useState(50); // Increased for better performance
+  const [facilityFilter, setFacilityFilter] = useState<string>("all");
+  const [areaFilter, setAreaFilter] = useState<string>("all");
+  const [reqStatusFilters, setReqStatusFilters] = useState<Record<string, 'all' | 'completed' | 'scheduled' | 'pending'>>({});
+  const [scheduledDates, setScheduledDates] = useState<{[key: string]: Date}>({});
+  const [completedDates, setCompletedDates] = useState<{[key: string]: Date}>({});
+  const [openDatePicker, setOpenDatePicker] = useState<string | null>(null);
+  const [query, setQuery] = useState<string>("");
   
   // Training data hook for database operations
   const {
@@ -84,6 +95,14 @@ export default function Training() {
     }
     // Reset pagination when tab changes
     setCurrentPage(1);
+    // Reset filters on tab change
+    setFacilityFilter('all');
+    setAreaFilter('all');
+    const next: Record<string, 'all' | 'completed' | 'scheduled' | 'pending'> = {};
+    getLevelRequirements(activeTab).forEach(r => {
+      next[r.key] = 'all';
+    });
+    setReqStatusFilters(next);
   }, [activeTab, setCurrentPage]);
 
   useEffect(() => {
@@ -150,9 +169,140 @@ export default function Training() {
     }
   };
 
-      const [scheduledDates, setScheduledDates] = useState<{[key: string]: Date}>({});
-      const [completedDates, setCompletedDates] = useState<{[key: string]: Date}>({});
-      const [openDatePicker, setOpenDatePicker] = useState<string | null>(null);
+  const computeRequirementStatus = (employee: any, reqKey: string): 'completed' | 'scheduled' | 'pending' => {
+    const key = `${employee.employeeId}-${reqKey}`;
+    if (reqKey.includes('Awarded')) {
+      if (employee[reqKey]) return 'completed';
+      if (scheduledDates[key]) return 'scheduled';
+      return 'pending';
+    }
+    if (completedDates[key]) return 'completed';
+    if (employee[reqKey]) return 'completed';
+    if (scheduledDates[key]) return 'scheduled';
+    return 'pending';
+  };
+
+  // Facility to area mapping for filtering
+  const facilityToAreaMapping = useMemo(() => {
+    const allFacilities = [
+      'Afton Oaks Nursing and Rehabilitation Center', 'Alvarado Meadows Nursing and Rehab', 'Amarillo Skilled Care', 'Amistad', 'Arboretum of Winnie',
+      'Arlington Heights', 'Atrium of Bellmead', 'Avalon Place Kirbyville', 'Ballinger Healthcare', 'Beaumont Nursing',
+      'Beltline Healthcare Center', 'Bertram Nursing', 'Big Spring', 'Birchwood Nursing', 'Bluebonnet Nursing',
+      'Bluebonnet Point Wellness', 'Brentwood Terrace', 'Brownwood', 'Buena Vida Odessa', 'Buena Vida San Antonio',
+      'Caprock', 'Care Nursing', 'Castle Pines', 'Cedar Creek', 'Cedar Manor', 'Central Texas',
+      'Chatfield', 'Cherokee Rose', 'Chisolm Trail Nursing and Rehabilitation Center', 'Concho Health and Rehab', 'Copperas Hollow Assisted Living',
+      'Copperas Hollow Nursing and Rehab', 'Cottonwood', 'Country View Nursing', 'Crossroads', 'Deerings', 'Deleon',
+      'Desoto Nursing and Rehabilitation Center', 'Devine', 'Dogwood', 'Downtown', 'Eagle Pass', 'El Paso Health and Rehab',
+      'Estates Healthcare', 'Fair Park Health & Rehabilitation Center', 'Fairfield', 'Five Points Amarillo', 'Five Points Desoto',
+      'Five Points of College Station', 'Five Points of Lake Highlands', 'Five Points of Pflugerville', 'Fortress', 'Fountains of Tyler',
+      'Franklin', 'Franklin Heights', 'Ganado', 'Georgia Manor', 'Gilmer Nursing', 'Grace Pointe Wellness Center',
+      'Graham Oaks', 'Granbury Care', 'Great Plains', 'Greenbrier of Tyler', 'Greenbrier Palestine',
+      'Greenhill Villas', 'Heritage House', 'Heritage House of Marshall', 'Heritage Place of Decatur', 'Hillcrest Manor Nursing and Rehabilitation',
+      'Hills Nursing', 'Honey Grove Nursing Center', 'Huebner Creek', 'Interlochen', 'Kemp Care Center',
+      'Kenedy', 'Kerens Care Center', 'La Bahia Nursing', 'La Hacienda', 'La Vida Serena',
+      'Lake Lodge', 'Lampasas Nursing and Rehabilitation Center', 'Lampstand', 'Lancaster Nursing and Rehabilitation', 'Landmark of Amarillo Rehab and Nursing',
+      'Landmark of Plano Rehab and Nursing', 'Legacy at Corsicana Rehabilitation and Healthcare', 'Legacy at Jacksonville', 'Longmeadow', 'Longview',
+      'Lubbock Health', 'Madisonville', 'Madisonville Assisted Living', 'Marine Creek Nursing', 'Matagorda',
+      'McLean Care', 'Memphis Convalescent', 'Mesa Vista', 'Mexia Skilled Care', 'Mineral Wells',
+      'Mission Ridge Nursing', 'Mount Pleasant ALF', 'Mountain View', 'Mullican Care Center', 'Navasota Nursing',
+      'Normandy Terrace', 'North Park', 'North Pointe', 'Oak Ridge Manor', 'Oakmont of Humble',
+      'Oakmont of Katy', 'Oaks at Granbury', 'Oasis', 'Park Highlands', 'Park Place Care Center',
+      'Park Plaza', 'Parkview Manor Nursing and Rehab', 'Peach Tree', 'Pebble Creek', 'Pecan Tree Rehab and Health Care Center',
+      'Pine Tree Lodge', 'Pleasant Springs', 'Premier Memory Care of Alice', 'Premier SNF of Alice', 'River City Care Center',
+      'River Oaks Nursing and Rehabilitation Center', 'Rock Creek', 'Rockwall Nursing Care Center', 'San Saba', 'Seven Oaks Nursing',
+      'Shady Oak', 'Shiner', 'Sienna', 'Silver Tree', 'Slaton Care Center', 'Songbird',
+      'Southern Specialty', 'St Giles', 'St Teresa Nursing and Rehab', 'Sunflower Park', 'Texoma',
+      'The Arbors', 'The Homestead Assisted Living', 'The Park', 'The Plaza at Richardson', 'The Rio at Mission Trails',
+      'The Village at Heritage Oaks', 'The Village at Heritage Oaks - Alf', 'Treemont Healthcare', 'Turner Park', 'Twilight',
+      'Twin Oaks', 'Twin Pines', 'Twin Pines North', 'University Park Nursing', 'University Rehabilitation Center',
+      'Vidor', 'Villa of Toscana', 'Villa of Wolfforth', 'Vintage Assisted Living of Denton', 'Vintage Health Care Center',
+      'Vista Hills', 'Wellington Care', 'Westward Trails', 'Whispering Pines Lodge', 'Whisperwood',
+      'Whitesboro Health & Rehabilitation Center', 'Winnie L Nursing And Rehab', 'Yorktown Nursing & Rehabilitation Center'
+    ];
+    
+    // Create facility to area mapping (same as in useEmployees.ts)
+    const areas = ['Area 1', 'Area 2', 'Area 3', 'Area 4', 'Area 5', 'Area 6', 'Area 7', 'Area 8', 'Area 9', 'Area 10', 'Area 11', 'Area 12', 'Area 13', 'Area 14', 'Area 15', 'Area 16'];
+    const mapping: { [facility: string]: string } = {};
+    let facilityIndex = 0;
+    
+    for (let areaIndex = 0; areaIndex < areas.length; areaIndex++) {
+      const facilitiesPerArea = areaIndex < 8 ? 10 : 11; // First 8 areas get 10, last 8 get 11
+      for (let i = 0; i < facilitiesPerArea && facilityIndex < allFacilities.length; i++) {
+        mapping[allFacilities[facilityIndex]] = areas[areaIndex];
+        facilityIndex++;
+      }
+    }
+    
+    return mapping;
+  }, []);
+
+  const uniqueFacilities = useMemo(() => {
+    // If area filter is applied, only show facilities from that area
+    if (areaFilter !== 'all') {
+      const facilitiesInArea = Object.entries(facilityToAreaMapping)
+        .filter(([_, area]) => area === areaFilter)
+        .map(([facility, _]) => facility);
+      return facilitiesInArea.sort();
+    }
+    
+    // Otherwise show all facilities
+    return Object.keys(facilityToAreaMapping).sort();
+  }, [areaFilter, facilityToAreaMapping]);
+  const uniqueAreas = useMemo(() => {
+    // Use all 16 areas instead of deriving from current page data
+    const allAreas = ['Area 1', 'Area 2', 'Area 3', 'Area 4', 'Area 5', 'Area 6', 'Area 7', 'Area 8', 'Area 9', 'Area 10', 'Area 11', 'Area 12', 'Area 13', 'Area 14', 'Area 15', 'Area 16'];
+    return allAreas.sort((a, b) => {
+      // Extract numbers from "Area X" format for proper numeric sorting
+      const numA = parseInt(a.replace('Area ', ''));
+      const numB = parseInt(b.replace('Area ', ''));
+      return numA - numB;
+    });
+  }, []);
+
+  const filteredEmployees = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return currentEmployees.filter(emp => {
+      if (q) {
+        const hay = `${emp.name} ${emp.employeeId}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      if (facilityFilter !== 'all' && emp.facility !== facilityFilter) return false;
+      if (areaFilter !== 'all' && emp.area !== areaFilter) return false;
+      // Apply per-requirement filters
+      const requirements = getLevelRequirements(activeTab);
+      for (const r of requirements) {
+        const want = reqStatusFilters[r.key] || 'all';
+        if (want === 'all') continue;
+        const status = computeRequirementStatus(emp, r.key);
+        if (status !== want) return false;
+      }
+      return true;
+    });
+  }, [currentEmployees, query, facilityFilter, areaFilter, reqStatusFilters, activeTab, scheduledDates, completedDates]);
+
+  const isAnyFilterActive = useMemo(() => {
+    if (facilityFilter !== 'all' || areaFilter !== 'all') return true;
+    return getLevelRequirements(activeTab).some(r => (reqStatusFilters[r.key] || 'all') !== 'all');
+  }, [facilityFilter, areaFilter, reqStatusFilters, activeTab]);
+
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (facilityFilter !== 'all') count++;
+    if (areaFilter !== 'all') count++;
+    count += getLevelRequirements(activeTab).reduce((acc, r) => acc + (((reqStatusFilters[r.key] || 'all') !== 'all') ? 1 : 0), 0);
+    return count;
+  }, [facilityFilter, areaFilter, reqStatusFilters, activeTab]);
+
+  const clearFilters = () => {
+    setFacilityFilter('all');
+    setAreaFilter('all');
+    setQuery('');
+    const reset: Record<string, 'all' | 'completed' | 'scheduled' | 'pending'> = {};
+    getLevelRequirements(activeTab).forEach(r => { reset[r.key] = 'all'; });
+    setReqStatusFilters(reset);
+  };
+
+      // moved to top
 
       const handleScheduleDate = async (employeeId: string, requirementKey: string, date: Date | undefined) => {
         const key = `${employeeId}-${requirementKey}`;
@@ -494,40 +644,131 @@ export default function Training() {
      );
    }
 
-       return (
-      <div className="flex flex-col h-full">
-        {!isModalOpen && (
-          <FloatingNav
-            navItems={[
-              { name: "Level 1", link: "#care-partner", icon: <Users className="h-4 w-4" /> },
-              { name: "Level 2", link: "#associate", icon: <Award className="h-4 w-4" /> },
-              { name: "Level 3", link: "#champion", icon: <Star className="h-4 w-4" /> },
-              { name: "Consultant", link: "#consultant", icon: <GraduationCap className="h-4 w-4" /> },
-              { name: "Coach", link: "#coach", icon: <TrendingUp className="h-4 w-4" /> },
-            ]}
-            className="top-4"
-            activeTab={activeTab}
-          />
-        )}
+   return (
+     <div className="flex flex-col h-full">
+       {!isModalOpen && (
+         <FloatingNav
+           navItems={[
+             { name: "Level 1", link: "#care-partner", icon: <Users className="h-4 w-4" /> },
+             { name: "Level 2", link: "#associate", icon: <Award className="h-4 w-4" /> },
+             { name: "Level 3", link: "#champion", icon: <Star className="h-4 w-4" /> },
+             { name: "Consultant", link: "#consultant", icon: <GraduationCap className="h-4 w-4" /> },
+             { name: "Coach", link: "#coach", icon: <TrendingUp className="h-4 w-4" /> },
+           ]}
+           className="top-4"
+           activeTab={activeTab}
+         />
+       )}
         
         {/* Sticky Table Header - Fixed to viewport */}
         <div className="sticky top-0 z-20 bg-gradient-to-r from-purple-50 to-lavender-50 border-b border-purple-100 shadow-sm mt-14">
-          <div className="px-6">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-gradient-to-r from-purple-50 to-lavender-50 border-b border-purple-100">
-                  <TableHead className="font-bold text-purple-900 py-4 px-3 w-[12%] bg-gradient-to-r from-purple-50 to-lavender-50 text-base">Employee</TableHead>
-                  <TableHead className="font-bold text-purple-900 py-4 px-3 w-[10%] bg-gradient-to-r from-purple-50 to-lavender-50 text-base">Facility</TableHead>
-                  <TableHead className="font-bold text-purple-900 py-4 px-3 w-[10%] bg-gradient-to-r from-purple-50 to-lavender-50 text-base">Area</TableHead>
-                  {getLevelRequirements(activeTab).map((req) => (
-                    <TableHead key={req.key} className={`font-bold text-purple-900 py-4 px-6 bg-gradient-to-r from-purple-50 to-lavender-50 text-base whitespace-pre-line ${
-                      req.key.includes("Awarded") ? "w-[12%]" : "w-[10%]"
-                    }`}>{req.name}</TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-            </Table>
+          <div className="px-6 py-2 flex items-center justify-between gap-3">
+            <div className="flex-1 max-w-sm">
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search employee by name or ID"
+                className="h-9"
+              />
+            </div>
+            {isAnyFilterActive && (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={clearFilters}
+                className="h-8 px-3 rounded-full bg-purple-600 hover:bg-purple-700 text-white shadow-sm"
+              >
+                <X className="w-4 h-4 mr-2" />
+                Clear filters
+                <span className="ml-2 inline-flex items-center justify-center rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-medium">
+                  {activeFilterCount}
+                </span>
+              </Button>
+            )}
           </div>
+          <div className="px-6 bg-gradient-to-r from-purple-50 to-lavender-50">
+                     <Table>
+                       <TableHeader>
+                         <TableRow className="bg-gradient-to-r from-purple-50 to-lavender-50 border-b border-purple-100">
+                           <TableHead className="font-bold text-purple-900 py-4 px-3 w-[12%] bg-gradient-to-r from-purple-50 to-lavender-50 text-base">Employee</TableHead>
+                  <TableHead className="font-bold text-purple-900 py-4 px-3 w-[10%] bg-gradient-to-r from-purple-50 to-lavender-50 text-base">
+                    <div className="flex items-center gap-1">
+                      <span>Facility</span>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-6 px-1">
+                            <Filter className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                                                 <DropdownMenuContent align="end" className="w-80 max-h-[600px] overflow-y-auto scrollbar-hide">
+                           <DropdownMenuLabel>Filter by Facility ({uniqueFacilities.length} total)</DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                                                     <DropdownMenuRadioGroup value={facilityFilter} onValueChange={(v) => setFacilityFilter(v)}>
+                             <DropdownMenuRadioItem value="all">All</DropdownMenuRadioItem>
+                             {uniqueFacilities.map(f => (
+                               <DropdownMenuRadioItem key={f} value={f} className="py-2">{f}</DropdownMenuRadioItem>
+                             ))}
+                           </DropdownMenuRadioGroup>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </TableHead>
+                  <TableHead className="font-bold text-purple-900 py-4 px-3 w-[10%] bg-gradient-to-r from-purple-50 to-lavender-50 text-base">
+                    <div className="flex items-center gap-1">
+                      <span>Area</span>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-6 px-1">
+                            <Filter className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-56">
+                          <DropdownMenuLabel>Filter by Area</DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                                                     <DropdownMenuRadioGroup value={areaFilter} onValueChange={(v) => {
+                             setAreaFilter(v);
+                             // Reset facility filter when area changes (1:1 relationship)
+                             setFacilityFilter('all');
+                           }}>
+                            <DropdownMenuRadioItem value="all">All</DropdownMenuRadioItem>
+                            {uniqueAreas.map(a => (
+                              <DropdownMenuRadioItem key={a} value={a}>{a}</DropdownMenuRadioItem>
+                            ))}
+                          </DropdownMenuRadioGroup>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </TableHead>
+                  {getLevelRequirements(activeTab).map((req) => (
+                             <TableHead key={req.key} className={`font-bold text-purple-900 py-4 px-6 bg-gradient-to-r from-purple-50 to-lavender-50 text-base whitespace-pre-line ${
+                               req.key.includes("Awarded") ? "w-[12%]" : "w-[10%]"
+                    }`}>
+                      <div className="flex items-center gap-1">
+                        <span>{req.name}</span>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-6 px-1">
+                              <Filter className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-44">
+                            <DropdownMenuLabel>Status</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuRadioGroup value={reqStatusFilters[req.key] || 'all'} onValueChange={(v) => setReqStatusFilters(prev => ({ ...prev, [req.key]: v as any }))}>
+                              <DropdownMenuRadioItem value="all">All</DropdownMenuRadioItem>
+                              <DropdownMenuRadioItem value="completed">Completed</DropdownMenuRadioItem>
+                              <DropdownMenuRadioItem value="scheduled">Scheduled</DropdownMenuRadioItem>
+                              <DropdownMenuRadioItem value="pending">Pending</DropdownMenuRadioItem>
+                            </DropdownMenuRadioGroup>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </TableHead>
+                           ))}
+                         </TableRow>
+                       </TableHeader>
+                     </Table>
+                   </div>
         </div>
         
         <Tabs value={activeTab} onValueChange={setActiveTab} className={`flex-1 flex flex-col ${isModalOpen ? 'mt-0' : 'mt-0'}`}>
@@ -538,49 +779,49 @@ export default function Training() {
               <TabsContent key={level} value={level} className="flex-1 flex flex-col min-h-0" style={{ display: activeTab === level ? 'flex' : 'none' }}>
                 <Card className="border-0 shadow-lg flex-1 flex flex-col min-h-0">
                   <CardContent className="p-0 flex-1 flex flex-col min-h-0">
-                    {/* Scrollable Table Body */}
-                    <div className="flex-1 overflow-auto min-h-0">
-                      <Table>
-                        <TableBody>
-                          {currentEmployees.map((employee, index) => {
-                            return (
-                              <TableRow key={employee.employeeId} className={`${index % 2 === 0 ? 'bg-white' : 'bg-purple-50/30'} hover:bg-purple-50/60 transition-all duration-200 border-b border-purple-100`}>
-                                <TableCell className="py-3 px-3 w-[12%]">
-                                  <div className="text-left">
-                                    <EmployeeDetailModal 
-                                      employee={employee}
-                                      onModalOpenChange={setIsModalOpen}
-                                    >
-                                      <div className="font-semibold text-purple-900 text-base cursor-pointer hover:text-purple-600 hover:underline transition-colors">
-                                        {employee.name}
-                                      </div>
-                                    </EmployeeDetailModal>
-                                    <div className="text-sm text-gray-500">{employee.employeeId}</div>
-                                  </div>
-                                </TableCell>
-                                <TableCell className="py-3 px-3 w-[10%]">
-                                  <div className="bg-purple-100 rounded-lg px-2 py-1 inline-block">
-                                    <span className="text-sm font-medium text-purple-700">{employee.facility}</span>
-                                  </div>
-                                </TableCell>
-                                <TableCell className="py-3 px-3 w-[10%]">
-                                  <div className="bg-lavender-100 rounded-lg px-2 py-1 inline-block">
-                                    <span className="text-sm font-medium text-lavender-700">{employee.area}</span>
-                                  </div>
-                                </TableCell>
-                                {getLevelRequirements(level).map((req) => (
-                                  <TableCell key={req.key} className={`py-3 px-6 ${
-                                    req.key.includes("Awarded") ? "w-[12%]" : "w-[10%]"
-                                  }`}>
-                                    {getStatusBadge(employee, req)}
-                                  </TableCell>
-                                ))}
-                              </TableRow>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
-                    </div>
+                   {/* Scrollable Table Body */}
+                   <div className="flex-1 overflow-auto min-h-0">
+                     <Table>
+                       <TableBody>
+                          {filteredEmployees.map((employee, index) => {
+                           return (
+                             <TableRow key={employee.employeeId} className={`${index % 2 === 0 ? 'bg-white' : 'bg-purple-50/30'} hover:bg-purple-50/60 transition-all duration-200 border-b border-purple-100`}>
+                               <TableCell className="py-3 px-3 w-[12%]">
+                                 <div className="text-left">
+                                   <EmployeeDetailModal 
+                                     employee={employee}
+                                     onModalOpenChange={setIsModalOpen}
+                                   >
+                                     <div className="font-semibold text-purple-900 text-base cursor-pointer hover:text-purple-600 hover:underline transition-colors">
+                                       {employee.name}
+                                     </div>
+                                   </EmployeeDetailModal>
+                                   <div className="text-sm text-gray-500">{employee.employeeId}</div>
+                                 </div>
+                               </TableCell>
+                               <TableCell className="py-3 px-3 w-[10%]">
+                                 <div className="bg-purple-100 rounded-lg px-2 py-1 inline-block">
+                                   <span className="text-sm font-medium text-purple-700">{employee.facility}</span>
+                                 </div>
+                               </TableCell>
+                               <TableCell className="py-3 px-3 w-[10%]">
+                                 <div className="bg-lavender-100 rounded-lg px-2 py-1 inline-block">
+                                   <span className="text-sm font-medium text-lavender-700">{employee.area}</span>
+                                 </div>
+                               </TableCell>
+                               {getLevelRequirements(level).map((req) => (
+                                 <TableCell key={req.key} className={`py-3 px-6 ${
+                                   req.key.includes("Awarded") ? "w-[12%]" : "w-[10%]"
+                                 }`}>
+                                   {getStatusBadge(employee, req)}
+                                 </TableCell>
+                               ))}
+                             </TableRow>
+                           );
+                         })}
+                       </TableBody>
+                     </Table>
+                   </div>
 
                    {/* Pagination */}
                    <div className="flex-shrink-0 border-t border-gray-200 bg-white px-6 py-4">
