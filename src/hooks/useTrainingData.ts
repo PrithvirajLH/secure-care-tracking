@@ -94,6 +94,26 @@ export const useTrainingData = () => {
     },
   });
 
+  // Award training mutation
+  const awardTrainingMutation = useMutation({
+    mutationFn: ({ employeeId, requirementKey, date }: { employeeId: string; requirementKey: string; date: Date }) =>
+      trainingAPI.awardTraining(employeeId, requirementKey, date),
+    onSuccess: (data, variables) => {
+      // Invalidate and refetch relevant queries
+      queryClient.invalidateQueries({ queryKey: trainingKeys.employee(variables.employeeId) });
+      queryClient.invalidateQueries({ queryKey: trainingKeys.allEmployees() });
+      
+      toast.success('Level awarded successfully!', {
+        description: `Awarded on ${variables.date.toLocaleDateString()}`,
+      });
+    },
+    onError: (error) => {
+      toast.error('Failed to award level', {
+        description: error instanceof Error ? error.message : 'An error occurred',
+      });
+    },
+  });
+
   // Generic update mutation
   const updateTrainingMutation = useMutation({
     mutationFn: (update: TrainingUpdate) => trainingAPI.updateTrainingData(update),
@@ -124,18 +144,21 @@ export const useTrainingData = () => {
     scheduleTraining: scheduleTrainingMutation.mutate,
     completeTraining: completeTrainingMutation.mutate,
     rescheduleTraining: rescheduleTrainingMutation.mutate,
+    awardTraining: awardTrainingMutation.mutate,
     updateTraining: updateTrainingMutation.mutate,
     
     // Loading states
     isScheduling: scheduleTrainingMutation.isPending,
     isCompleting: completeTrainingMutation.isPending,
     isRescheduling: rescheduleTrainingMutation.isPending,
+    isAwarding: awardTrainingMutation.isPending,
     isUpdating: updateTrainingMutation.isPending,
     
     // Error states
     scheduleError: scheduleTrainingMutation.error,
     completeError: completeTrainingMutation.error,
     rescheduleError: rescheduleTrainingMutation.error,
+    awardError: awardTrainingMutation.error,
     updateError: updateTrainingMutation.error,
   };
 };

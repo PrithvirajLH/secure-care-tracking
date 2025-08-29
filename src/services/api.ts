@@ -6,7 +6,7 @@ export interface TrainingUpdate {
   requirementKey: string;
   scheduledDate?: Date;
   completedDate?: Date;
-  action: 'schedule' | 'complete' | 'reschedule';
+  action: 'schedule' | 'complete' | 'reschedule' | 'award';
 }
 
 export interface TrainingData {
@@ -63,6 +63,28 @@ class TrainingAPI {
 
     if (!response.ok) {
       throw new Error(`Failed to complete training: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  // Award a level to an employee
+  async awardTraining(employeeId: string, requirementKey: string, date: Date): Promise<TrainingData> {
+    const response = await fetch(`${this.baseURL}/training/award`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        employeeId,
+        requirementKey,
+        awardedDate: date.toISOString(),
+        action: 'award'
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to award training: ${response.statusText}`);
     }
 
     return response.json();

@@ -271,17 +271,6 @@ yarn test:coverage
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## 📝 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🆘 Support
-
-For support and questions:
-- **Email**: support@securecare.com
-- **Documentation**: [docs.securecare.com](https://docs.securecare.com)
-- **Issues**: [GitHub Issues](https://github.com/your-repo/issues)
-
 ## 🙏 Acknowledgments
 
 - **Shadcn/ui** for the excellent component library
@@ -289,6 +278,7 @@ For support and questions:
 - **Tailwind CSS** for the utility-first CSS framework
 - **Vite** for the fast build tool
 - **React Team** for the amazing framework
+- **Lucide React** for the beautiful icon library
 
 ---
 

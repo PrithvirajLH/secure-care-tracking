@@ -21,7 +21,7 @@ export default function AppLayout({ children }: PropsWithChildren) {
             </Sidebar>
           </div>
           <div className="flex flex-col min-w-0">
-            <main className="p-4 md:p-6">
+            <main className="p-0">
               {children}
             </main>
           </div>

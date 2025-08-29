@@ -28,38 +28,10 @@ export const FloatingNav = ({
   const [visible, setVisible] = useState(true);
   const [lastScrollY, setLastScrollY] = useState(0);
 
-  // Enhanced scroll detection for hide/show behavior
+  // Always visible behavior
   useEffect(() => {
-    const handleScroll = () => {
-      const currentScrollY = window.scrollY;
-      
-      if (alwaysVisible) {
-        setVisible(true);
-        return;
-      }
-
-      // Show nav when at the top
-      if (currentScrollY < 100) {
-        setVisible(true);
-        setLastScrollY(currentScrollY);
-        return;
-      }
-
-      // Hide/show based on scroll direction
-      if (currentScrollY > lastScrollY + 10) {
-        // Scrolling down - hide nav
-        setVisible(false);
-      } else if (currentScrollY < lastScrollY - 10) {
-        // Scrolling up - show nav
-        setVisible(true);
-      }
-      
-      setLastScrollY(currentScrollY);
-    };
-
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [lastScrollY, alwaysVisible]);
+    setVisible(true);
+  }, []);
 
   return (
     <AnimatePresence mode="wait">
@@ -77,7 +49,7 @@ export const FloatingNav = ({
           ease: "easeInOut",
         }}
         className={cn(
-          "flex max-w-fit fixed top-4 inset-x-0 mx-auto border border-transparent dark:border-white/[0.2] rounded-full dark:bg-black bg-white shadow-[0px_2px_3px_-1px_rgba(0,0,0,0.1),0px_1px_0px_0px_rgba(25,28,33,0.02),0px_0px_0px_1px_rgba(25,28,33,0.08)] z-[5000] px-6 py-3 items-center justify-center space-x-6 backdrop-blur-sm bg-white/90",
+          "flex max-w-fit fixed top-4 inset-x-0 mx-auto border border-transparent dark:border-white/[0.2] rounded-full dark:bg-black bg-white shadow-[0px_2px_3px_-1px_rgba(0,0,0,0.1),0px_1px_0px_0px_rgba(25,28,33,0.02),0px_0px_0px_1px_rgba(25,28,33,0.08)] z-[5000] px-6 py-3 items-center justify-center space-x-6 backdrop-blur-sm bg-white/90 mt-2",
           className
         )}
       >

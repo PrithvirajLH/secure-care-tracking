@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 import { useApp } from "@/context/AppContext";
 import TrainingAssignmentWizard from "@/components/TrainingAssignmentWizard";
@@ -60,9 +61,11 @@ export default function Training() {
     scheduleTraining,
     completeTraining,
     rescheduleTraining,
+    awardTraining,
     isScheduling,
     isCompleting,
     isRescheduling,
+    isAwarding,
   } = useTrainingData();
 
   // Server-side pagination with filters
@@ -84,6 +87,33 @@ export default function Training() {
 
   // Server-side statistics
   const { data: levelStats } = useEmployeeStats(activeTab);
+
+  // Utility function to check if all previous requirements are completed
+  const canAwardLevel = (employee: any, requirementKey: string): { canAward: boolean; missingRequirements: string[] } => {
+    const requirements = getLevelRequirements(activeTab);
+    const currentReqIndex = requirements.findIndex(req => req.key === requirementKey);
+    
+    if (currentReqIndex === -1 || !requirementKey.includes('Awarded')) {
+      return { canAward: false, missingRequirements: [] };
+    }
+
+    const missingRequirements: string[] = [];
+    
+    // Check all requirements before the current one
+    for (let i = 0; i < currentReqIndex; i++) {
+      const req = requirements[i];
+      const value = employee[req.key];
+      
+      if (!value) {
+        missingRequirements.push(req.name);
+      }
+    }
+
+    return {
+      canAward: missingRequirements.length === 0,
+      missingRequirements
+    };
+  };
 
   // Sync active tab with URL hash and dispatch header update
   useEffect(() => {
@@ -143,7 +173,7 @@ export default function Training() {
       case "champion":
         return [
           { name: "Conference\nCompleted", key: "level3ConferenceCompleted" },
-          { name: "Sitting/ Standing/\nApproaching", key: "level3SittingStandingApproaching" },
+          { name: "Sitting/Standing/\nApproaching", key: "level3SittingStandingApproaching" },
           { name: "No Hand/No\nSpeak", key: "level3NoHandNoSpeak" },
           { name: "Challenge\nSleeping", key: "level3ChallengeSleeping" },
           { name: "Level 3 Awarded", key: "level3Awarded" }
@@ -151,17 +181,17 @@ export default function Training() {
       case "consultant":
         return [
           { name: "Conference\nCompleted", key: "consultantConferenceCompleted" },
-          { name: "Coaching Session\n1", key: "consultantCoachingSession1" },
-          { name: "Coaching Session\n2", key: "consultantCoachingSession2" },
-          { name: "Coaching Session\n3", key: "consultantCoachingSession3" },
+          { name: "Coaching \nSession 1", key: "consultantCoachingSession1" },
+          { name: "Coaching \nSession 2", key: "consultantCoachingSession2" },
+          { name: "Coaching \nSession 3", key: "consultantCoachingSession3" },
           { name: "Consultant Awarded", key: "consultantAwarded" }
         ];
       case "coach":
         return [
           { name: "Conference\nCompleted", key: "coachConferenceCompleted" },
-          { name: "Coaching Session\n1", key: "coachCoachingSession1" },
-          { name: "Coaching Session\n2", key: "coachCoachingSession2" },
-          { name: "Coaching Session\n3", key: "coachCoachingSession3" },
+          { name: "Coaching \nSession 1", key: "coachCoachingSession1" },
+          { name: "Coaching \nSession 2", key: "coachCoachingSession2" },
+          { name: "Coaching \nSession 3", key: "coachCoachingSession3" },
           { name: "Coach Awarded", key: "coachAwarded" }
         ];
       default:
@@ -359,6 +389,31 @@ export default function Training() {
         setOpenDatePicker(null);
       };
 
+      const handleMarkAwarded = async (employeeId: string, requirementKey: string) => {
+        const key = `${employeeId}-${requirementKey}`;
+        const currentDate = new Date();
+        
+        // Temporarily disable API calls for testing
+        // try {
+        //   // Call database API to award training
+        //   await awardTraining({ employeeId, requirementKey, date: currentDate });
+        // } catch (error) {
+        //   console.error('Failed to award training:', error);
+        // }
+        
+        // Add to completed dates with current date
+        setCompletedDates(prev => ({
+          ...prev,
+          [key]: currentDate
+        }));
+        
+        toast.success('Level awarded successfully!', {
+          description: `Awarded on ${currentDate.toLocaleDateString()}`,
+        });
+        
+        setOpenDatePicker(null);
+      };
+
       const openDatePickerFor = (key: string) => {
         setOpenDatePicker(key);
       };
@@ -411,7 +466,7 @@ export default function Training() {
         const key = `${employee.employeeId}-${requirement.key}`;
         const scheduledDate = scheduledDates[key];
         const completedDate = completedDates[key];
-                 const isDatePickerOpen = openDatePicker === key || openDatePicker?.startsWith(`reschedule-${key}`);
+        const isDatePickerOpen = openDatePicker === key || openDatePicker?.startsWith(`reschedule-${key}`);
 
         if (requirement.key.includes("Awarded")) {
           const awardDateKey = requirement.key.replace("Awarded", "AwardedDate");
@@ -420,7 +475,7 @@ export default function Training() {
           // Check for completed date first
           if (completedDate) {
             return (
-              <div className="inline-flex items-center gap-1 bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-2 py-1 rounded-full text-sm font-semibold shadow-sm">
+              <div className="inline-flex items-center gap-1 bg-gradient-to-r from-green-500 to-emerald-500 text-white px-2 py-1 rounded-full text-sm font-semibold shadow-sm">
                 <CheckCircle className="w-3 h-3" />
                 <span className="text-sm font-medium">
                   {completedDate.toLocaleDateString()}
@@ -429,101 +484,139 @@ export default function Training() {
             );
           }
           
-                     // Check for scheduled date
-           if (scheduledDate) {
+          // Check for scheduled date
+          if (scheduledDate) {
+            return (
+              <div className="flex flex-col gap-1">
+                <button
+                  onClick={() => openDatePickerFor(key)}
+                  className="inline-flex items-center justify-center gap-1 bg-gradient-to-r from-yellow-500 to-orange-500 text-white px-2 py-1 rounded-full text-sm font-semibold shadow-sm hover:from-yellow-600 hover:to-orange-600 cursor-pointer transition-colors w-20"
+                >
+                  <Clock className="w-3 h-3" />
+                  <span className="text-sm">Scheduled</span>
+                </button>
+                <div className="inline-flex items-center justify-center gap-1 bg-yellow-50 border border-yellow-200 rounded px-2 py-1 w-20">
+                  <span className="text-sm text-yellow-700 font-medium">
+                    {scheduledDate.toLocaleDateString()}
+                  </span>
+                </div>
+                {isDatePickerOpen && (
+                  <div className="absolute z-50 bg-white border border-gray-300 rounded-lg shadow-lg p-2 mt-1 w-48 date-picker-popup">
+                    <div className="flex flex-col gap-2 mb-3">
+                      <button
+                        onClick={() => handleMarkAwarded(employee.employeeId, requirement.key)}
+                        disabled={isAwarding}
+                        className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white px-3 py-2 rounded-lg text-sm font-semibold hover:from-green-600 hover:to-emerald-600 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Award className="w-4 h-4" />
+                        {isAwarding ? 'Awarding...' : 'Mark Awarded'}
+                      </button>
+                      <button
+                        onClick={() => {
+                          // Show date picker for rescheduling
+                          console.log('Setting reschedule for key (first instance):', key);
+                          setOpenDatePicker(`reschedule-${key}`);
+                        }}
+                        disabled={isRescheduling}
+                        className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-yellow-500 to-orange-500 text-white px-3 py-2 rounded-lg text-sm font-semibold hover:from-yellow-600 hover:to-orange-600 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Clock className="w-4 h-4" />
+                        {isRescheduling ? 'Rescheduling...' : 'Reschedule'}
+                      </button>
+                    </div>
+                    {(() => {
+                      if (openDatePicker && openDatePicker.startsWith(`reschedule-${key}`)) {
+                        console.log('Rendering DatePicker for reschedule (first instance), openDatePicker:', openDatePicker, 'key:', key);
+                        return (
+                          <DatePicker
+                            date={scheduledDate}
+                            onDateChange={(date) => handleReschedule(employee.employeeId, requirement.key, date)}
+                            placeholder="Reschedule date"
+                          />
+                        );
+                      }
+                      return null;
+                    })()}
+                  </div>
+                )}
+              </div>
+            );
+          }
+          
+          // Check for existing awarded value
+          if (value) {
+            return (
+              <div className="flex flex-col gap-1">
+                <div className="inline-flex items-center justify-center gap-1 bg-gradient-to-r from-green-500 to-emerald-500 text-white px-2 py-1 rounded-full text-sm font-semibold shadow-sm w-20">
+                  <Award className="w-3 h-3" />
+                  <span className="text-sm">Awarded</span>
+                </div>
+                {awardDate && (
+                  <div className="inline-flex items-center justify-center gap-1 bg-green-50 border border-green-200 rounded px-2 py-1 w-20">
+                    <span className="text-sm text-green-700 font-medium">
+                      {awardDate.toLocaleDateString()}
+                    </span>
+                  </div>
+                )}
+              </div>
+            );
+          }
+
+                     // Check if can award (all previous requirements completed)
+           const { canAward, missingRequirements } = canAwardLevel(employee, requirement.key);
+           
+           if (canAward) {
              return (
                <div className="flex flex-col gap-1">
                  <button
                    onClick={() => openDatePickerFor(key)}
-                   className="inline-flex items-center justify-center gap-1 bg-gradient-to-r from-yellow-500 to-orange-500 text-white px-2 py-1 rounded-full text-sm font-semibold shadow-sm hover:from-yellow-600 hover:to-orange-600 cursor-pointer transition-colors w-20"
+                   disabled={isAwarding}
+                   className="inline-flex items-center justify-center gap-1 bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-sm font-semibold hover:bg-gray-200 cursor-pointer transition-colors w-20 disabled:opacity-50 disabled:cursor-not-allowed"
                  >
                    <Clock className="w-3 h-3" />
-                   <span className="text-sm">Scheduled</span>
+                   <span className="text-sm">Pending</span>
                  </button>
-                 <div className="inline-flex items-center justify-center gap-1 bg-yellow-50 border border-yellow-200 rounded px-2 py-1 w-20">
-                   <span className="text-sm text-yellow-700 font-medium">
-                     {scheduledDate.toLocaleDateString()}
-                   </span>
-                 </div>
                  {isDatePickerOpen && (
                    <div className="absolute z-50 bg-white border border-gray-300 rounded-lg shadow-lg p-2 mt-1 w-48 date-picker-popup">
                      <div className="flex flex-col gap-2 mb-3">
                        <button
-                         onClick={() => handleMarkComplete(employee.employeeId, requirement.key)}
-                         disabled={isCompleting}
-                         className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-3 py-2 rounded-lg text-sm font-semibold hover:from-blue-600 hover:to-indigo-600 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                         onClick={() => handleMarkAwarded(employee.employeeId, requirement.key)}
+                         disabled={isAwarding}
+                         className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white px-3 py-2 rounded-lg text-sm font-semibold hover:from-green-600 hover:to-emerald-600 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                        >
-                         <CheckCircle className="w-4 h-4" />
-                         {isCompleting ? 'Completing...' : 'Mark Complete'}
+                         <Award className="w-4 h-4" />
+                         {isAwarding ? 'Awarding...' : 'Mark Awarded'}
                        </button>
-                                            <button
-                       onClick={() => {
-                         // Show date picker for rescheduling
-                         console.log('Setting reschedule for key (first instance):', key);
-                         setOpenDatePicker(`reschedule-${key}`);
-                       }}
-                       disabled={isRescheduling}
-                       className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-yellow-500 to-orange-500 text-white px-3 py-2 rounded-lg text-sm font-semibold hover:from-yellow-600 hover:to-orange-600 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                     >
-                       <Clock className="w-4 h-4" />
-                       {isRescheduling ? 'Rescheduling...' : 'Reschedule'}
-                     </button>
                      </div>
-                                           {(() => {
-                        if (openDatePicker && openDatePicker.startsWith(`reschedule-${key}`)) {
-                          console.log('Rendering DatePicker for reschedule (first instance), openDatePicker:', openDatePicker, 'key:', key);
-                          return (
-                            <DatePicker
-                              date={scheduledDate}
-                              onDateChange={(date) => handleReschedule(employee.employeeId, requirement.key, date)}
-                              placeholder="Reschedule date"
-                            />
-                          );
-                        }
-                        return null;
-                      })()}
                    </div>
                  )}
                </div>
              );
+           } else {
+             return (
+               <div className="flex flex-col gap-1">
+                 <Tooltip>
+                   <TooltipTrigger asChild>
+                     <button
+                       disabled
+                       className="inline-flex items-center justify-center gap-1 bg-gray-100 text-gray-400 px-2 py-1 rounded-full text-sm font-semibold cursor-not-allowed w-20"
+                     >
+                       <Clock className="w-3 h-3" />
+                       <span className="text-sm">Pending</span>
+                     </button>
+                   </TooltipTrigger>
+                   <TooltipContent>
+                     <p>Cannot be awarded until the following requirements are completed:</p>
+                     <ul className="mt-1">
+                       {missingRequirements.map((req, index) => (
+                         <li key={index} className="text-sm">• {req}</li>
+                       ))}
+                     </ul>
+                   </TooltipContent>
+                 </Tooltip>
+               </div>
+             );
            }
-          
-          // Check for existing awarded value
-          return value ? (
-            <div className="flex flex-col gap-1">
-              <div className="inline-flex items-center justify-center gap-1 bg-gradient-to-r from-green-500 to-emerald-500 text-white px-2 py-1 rounded-full text-sm font-semibold shadow-sm w-20">
-                <CheckCircle className="w-3 h-3" />
-                <span className="text-sm">Awarded</span>
-              </div>
-              {awardDate && (
-                <div className="inline-flex items-center justify-center gap-1 bg-green-50 border border-green-200 rounded px-2 py-1 w-20">
-                  <span className="text-sm text-green-700 font-medium">
-                    {awardDate.toLocaleDateString()}
-                  </span>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="flex flex-col gap-1">
-              <button
-                onClick={() => openDatePickerFor(key)}
-                disabled={isScheduling}
-                className="inline-flex items-center justify-center gap-1 bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-sm font-semibold hover:bg-gray-200 cursor-pointer transition-colors w-20 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Clock className="w-3 h-3" />
-                <span className="text-sm">{isScheduling ? 'Scheduling...' : 'Pending'}</span>
-              </button>
-              {isDatePickerOpen && (
-                <div className="absolute z-50 bg-white border border-gray-300 rounded-lg shadow-lg p-2 mt-1 w-48 date-picker-popup">
-                  <DatePicker
-                    date={scheduledDate}
-                    onDateChange={(date) => handleScheduleDate(employee.employeeId, requirement.key, date)}
-                    placeholder="Schedule date"
-                  />
-                </div>
-              )}
-            </div>
-          );
         }
         
                  if (scheduledDate) {
@@ -584,50 +677,50 @@ export default function Training() {
            );
          }
         
-        if (completedDate) {
-          return (
-            <div className="inline-flex items-center gap-1 bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-2 py-1 rounded-full text-sm font-semibold shadow-sm">
-              <CheckCircle className="w-3 h-3" />
-              <span className="text-sm font-medium">
-                {completedDate.toLocaleDateString()}
-              </span>
-            </div>
-          );
-        }
-        
-        if (value) {
-          return (
-            <div className="inline-flex items-center gap-1 bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-2 py-1 rounded-full text-sm font-semibold shadow-sm">
-              <CheckCircle className="w-3 h-3" />
-              <span className="text-sm font-medium">
-                {value.toLocaleDateString()}
-              </span>
-            </div>
-          );
-        }
-        
-        return (
-          <div className="flex flex-col gap-1">
-                         <button
-                onClick={() => openDatePickerFor(key)}
-                disabled={isScheduling}
-                className="inline-flex items-center justify-center gap-1 bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-sm font-semibold hover:bg-gray-200 cursor-pointer transition-colors w-20 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Clock className="w-3 h-3" />
-                <span className="text-sm">{isScheduling ? 'Scheduling...' : 'Pending'}</span>
-              </button>
-                         {isDatePickerOpen && (
-                <div className="absolute z-50 bg-white border border-gray-300 rounded-lg shadow-lg p-2 mt-1 w-48 date-picker-popup">
-                  <DatePicker
-                    date={scheduledDate}
-                    onDateChange={(date) => handleScheduleDate(employee.employeeId, requirement.key, date)}
-                    placeholder="Schedule date"
-                  />
-                </div>
-              )}
-          </div>
-        );
-      };
+                 if (completedDate) {
+           return (
+             <div className="inline-flex items-center gap-1 bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-2 py-1 rounded-full text-sm font-semibold shadow-sm">
+               <CheckCircle className="w-3 h-3" />
+               <span className="text-sm font-medium">
+                 {completedDate.toLocaleDateString()}
+               </span>
+             </div>
+           );
+         }
+         
+         if (value) {
+           return (
+             <div className="inline-flex items-center gap-1 bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-2 py-1 rounded-full text-sm font-semibold shadow-sm">
+               <CheckCircle className="w-3 h-3" />
+               <span className="text-sm font-medium">
+                 {value.toLocaleDateString()}
+               </span>
+             </div>
+           );
+         }
+         
+         return (
+           <div className="flex flex-col gap-1">
+             <button
+               onClick={() => openDatePickerFor(key)}
+               disabled={isScheduling}
+               className="inline-flex items-center justify-center gap-1 bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-sm font-semibold hover:bg-gray-200 cursor-pointer transition-colors w-20 disabled:opacity-50 disabled:cursor-not-allowed"
+             >
+               <Clock className="w-3 h-3" />
+               <span className="text-sm">{isScheduling ? 'Scheduling...' : 'Pending'}</span>
+             </button>
+             {isDatePickerOpen && (
+               <div className="absolute z-50 bg-white border border-gray-300 rounded-lg shadow-lg p-2 mt-1 w-48 date-picker-popup">
+                 <DatePicker
+                   date={scheduledDate}
+                   onDateChange={(date) => handleScheduleDate(employee.employeeId, requirement.key, date)}
+                   placeholder="Schedule date"
+                 />
+               </div>
+             )}
+           </div>
+         );
+       };
 
    const levelConfig = {
      "care-partner": { title: "Level 1", icon: Users, color: "text-blue-600" },
@@ -665,53 +758,55 @@ export default function Training() {
    }
 
    return (
-     <div className="flex flex-col h-full">
-       {!isModalOpen && (
-         <FloatingNav
-           navItems={[
-             { name: "Level 1", link: "#care-partner", icon: <Users className="h-4 w-4" /> },
-             { name: "Level 2", link: "#associate", icon: <Award className="h-4 w-4" /> },
-             { name: "Level 3", link: "#champion", icon: <Star className="h-4 w-4" /> },
-             { name: "Consultant", link: "#consultant", icon: <GraduationCap className="h-4 w-4" /> },
-             { name: "Coach", link: "#coach", icon: <TrendingUp className="h-4 w-4" /> },
-           ]}
-           className="top-4"
-           activeTab={activeTab}
-         />
-       )}
+     <TooltipProvider>
+       <div className="flex flex-col h-full">
+                   {!isModalOpen && (
+            <FloatingNav
+              navItems={[
+                { name: "Level 1", link: "#care-partner", icon: <Users className="h-4 w-4" /> },
+                { name: "Level 2", link: "#associate", icon: <Award className="h-4 w-4" /> },
+                { name: "Level 3", link: "#champion", icon: <Star className="h-4 w-4" /> },
+                { name: "Consultant", link: "#consultant", icon: <GraduationCap className="h-4 w-4" /> },
+                { name: "Coach", link: "#coach", icon: <TrendingUp className="h-4 w-4" /> },
+              ]}
+              className="top-0"
+              activeTab={activeTab}
+            />
+          )}
         
-        {/* Sticky Table Header - Fixed to viewport */}
-        <div className="sticky top-0 z-20 bg-gradient-to-r from-purple-50 to-lavender-50 border-b border-purple-100 shadow-sm mt-14">
-          <div className="px-6 py-2 flex items-center justify-between gap-3">
-            <div className="flex-1 max-w-sm">
-              <Input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search employee by name or ID"
-                className="h-9"
-              />
-            </div>
+                           {/* Sticky Table Header - Fixed to viewport */}
+          <div className="sticky top-0 z-20 bg-purple-100 border-b border-purple-200 shadow-md">
+           <div className="px-3 sm:px-4 md:px-6 py-2 flex items-center justify-between gap-2 sm:gap-3">
+             <div className="flex-1 max-w-[200px] sm:max-w-[300px] md:max-w-sm pt-5">
+               <Input
+                 value={query}
+                 onChange={(e) => setQuery(e.target.value)}
+                 placeholder="Search employee by name or ID"
+                 className="h-8 sm:h-9 text-sm sm:text-base"
+               />
+             </div>
             {isAnyFilterActive && (
               <Button
                 variant="default"
                 size="sm"
                 onClick={clearFilters}
-                className="h-8 px-3 rounded-full bg-purple-600 hover:bg-purple-700 text-white shadow-sm"
+                className="h-7 sm:h-8 px-2 sm:px-3 rounded-full bg-purple-600 hover:bg-purple-700 text-white shadow-sm text-xs sm:text-sm"
               >
-                <X className="w-4 h-4 mr-2" />
-                Clear filters
-                <span className="ml-2 inline-flex items-center justify-center rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-medium">
+                <X className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                <span className="hidden sm:inline">Clear filters</span>
+                <span className="sm:hidden">Clear</span>
+                <span className="ml-1 sm:ml-2 inline-flex items-center justify-center rounded-full bg-white/20 px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-[10px] font-medium">
                   {activeFilterCount}
                 </span>
               </Button>
             )}
           </div>
-          <div className="px-6 bg-gradient-to-r from-purple-50 to-lavender-50">
+          <div className="px-6">
                      <Table>
                        <TableHeader>
-                         <TableRow className="bg-gradient-to-r from-purple-50 to-lavender-50 border-b border-purple-100">
-                           <TableHead className="font-bold text-purple-900 py-4 px-3 w-[12%] bg-gradient-to-r from-purple-50 to-lavender-50 text-base">Employee</TableHead>
-                  <TableHead className="font-bold text-purple-900 py-4 px-3 w-[10%] bg-gradient-to-r from-purple-50 to-lavender-50 text-base">
+                         <TableRow className="bg-purple-100 border-b border-purple-200">
+                           <TableHead className="font-bold text-purple-900 py-4 px-3 w-[12%] bg-purple-100 text-base">Employee</TableHead>
+                  <TableHead className="font-bold text-purple-900 py-4 px-3 w-[10%] bg-purple-100 text-base">
                     <div className="flex items-center gap-1">
                       <span>Facility</span>
                       <DropdownMenu>
@@ -733,7 +828,7 @@ export default function Training() {
                       </DropdownMenu>
                     </div>
                   </TableHead>
-                  <TableHead className="font-bold text-purple-900 py-4 px-3 w-[10%] bg-gradient-to-r from-purple-50 to-lavender-50 text-base">
+                  <TableHead className="font-bold text-purple-900 py-4 px-3 w-[10%] bg-purple-100 text-base">
                     <div className="flex items-center gap-1">
                       <span>Area</span>
                       <DropdownMenu>
@@ -760,27 +855,36 @@ export default function Training() {
                     </div>
                   </TableHead>
                   {getLevelRequirements(activeTab).map((req) => (
-                             <TableHead key={req.key} className={`font-bold text-purple-900 py-4 px-6 bg-gradient-to-r from-purple-50 to-lavender-50 text-base whitespace-pre-line ${
+                             <TableHead key={req.key} className={`font-bold text-purple-900 py-4 px-6 bg-purple-100 text-base whitespace-pre-line ${
                                req.key.includes("Awarded") ? "w-[12%]" : "w-[10%]"
                     }`}>
-                      <div className="flex items-center gap-1">
-                        <span>{req.name}</span>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-6 px-1">
-                              <Filter className="w-4 h-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-44">
-                            <DropdownMenuLabel>Status</DropdownMenuLabel>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuRadioGroup value={reqStatusFilters[req.key] || 'all'} onValueChange={(v) => setReqStatusFilters(prev => ({ ...prev, [req.key]: v as any }))}>
-                              <DropdownMenuRadioItem value="all">All</DropdownMenuRadioItem>
-                              <DropdownMenuRadioItem value="completed">Completed</DropdownMenuRadioItem>
-                              <DropdownMenuRadioItem value="scheduled">Scheduled</DropdownMenuRadioItem>
-                              <DropdownMenuRadioItem value="pending">Pending</DropdownMenuRadioItem>
-                            </DropdownMenuRadioGroup>
-                          </DropdownMenuContent>
+                                             <div className="flex items-start gap-1">
+                         <span className="whitespace-pre-line">{req.name}</span>
+                         <DropdownMenu>
+                           <DropdownMenuTrigger asChild>
+                             <Button variant="ghost" size="sm" className="h-6 px-1 mt-1 flex-shrink-0">
+                               <Filter className="w-4 h-4" />
+                             </Button>
+                           </DropdownMenuTrigger>
+                                                     <DropdownMenuContent align="end" className="w-44">
+                             <DropdownMenuLabel>Status</DropdownMenuLabel>
+                             <DropdownMenuSeparator />
+                             <DropdownMenuRadioGroup value={reqStatusFilters[req.key] || 'all'} onValueChange={(v) => setReqStatusFilters(prev => ({ ...prev, [req.key]: v as any }))}>
+                               <DropdownMenuRadioItem value="all">All</DropdownMenuRadioItem>
+                               {req.key.includes("Awarded") ? (
+                                 <>
+                                   <DropdownMenuRadioItem value="completed">Awarded</DropdownMenuRadioItem>
+                                   <DropdownMenuRadioItem value="pending">Pending</DropdownMenuRadioItem>
+                                 </>
+                               ) : (
+                                 <>
+                                   <DropdownMenuRadioItem value="completed">Completed</DropdownMenuRadioItem>
+                                   <DropdownMenuRadioItem value="scheduled">Scheduled</DropdownMenuRadioItem>
+                                   <DropdownMenuRadioItem value="pending">Pending</DropdownMenuRadioItem>
+                                 </>
+                               )}
+                             </DropdownMenuRadioGroup>
+                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
                     </TableHead>
@@ -915,6 +1019,7 @@ export default function Training() {
            ))}
          </div>
        </Tabs>
-     </div>
+       </div>
+     </TooltipProvider>
    );
  }

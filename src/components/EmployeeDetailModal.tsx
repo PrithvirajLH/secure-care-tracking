@@ -6,6 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { DatePicker } from "@/components/ui/date-picker";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -49,6 +50,7 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
   const [inlineDatePicker, setInlineDatePicker] = useState<string | null>(null);
   const [currentLevel, setCurrentLevel] = useState("care-partner");
   const [isCompleting, setIsCompleting] = useState(false);
+  const [isAwarding, setIsAwarding] = useState(false);
 
   const getLevelProgress = (level: string) => {
     switch (level) {
@@ -138,6 +140,31 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
     { key: "coach", name: "Coach", progress: getLevelProgress("coach") }
   ], [employee]);
 
+  // Utility function to check if all previous requirements are completed
+  const canAwardLevel = (levelKey: string, requirementKey: string): { canAward: boolean; missingRequirements: string[] } => {
+    const levelProgress = getLevelProgress(levelKey);
+    const currentReqIndex = levelProgress.requirements.findIndex(req => req.key === requirementKey);
+    
+    if (currentReqIndex === -1 || !requirementKey.includes('Awarded')) {
+      return { canAward: false, missingRequirements: [] };
+    }
+
+    const missingRequirements: string[] = [];
+    
+    // Check all requirements before the current one
+    for (let i = 0; i < currentReqIndex; i++) {
+      const req = levelProgress.requirements[i];
+      if (!req.completed) {
+        missingRequirements.push(req.name);
+      }
+    }
+
+    return {
+      canAward: missingRequirements.length === 0,
+      missingRequirements
+    };
+  };
+
   // Determine current level when modal opens
   useEffect(() => {
     if (open) {
@@ -189,6 +216,27 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
       } finally {
         setIsCompleting(false);
       }
+    }
+  };
+
+  const handleMarkAwarded = async (employeeId: string, requirementKey: string) => {
+    const key = `${employeeId}-${requirementKey}`;
+    const currentDate = new Date();
+    
+    setIsAwarding(true);
+    try {
+      setCompletedDates(prev => ({
+        ...prev,
+        [key]: currentDate
+      }));
+      
+      toast.success('Level awarded successfully!', {
+        description: `Awarded on ${currentDate.toLocaleDateString()}`,
+      });
+    } catch (error) {
+      toast.error('Failed to award level');
+    } finally {
+      setIsAwarding(false);
     }
   };
 
@@ -245,8 +293,8 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
       // Check for completed date first
       if (completedDate) {
         return (
-          <div className="inline-flex items-center gap-1 bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-2 py-1 rounded-full text-sm font-semibold shadow-sm">
-            <CheckCircle className="w-3 h-3" />
+          <div className="inline-flex items-center gap-1 bg-gradient-to-r from-green-500 to-emerald-500 text-white px-2 py-1 rounded-full text-sm font-semibold shadow-sm">
+            <Award className="w-3 h-3" />
             <span className="text-sm font-medium">
               {completedDate.toLocaleDateString()}
             </span>
@@ -274,11 +322,12 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
                  <div className="inline-date-picker">
                    <div className="flex flex-col gap-2 mb-3">
                      <button
-                       onClick={() => handleMarkComplete(employee.employeeId, requirement.key)}
-                       className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-3 py-2 rounded-lg text-sm font-semibold hover:from-blue-600 hover:to-indigo-600 transition-colors shadow-sm"
+                       onClick={() => handleMarkAwarded(employee.employeeId, requirement.key)}
+                       disabled={isAwarding}
+                       className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white px-3 py-2 rounded-lg text-sm font-semibold hover:from-green-600 hover:to-emerald-600 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                      >
-                       <CheckCircle className="w-4 h-4" />
-                       Mark Complete
+                       <Award className="w-4 h-4" />
+                       {isAwarding ? 'Awarding...' : 'Mark Awarded'}
                      </button>
                                            <button
                         onClick={() => {
@@ -305,41 +354,79 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
        }
       
       // Check for existing awarded value
-      return value ? (
-        <div className="flex flex-col gap-1">
-          <div className="inline-flex items-center justify-center gap-1 bg-gradient-to-r from-green-500 to-emerald-500 text-white px-2 py-1 rounded-full text-sm font-semibold shadow-sm w-20">
-            <CheckCircle className="w-3 h-3" />
-            <span className="text-sm">Awarded</span>
+      if (value) {
+        return (
+          <div className="flex flex-col gap-1">
+            <div className="inline-flex items-center justify-center gap-1 bg-gradient-to-r from-green-500 to-emerald-500 text-white px-2 py-1 rounded-full text-sm font-semibold shadow-sm w-20">
+              <Award className="w-3 h-3" />
+              <span className="text-sm">Awarded</span>
+            </div>
+            {awardDate && (
+              <div className="inline-flex items-center justify-center gap-1 bg-green-50 border border-green-200 rounded px-2 py-1 w-20">
+                <span className="text-sm text-green-700 font-medium">
+                  {awardDate.toLocaleDateString()}
+                </span>
+              </div>
+            )}
           </div>
-          {awardDate && (
-            <div className="inline-flex items-center justify-center gap-1 bg-green-50 border border-green-200 rounded px-2 py-1 w-20">
-              <span className="text-sm text-green-700 font-medium">
-                {awardDate.toLocaleDateString()}
-              </span>
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className="flex flex-col gap-1">
-          {isInlineDatePickerOpen ? (
-            <div className="inline-date-picker">
-              <DatePicker
-                date={scheduledDate}
-                onDateChange={(date) => handleScheduleDate(employee.employeeId, requirement.key, date)}
-                placeholder="Select date"
-              />
-            </div>
-          ) : (
-            <button
-              onClick={() => openInlineDatePicker(key)}
-              className="inline-flex items-center justify-center gap-1 bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-sm font-semibold hover:bg-gray-200 cursor-pointer transition-colors w-20"
-            >
-              <Clock className="w-3 h-3" />
-              <span className="text-sm">Pending</span>
-            </button>
-          )}
-        </div>
-      );
+        );
+      }
+
+             // Check if can award (all previous requirements completed)
+       const { canAward, missingRequirements } = canAwardLevel(currentLevel, requirement.key);
+       
+       if (canAward) {
+         return (
+           <div className="flex flex-col gap-1">
+             <button
+               onClick={() => openInlineDatePicker(key)}
+               disabled={isAwarding}
+               className="inline-flex items-center justify-center gap-1 bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-sm font-semibold hover:bg-gray-200 cursor-pointer transition-colors w-20 disabled:opacity-50 disabled:cursor-not-allowed"
+             >
+               <Clock className="w-3 h-3" />
+               <span className="text-sm">Pending</span>
+             </button>
+             {isInlineDatePickerOpen && (
+               <div className="inline-date-picker">
+                 <div className="flex flex-col gap-2 mb-3">
+                   <button
+                     onClick={() => handleMarkAwarded(employee.employeeId, requirement.key)}
+                     disabled={isAwarding}
+                     className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white px-3 py-2 rounded-lg text-sm font-semibold hover:from-green-600 hover:to-emerald-600 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                   >
+                     <Award className="w-4 h-4" />
+                     {isAwarding ? 'Awarding...' : 'Mark Awarded'}
+                   </button>
+                 </div>
+               </div>
+             )}
+           </div>
+         );
+       } else {
+         return (
+           <div className="flex flex-col gap-1">
+             <Tooltip>
+               <TooltipTrigger asChild>
+                 <button
+                   disabled
+                   className="inline-flex items-center justify-center gap-1 bg-gray-100 text-gray-400 px-2 py-1 rounded-full text-sm font-semibold cursor-not-allowed w-20"
+                 >
+                   <Clock className="w-3 h-3" />
+                   <span className="text-sm">Pending</span>
+                 </button>
+               </TooltipTrigger>
+               <TooltipContent>
+                 <p>Cannot be awarded until the following requirements are completed:</p>
+                 <ul className="mt-1">
+                   {missingRequirements.map((req, index) => (
+                     <li key={index} className="text-sm">• {req}</li>
+                   ))}
+                 </ul>
+               </TooltipContent>
+             </Tooltip>
+           </div>
+         );
+       }
     }
     
     if (completedDate) {
@@ -407,11 +494,12 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
   };
   
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {children}
-      </DialogTrigger>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+    <TooltipProvider>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogTrigger asChild>
+          {children}
+        </DialogTrigger>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
             <User className="w-6 h-6" />
@@ -575,5 +663,6 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
         </div>
       </DialogContent>
     </Dialog>
+    </TooltipProvider>
   );
 }
