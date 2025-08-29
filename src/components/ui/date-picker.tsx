@@ -18,9 +18,16 @@ interface DatePickerProps {
   disabled?: boolean
 }
 
-export function DatePicker({ date, onDateChange, placeholder = "Pick a date", disabled = false }: DatePickerProps) {
+export function DatePicker({ 
+  date, 
+  onDateChange, 
+  placeholder = "Pick a date", 
+  disabled = false
+}: DatePickerProps) {
+  const [open, setOpen] = React.useState(false)
+
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
           variant={"outline"}
@@ -31,14 +38,17 @@ export function DatePicker({ date, onDateChange, placeholder = "Pick a date", di
           disabled={disabled}
         >
           <CalendarIcon className="mr-2 h-4 w-4" />
-          {date ? format(date, "PPP") : placeholder}
+          {date ? format(date, "PPP") : <span>{placeholder}</span>}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[280px] p-0" align="center" side="bottom">
+      <PopoverContent className="w-auto p-0" align="start">
         <Calendar
           mode="single"
           selected={date}
-          onSelect={onDateChange}
+          onSelect={(newDate) => {
+            onDateChange(newDate);
+            setOpen(false);
+          }}
           initialFocus
         />
       </PopoverContent>

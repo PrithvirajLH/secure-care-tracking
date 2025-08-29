@@ -411,7 +411,7 @@ export default function Training() {
         const key = `${employee.employeeId}-${requirement.key}`;
         const scheduledDate = scheduledDates[key];
         const completedDate = completedDates[key];
-        const isDatePickerOpen = openDatePicker === key;
+                 const isDatePickerOpen = openDatePicker === key || openDatePicker?.startsWith(`reschedule-${key}`);
 
         if (requirement.key.includes("Awarded")) {
           const awardDateKey = requirement.key.replace("Awarded", "AwardedDate");
@@ -429,54 +429,64 @@ export default function Training() {
             );
           }
           
-          // Check for scheduled date
-          if (scheduledDate) {
-            return (
-              <div className="flex flex-col gap-1">
-                <button
-                  onClick={() => openDatePickerFor(key)}
-                  className="inline-flex items-center justify-center gap-1 bg-gradient-to-r from-yellow-500 to-orange-500 text-white px-2 py-1 rounded-full text-sm font-semibold shadow-sm hover:from-yellow-600 hover:to-orange-600 cursor-pointer transition-colors w-20"
-                >
-                  <Clock className="w-3 h-3" />
-                  <span className="text-sm">Scheduled</span>
-                </button>
-                <div className="inline-flex items-center justify-center gap-1 bg-yellow-50 border border-yellow-200 rounded px-2 py-1 w-20">
-                  <span className="text-sm text-yellow-700 font-medium">
-                    {scheduledDate.toLocaleDateString()}
-                  </span>
-                </div>
-                {isDatePickerOpen && (
-                  <div className="absolute z-50 bg-white border border-gray-300 rounded-lg shadow-lg p-2 mt-1 w-48 date-picker-popup">
-                    <div className="flex flex-col gap-2 mb-3">
-                      <button
-                        onClick={() => handleMarkComplete(employee.employeeId, requirement.key)}
-                        disabled={isCompleting}
-                        className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white px-3 py-2 rounded-lg text-sm font-semibold hover:from-green-600 hover:to-emerald-600 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <CheckCircle className="w-4 h-4" />
-                        {isCompleting ? 'Completing...' : 'Mark Complete'}
-                      </button>
-                      <button
-                        onClick={() => {
-                          // Keep date picker open for rescheduling
-                        }}
-                        disabled={isRescheduling}
-                        className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-3 py-2 rounded-lg text-sm font-semibold hover:from-blue-600 hover:to-indigo-600 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <Clock className="w-4 h-4" />
-                        {isRescheduling ? 'Rescheduling...' : 'Reschedule'}
-                      </button>
-                    </div>
-                    <DatePicker
-                      date={scheduledDate}
-                      onDateChange={(date) => handleReschedule(employee.employeeId, requirement.key, date)}
-                      placeholder="Reschedule date"
-                    />
-                  </div>
-                )}
-              </div>
-            );
-          }
+                     // Check for scheduled date
+           if (scheduledDate) {
+             return (
+               <div className="flex flex-col gap-1">
+                 <button
+                   onClick={() => openDatePickerFor(key)}
+                   className="inline-flex items-center justify-center gap-1 bg-gradient-to-r from-yellow-500 to-orange-500 text-white px-2 py-1 rounded-full text-sm font-semibold shadow-sm hover:from-yellow-600 hover:to-orange-600 cursor-pointer transition-colors w-20"
+                 >
+                   <Clock className="w-3 h-3" />
+                   <span className="text-sm">Scheduled</span>
+                 </button>
+                 <div className="inline-flex items-center justify-center gap-1 bg-yellow-50 border border-yellow-200 rounded px-2 py-1 w-20">
+                   <span className="text-sm text-yellow-700 font-medium">
+                     {scheduledDate.toLocaleDateString()}
+                   </span>
+                 </div>
+                 {isDatePickerOpen && (
+                   <div className="absolute z-50 bg-white border border-gray-300 rounded-lg shadow-lg p-2 mt-1 w-48 date-picker-popup">
+                     <div className="flex flex-col gap-2 mb-3">
+                       <button
+                         onClick={() => handleMarkComplete(employee.employeeId, requirement.key)}
+                         disabled={isCompleting}
+                         className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-3 py-2 rounded-lg text-sm font-semibold hover:from-blue-600 hover:to-indigo-600 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                       >
+                         <CheckCircle className="w-4 h-4" />
+                         {isCompleting ? 'Completing...' : 'Mark Complete'}
+                       </button>
+                                            <button
+                       onClick={() => {
+                         // Show date picker for rescheduling
+                         console.log('Setting reschedule for key (first instance):', key);
+                         setOpenDatePicker(`reschedule-${key}`);
+                       }}
+                       disabled={isRescheduling}
+                       className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-yellow-500 to-orange-500 text-white px-3 py-2 rounded-lg text-sm font-semibold hover:from-yellow-600 hover:to-orange-600 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                     >
+                       <Clock className="w-4 h-4" />
+                       {isRescheduling ? 'Rescheduling...' : 'Reschedule'}
+                     </button>
+                     </div>
+                                           {(() => {
+                        if (openDatePicker && openDatePicker.startsWith(`reschedule-${key}`)) {
+                          console.log('Rendering DatePicker for reschedule (first instance), openDatePicker:', openDatePicker, 'key:', key);
+                          return (
+                            <DatePicker
+                              date={scheduledDate}
+                              onDateChange={(date) => handleReschedule(employee.employeeId, requirement.key, date)}
+                              placeholder="Reschedule date"
+                            />
+                          );
+                        }
+                        return null;
+                      })()}
+                   </div>
+                 )}
+               </div>
+             );
+           }
           
           // Check for existing awarded value
           return value ? (
@@ -516,53 +526,63 @@ export default function Training() {
           );
         }
         
-        if (scheduledDate) {
-          return (
-            <div className="flex flex-col gap-1">
-              <button
-                onClick={() => openDatePickerFor(key)}
-                className="inline-flex items-center justify-center gap-1 bg-gradient-to-r from-yellow-500 to-orange-500 text-white px-2 py-1 rounded-full text-sm font-semibold shadow-sm hover:from-yellow-600 hover:to-orange-600 cursor-pointer transition-colors w-20"
-              >
-                <Clock className="w-3 h-3" />
-                <span className="text-sm">Scheduled</span>
-              </button>
-              <div className="inline-flex items-center justify-center gap-1 bg-yellow-50 border border-yellow-200 rounded px-2 py-1 w-20">
-                <span className="text-sm text-yellow-700 font-medium">
-                  {scheduledDate.toLocaleDateString()}
-                </span>
-              </div>
-              {isDatePickerOpen && (
-                <div className="absolute z-50 bg-white border border-gray-300 rounded-lg shadow-lg p-2 mt-1 w-48 date-picker-popup">
-                  <div className="flex flex-col gap-2 mb-3">
-                    <button
-                      onClick={() => handleMarkComplete(employee.employeeId, requirement.key)}
-                      disabled={isCompleting}
-                      className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white px-3 py-2 rounded-lg text-sm font-semibold hover:from-green-600 hover:to-emerald-600 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <CheckCircle className="w-4 h-4" />
-                      {isCompleting ? 'Completing...' : 'Mark Complete'}
-                    </button>
-                    <button
-                      onClick={() => {
-                        // Keep date picker open for rescheduling
-                      }}
-                      disabled={isRescheduling}
-                      className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-3 py-2 rounded-lg text-sm font-semibold hover:from-blue-600 hover:to-indigo-600 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <Clock className="w-4 h-4" />
-                      {isRescheduling ? 'Rescheduling...' : 'Reschedule'}
-                    </button>
-                  </div>
-                  <DatePicker
-                    date={scheduledDate}
-                    onDateChange={(date) => handleReschedule(employee.employeeId, requirement.key, date)}
-                    placeholder="Reschedule date"
-                  />
-                </div>
-              )}
-            </div>
-          );
-        }
+                 if (scheduledDate) {
+           return (
+             <div className="flex flex-col gap-1">
+               <button
+                 onClick={() => openDatePickerFor(key)}
+                 className="inline-flex items-center justify-center gap-1 bg-gradient-to-r from-yellow-500 to-orange-500 text-white px-2 py-1 rounded-full text-sm font-semibold shadow-sm hover:from-yellow-600 hover:to-orange-600 cursor-pointer transition-colors w-20"
+               >
+                 <Clock className="w-3 h-3" />
+                 <span className="text-sm">Scheduled</span>
+               </button>
+               <div className="inline-flex items-center justify-center gap-1 bg-yellow-50 border border-yellow-200 rounded px-2 py-1 w-20">
+                 <span className="text-sm text-yellow-700 font-medium">
+                   {scheduledDate.toLocaleDateString()}
+                 </span>
+               </div>
+               {isDatePickerOpen && (
+                 <div className="absolute z-50 bg-white border border-gray-300 rounded-lg shadow-lg p-2 mt-1 w-48 date-picker-popup">
+                   <div className="flex flex-col gap-2 mb-3">
+                     <button
+                       onClick={() => handleMarkComplete(employee.employeeId, requirement.key)}
+                       disabled={isCompleting}
+                       className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-3 py-2 rounded-lg text-sm font-semibold hover:from-blue-600 hover:to-indigo-600 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                     >
+                       <CheckCircle className="w-4 h-4" />
+                       {isCompleting ? 'Completing...' : 'Mark Complete'}
+                     </button>
+                     <button
+                       onClick={() => {
+                         // Show date picker for rescheduling
+                         console.log('Setting reschedule for key:', key);
+                         setOpenDatePicker(`reschedule-${key}`);
+                       }}
+                       disabled={isRescheduling}
+                       className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-yellow-500 to-orange-500 text-white px-3 py-2 rounded-lg text-sm font-semibold hover:from-yellow-600 hover:to-orange-600 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                     >
+                       <Clock className="w-4 h-4" />
+                       {isRescheduling ? 'Rescheduling...' : 'Reschedule'}
+                     </button>
+                   </div>
+                   {(() => {
+                     if (openDatePicker && openDatePicker.startsWith(`reschedule-${key}`)) {
+                       console.log('Rendering DatePicker for reschedule, openDatePicker:', openDatePicker, 'key:', key);
+                       return (
+                         <DatePicker
+                           date={scheduledDate}
+                           onDateChange={(date) => handleReschedule(employee.employeeId, requirement.key, date)}
+                           placeholder="Reschedule date"
+                         />
+                       );
+                     }
+                     return null;
+                   })()}
+                 </div>
+               )}
+             </div>
+           );
+         }
         
         if (completedDate) {
           return (

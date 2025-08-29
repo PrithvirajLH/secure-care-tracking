@@ -6,6 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { BentoGrid, BentoCard } from "@/components/magicui/bento-grid";
+import { DatePicker } from "@/components/ui/date-picker";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { 
   BarChart, 
   Bar, 
@@ -47,8 +50,11 @@ import {
 
 export default function Analytics() {
   const { state } = useApp();
-  const [timeRange, setTimeRange] = useState<string>("30d");
+  const [timeRange, setTimeRange] = useState<string>("1y");
   const [selectedFacility, setSelectedFacility] = useState<string>("all");
+  const [selectedLevel, setSelectedLevel] = useState<string>("all");
+  const [customStartDate, setCustomStartDate] = useState<Date | undefined>(undefined);
+  const [customEndDate, setCustomEndDate] = useState<Date | undefined>(undefined);
 
   // Helper functions for advanced analytics
   const calculateAverageCompletionTime = (employees: any[]) => {
@@ -66,6 +72,14 @@ export default function Analytics() {
   };
 
   const calculateCertificationVelocity = (employees: any[], days: number) => {
+    // Handle case when days is 0 (all time)
+    if (days === 0) {
+      const totalCompletions = employees.filter(e => 
+        e.level1AwardedDate || e.level2AwardedDate || e.level3AwardedDate
+      ).length;
+      return totalCompletions > 0 ? "1.00" : "0.00";
+    }
+    
     const recentCompletions = employees.filter(e => {
       const hasRecentCompletion = e.level1AwardedDate || e.level2AwardedDate || e.level3AwardedDate;
       if (hasRecentCompletion) {
@@ -163,26 +177,58 @@ export default function Analytics() {
   const generateMonthlyTrends = (employees: any[], days: number) => {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const currentMonth = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
     
-    return months.slice(Math.max(0, currentMonth - 5), currentMonth + 1).map((month, index) => {
-      const monthIndex = (currentMonth - 5 + index + 12) % 12;
+    // Generate last 6 months of data
+    return Array.from({ length: 6 }, (_, index) => {
+      const monthOffset = 5 - index; // Start from 5 months ago
+      const targetDate = new Date(currentYear, currentMonth - monthOffset, 1);
+      const monthName = months[targetDate.getMonth()];
+      
+      // Count employees with certifications awarded in this month
       const monthEmployees = employees.filter(e => {
-        const hasCompletion = e.level1AwardedDate || e.level2AwardedDate || e.level3AwardedDate;
-        if (hasCompletion) {
-          const completionDate = new Date([e.level1AwardedDate, e.level2AwardedDate, e.level3AwardedDate]
-            .filter(date => date)
-            .sort()
-            .pop()!);
-          return completionDate.getMonth() === monthIndex;
-        }
-        return false;
+        const certificationDates = [
+          e.level1AwardedDate,
+          e.level2AwardedDate,
+          e.level3AwardedDate,
+          e.consultantAwardedDate,
+          e.coachAwardedDate
+        ].filter(date => date);
+        
+        return certificationDates.some(date => {
+          const awardDate = new Date(date);
+          return awardDate.getMonth() === targetDate.getMonth() && 
+                 awardDate.getFullYear() === targetDate.getFullYear();
+        });
+      });
+      
+      // Count in-progress employees for this month
+      const inProgressEmployees = employees.filter(e => {
+        const hasInProgress = e.level1ReliasAssigned || e.level2ReliasAssigned || e.level3ReliasAssigned || 
+                             e.consultantReliasAssigned || e.coachReliasAssigned;
+        if (!hasInProgress) return false;
+        
+        // Check if they started in this month
+        const startDates = [
+          e.level1ReliasAssigned,
+          e.level2ReliasAssigned,
+          e.level3ReliasAssigned,
+          e.consultantReliasAssigned,
+          e.coachReliasAssigned
+        ].filter(date => date);
+        
+        return startDates.some(date => {
+          const startDate = new Date(date);
+          return startDate.getMonth() === targetDate.getMonth() && 
+                 startDate.getFullYear() === targetDate.getFullYear();
+        });
       });
       
       return {
-        month,
+        month: monthName,
         completed: monthEmployees.length,
-        inProgress: Math.floor(monthEmployees.length * 0.6),
-        new: Math.floor(monthEmployees.length * 0.3)
+        inProgress: inProgressEmployees.length,
+        new: Math.floor(monthEmployees.length * 0.3) // Estimate new enrollments
       };
     });
   };
@@ -213,56 +259,93 @@ export default function Analytics() {
       employees = employees.filter(e => e.facility === selectedFacility);
     }
 
-    // Apply time range filter (simulate time-based filtering)
+    // Apply time range filter with enhanced options including custom date range
     const now = new Date();
+    let startDate: Date | null = null;
+    let endDate: Date | null = null;
+    
+    // Calculate timeRangeDays for use throughout the function
     const timeRangeDays = {
-      "7d": 7,
-      "30d": 30,
-      "90d": 90,
-      "1y": 365
-    }[timeRange] || 30;
+      "3m": 90,
+      "6m": 180,
+      "1y": 365,
+      "all": 0
+    }[timeRange] || 365;
     
-    const cutoffDate = new Date(now.getTime() - (timeRangeDays * 24 * 60 * 60 * 1000));
-    
-    // Filter employees based on time range (for demonstration)
-    const recentEmployees = employees.filter(e => {
-      const hasRecentActivity = e.level1AwardedDate || e.level2AwardedDate || e.level3AwardedDate;
-      if (hasRecentActivity) {
-        const latestDate = [e.level1AwardedDate, e.level2AwardedDate, e.level3AwardedDate]
-          .filter(date => date)
-          .sort()
-          .pop();
-        return latestDate && new Date(latestDate) >= cutoffDate;
+    if (timeRange === "custom" && customStartDate && customEndDate) {
+      startDate = customStartDate;
+      endDate = customEndDate;
+    } else {
+      if (timeRangeDays > 0) {
+        startDate = new Date(now.getTime() - (timeRangeDays * 24 * 60 * 60 * 1000));
+        endDate = now;
       }
-      return true; // Include all if no date filtering
-    });
+    }
+    
+    // Filter employees based on time range and level
+    let filteredEmployees = employees;
+    
+    if (startDate && endDate) {
+      filteredEmployees = employees.filter(e => {
+        // Check if employee has any certification activity within the date range
+        const certificationDates = [
+          e.level1AwardedDate,
+          e.level2AwardedDate, 
+          e.level3AwardedDate,
+          e.consultantAwardedDate,
+          e.coachAwardedDate
+        ].filter(date => date);
+        
+        if (certificationDates.length === 0) return false;
+        
+        // Check if any certification was awarded within the date range
+        return certificationDates.some(date => {
+          const awardDate = new Date(date);
+          return awardDate >= startDate! && awardDate <= endDate!;
+        });
+      });
+    }
+    
+    // Apply level filter
+    if (selectedLevel !== "all") {
+      filteredEmployees = filteredEmployees.filter(e => {
+        switch(selectedLevel) {
+          case "level1": return e.level1Awarded;
+          case "level2": return e.level2Awarded;
+          case "level3": return e.level3Awarded;
+          case "consultant": return e.consultantAwarded;
+          case "coach": return e.coachAwarded;
+          default: return true;
+        }
+      });
+    }
 
     // Overall statistics
-    const totalEmployees = employees.length;
-    const completedCertifications = employees.filter(e => 
+    const totalEmployees = filteredEmployees.length;
+    const completedCertifications = filteredEmployees.filter(e => 
       e.level1Awarded || e.level2Awarded || e.level3Awarded || e.consultantAwarded || e.coachAwarded
     ).length;
-    const inProgress = employees.filter(e => 
+    const inProgress = filteredEmployees.filter(e => 
       e.level1ReliasAssigned || e.level2ReliasAssigned || e.level3ReliasAssigned || 
       e.consultantReliasAssigned || e.coachReliasAssigned
     ).length;
     const notStarted = totalEmployees - completedCertifications - inProgress;
 
     // Level-wise breakdown
-    const level1Completed = employees.filter(e => e.level1Awarded).length;
-    const level2Completed = employees.filter(e => e.level2Awarded).length;
-    const level3Completed = employees.filter(e => e.level3Awarded).length;
-    const consultantCompleted = employees.filter(e => e.consultantAwarded).length;
-    const coachCompleted = employees.filter(e => e.coachAwarded).length;
+    const level1Completed = filteredEmployees.filter(e => e.level1Awarded).length;
+    const level2Completed = filteredEmployees.filter(e => e.level2Awarded).length;
+    const level3Completed = filteredEmployees.filter(e => e.level3Awarded).length;
+    const consultantCompleted = filteredEmployees.filter(e => e.consultantAwarded).length;
+    const coachCompleted = filteredEmployees.filter(e => e.coachAwarded).length;
 
     // Advanced metrics
-    const averageCompletionTime = calculateAverageCompletionTime(employees);
-    const certificationVelocity = calculateCertificationVelocity(employees, timeRangeDays);
-    const retentionRate = calculateRetentionRate(employees);
-    const bottleneckAnalysis = analyzeBottlenecks(employees);
+    const averageCompletionTime = calculateAverageCompletionTime(filteredEmployees);
+    const certificationVelocity = calculateCertificationVelocity(filteredEmployees, timeRangeDays);
+    const retentionRate = calculateRetentionRate(filteredEmployees);
+    const bottleneckAnalysis = analyzeBottlenecks(filteredEmployees);
 
     // Facility performance with advanced metrics
-    const facilityStats = employees.reduce((acc, emp) => {
+    const facilityStats = filteredEmployees.reduce((acc, emp) => {
       if (!acc[emp.facility]) {
         acc[emp.facility] = { 
           total: 0, 
@@ -285,11 +368,11 @@ export default function Analytics() {
     Object.keys(facilityStats).forEach(facility => {
       const stats = facilityStats[facility];
       stats.efficiency = (stats.completed / stats.total) * 100;
-      stats.avgTime = calculateFacilityAvgTime(employees.filter(e => e.facility === facility));
+      stats.avgTime = calculateFacilityAvgTime(filteredEmployees.filter(e => e.facility === facility));
     });
 
     // Area performance with trends
-    const areaStats = employees.reduce((acc, emp) => {
+    const areaStats = filteredEmployees.reduce((acc, emp) => {
       if (!acc[emp.area]) {
         acc[emp.area] = { 
           total: 0, 
@@ -316,49 +399,49 @@ export default function Analytics() {
     });
 
     // Dynamic monthly trends based on actual data
-    const monthlyTrends = generateMonthlyTrends(employees, timeRangeDays);
+    const monthlyTrends = generateMonthlyTrends(filteredEmployees, timeRangeDays);
     
     // Certification progress with targets and efficiency
     const certificationProgress = [
       { 
         level: "Level 1", 
         completed: level1Completed, 
-        inProgress: employees.filter(e => e.level1ReliasAssigned && !e.level1Awarded).length, 
+        inProgress: filteredEmployees.filter(e => e.level1ReliasAssigned && !e.level1Awarded).length, 
         target: totalEmployees * 0.8,
         efficiency: (level1Completed / totalEmployees) * 100,
-        avgTime: calculateLevelAvgTime(employees, 'level1')
+        avgTime: calculateLevelAvgTime(filteredEmployees, 'level1')
       },
       { 
         level: "Level 2", 
         completed: level2Completed, 
-        inProgress: employees.filter(e => e.level2ReliasAssigned && !e.level2Awarded).length, 
+        inProgress: filteredEmployees.filter(e => e.level2ReliasAssigned && !e.level2Awarded).length, 
         target: totalEmployees * 0.6,
         efficiency: (level2Completed / totalEmployees) * 100,
-        avgTime: calculateLevelAvgTime(employees, 'level2')
+        avgTime: calculateLevelAvgTime(filteredEmployees, 'level2')
       },
       { 
         level: "Level 3", 
         completed: level3Completed, 
-        inProgress: employees.filter(e => e.level3ReliasAssigned && !e.level3Awarded).length, 
+        inProgress: filteredEmployees.filter(e => e.level3ReliasAssigned && !e.level3Awarded).length, 
         target: totalEmployees * 0.4,
         efficiency: (level3Completed / totalEmployees) * 100,
-        avgTime: calculateLevelAvgTime(employees, 'level3')
+        avgTime: calculateLevelAvgTime(filteredEmployees, 'level3')
       },
       { 
         level: "Consultant", 
         completed: consultantCompleted, 
-        inProgress: employees.filter(e => e.consultantReliasAssigned && !e.consultantAwarded).length, 
+        inProgress: filteredEmployees.filter(e => e.consultantReliasAssigned && !e.consultantAwarded).length, 
         target: totalEmployees * 0.2,
         efficiency: (consultantCompleted / totalEmployees) * 100,
-        avgTime: calculateLevelAvgTime(employees, 'consultant')
+        avgTime: calculateLevelAvgTime(filteredEmployees, 'consultant')
       },
       { 
         level: "Coach", 
         completed: coachCompleted, 
-        inProgress: employees.filter(e => e.coachReliasAssigned && !e.coachAwarded).length, 
+        inProgress: filteredEmployees.filter(e => e.coachReliasAssigned && !e.coachAwarded).length, 
         target: totalEmployees * 0.1,
         efficiency: (coachCompleted / totalEmployees) * 100,
-        avgTime: calculateLevelAvgTime(employees, 'coach')
+        avgTime: calculateLevelAvgTime(filteredEmployees, 'coach')
       },
     ];
 
@@ -402,7 +485,7 @@ export default function Analytics() {
        .slice(0, 5);
 
     // Recent activity with performance indicators
-    const recentActivity = employees
+    const recentActivity = filteredEmployees
       .filter(e => e.level1AwardedDate || e.level2AwardedDate || e.level3AwardedDate)
       .map(e => {
         const latestAward = [e.level1AwardedDate, e.level2AwardedDate, e.level3AwardedDate]
@@ -425,7 +508,7 @@ export default function Analytics() {
       .slice(0, 10);
 
     // Predictive analytics
-    const predictions = generatePredictions(employees, timeRangeDays);
+    const predictions = generatePredictions(filteredEmployees, timeRangeDays);
 
     return {
       totalEmployees,
@@ -449,7 +532,7 @@ export default function Analytics() {
       bottleneckAnalysis,
       predictions
     };
-  }, [state.employees, timeRange, selectedFacility]);
+  }, [state.employees, timeRange, selectedFacility, selectedLevel, customStartDate, customEndDate]);
 
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
 
@@ -461,8 +544,33 @@ export default function Analytics() {
     return str;
   }
 
+  const handleTimeRangeChange = (newTimeRange: string) => {
+    setTimeRange(newTimeRange);
+    // Reset custom dates when switching away from custom range
+    if (newTimeRange !== "custom") {
+      setCustomStartDate(undefined);
+      setCustomEndDate(undefined);
+    }
+  };
+
   const handleExport = () => {
     const lines: string[] = [];
+
+    // Filter Information
+    lines.push("Filter Settings");
+    lines.push(["Filter","Value"].map(csvEscape).join(","));
+    
+    let timeRangeText = "";
+    if (timeRange === "custom" && customStartDate && customEndDate) {
+      timeRangeText = `Custom: ${customStartDate.toLocaleDateString()} to ${customEndDate.toLocaleDateString()}`;
+    } else {
+      timeRangeText = timeRange === "3m" ? "3 Months" : timeRange === "6m" ? "6 Months" : timeRange === "1y" ? "1 Year" : "All Time";
+    }
+    
+    lines.push(["Time Range", timeRangeText].map(csvEscape).join(","));
+    lines.push(["Level Filter", selectedLevel === "all" ? "All Levels" : selectedLevel.charAt(0).toUpperCase() + selectedLevel.slice(1)].map(csvEscape).join(","));
+    lines.push(["Facility Filter", selectedFacility === "all" ? "All Facilities" : selectedFacility].map(csvEscape).join(","));
+    lines.push("");
 
     // Overview
     lines.push("Overview Metrics");
@@ -539,46 +647,203 @@ export default function Analytics() {
         </p>
       </header>
 
-      {/* Filters */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-4">
-          <div className="space-y-1">
-            <Label htmlFor="time-range" className="text-xs text-gray-600">Time Range</Label>
-            <Select value={timeRange} onValueChange={setTimeRange}>
-              <SelectTrigger id="time-range" className="w-[150px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="7d">Last 7 days</SelectItem>
-                <SelectItem value="30d">Last 30 days</SelectItem>
-                <SelectItem value="90d">Last 90 days</SelectItem>
-                <SelectItem value="1y">Last year</SelectItem>
-              </SelectContent>
-            </Select>
+      {/* Enhanced Filters with Magic UI */}
+      <div className="space-y-6">
+        <BentoGrid className="grid-cols-1 md:grid-cols-3 lg:grid-cols-4">
+          <BentoCard
+            name="Time Range"
+            description="Filter by certification award period"
+            className="col-span-1"
+            background={
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-blue-950/50 dark:to-indigo-950/50" />
+            }
+            Icon={Calendar}
+            href="#"
+            cta="Select Period"
+          />
+          <BentoCard
+            name="Certification Level"
+            description="Filter by specific certification levels"
+            className="col-span-1"
+            background={
+              <div className="absolute inset-0 bg-gradient-to-br from-green-50 to-emerald-100 dark:from-green-950/50 dark:to-emerald-950/50" />
+            }
+            Icon={Award}
+            href="#"
+            cta="Select Level"
+          />
+          <BentoCard
+            name="Facility"
+            description="Filter by specific facilities"
+            className="col-span-1"
+            background={
+              <div className="absolute inset-0 bg-gradient-to-br from-purple-50 to-violet-100 dark:from-purple-950/50 dark:to-violet-950/50" />
+            }
+            Icon={Building}
+            href="#"
+            cta="Select Facility"
+          />
+          <BentoCard
+            name="Export Data"
+            description="Download filtered analytics report"
+            className="col-span-1"
+            background={
+              <div className="absolute inset-0 bg-gradient-to-br from-orange-50 to-amber-100 dark:from-orange-950/50 dark:to-amber-950/50" />
+            }
+            Icon={Download}
+            href="#"
+            cta="Export Report"
+          />
+        </BentoGrid>
+
+        {/* Filter Controls */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between bg-white dark:bg-gray-900 rounded-lg p-4 border border-gray-200 dark:border-gray-800">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="space-y-1">
+              <Label htmlFor="time-range" className="text-xs font-medium text-gray-700 dark:text-gray-300">Time Range</Label>
+              <Select value={timeRange} onValueChange={handleTimeRangeChange}>
+                <SelectTrigger id="time-range" className="w-[140px] bg-white dark:bg-gray-800">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="3m">Last 3 months</SelectItem>
+                  <SelectItem value="6m">Last 6 months</SelectItem>
+                  <SelectItem value="1y">Last year</SelectItem>
+                  <SelectItem value="custom">Custom range</SelectItem>
+                  <SelectItem value="all">All time</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            {/* Custom Date Range Picker */}
+            {timeRange === "custom" && (
+              <div className="flex items-center gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium text-gray-700 dark:text-gray-300">From</Label>
+                  <DatePicker
+                    date={customStartDate}
+                    onDateChange={setCustomStartDate}
+                    placeholder="Start date"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs font-medium text-gray-700 dark:text-gray-300">To</Label>
+                  <DatePicker
+                    date={customEndDate}
+                    onDateChange={setCustomEndDate}
+                    placeholder="End date"
+                  />
+                </div>
+                {timeRange === "custom" && (!customStartDate || !customEndDate) && (
+                  <div className="text-xs text-orange-600 dark:text-orange-400 mt-6">
+                    Please select both start and end dates
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="space-y-1">
+              <Label htmlFor="level-filter" className="text-xs font-medium text-gray-700 dark:text-gray-300">Level</Label>
+              <Select value={selectedLevel} onValueChange={setSelectedLevel}>
+                <SelectTrigger id="level-filter" className="w-[140px] bg-white dark:bg-gray-800">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Levels</SelectItem>
+                  <SelectItem value="level1">Level 1</SelectItem>
+                  <SelectItem value="level2">Level 2</SelectItem>
+                  <SelectItem value="level3">Level 3</SelectItem>
+                  <SelectItem value="consultant">Consultant</SelectItem>
+                  <SelectItem value="coach">Coach</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="facility-filter" className="text-xs font-medium text-gray-700 dark:text-gray-300">Facility</Label>
+              <Select value={selectedFacility} onValueChange={setSelectedFacility}>
+                <SelectTrigger id="facility-filter" className="w-[180px] bg-white dark:bg-gray-800">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Facilities</SelectItem>
+                  {Object.keys(state.employees.reduce((acc, emp) => {
+                    acc[emp.facility] = true;
+                    return acc;
+                  }, {} as Record<string, boolean>)).map(facility => (
+                    <SelectItem key={facility} value={facility}>{facility}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-          <div className="space-y-1">
-            <Label htmlFor="facility-filter" className="text-xs text-gray-600">Facility</Label>
-            <Select value={selectedFacility} onValueChange={setSelectedFacility}>
-              <SelectTrigger id="facility-filter" className="w-[180px]">
-                <SelectValue />
-              </SelectTrigger>
-                             <SelectContent>
-                 <SelectItem value="all">All Facilities</SelectItem>
-                 {Object.keys(state.employees.reduce((acc, emp) => {
-                   acc[emp.facility] = true;
-                   return acc;
-                 }, {} as Record<string, boolean>)).map(facility => (
-                   <SelectItem key={facility} value={facility}>{facility}</SelectItem>
-                 ))}
-               </SelectContent>
-            </Select>
-          </div>
+          <Button variant="outline" className="flex items-center gap-2 bg-white dark:bg-gray-800" onClick={handleExport}>
+            <Download className="w-4 h-4" />
+            Export Report
+          </Button>
         </div>
-        <Button variant="outline" className="flex items-center gap-2" onClick={handleExport}>
-          <Download className="w-4 h-4" />
-          Export Report
-        </Button>
       </div>
+
+      {/* Filter Summary */}
+      <Card className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/50 dark:to-indigo-950/50 border-blue-200 dark:border-blue-800">
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Filter className="w-4 h-4 text-blue-600" />
+                <span className="text-sm font-medium text-blue-900 dark:text-blue-100">Active Filters:</span>
+              </div>
+                             <div className="flex gap-2">
+                 <Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                   {timeRange === "custom" && customStartDate && customEndDate 
+                     ? `${customStartDate.toLocaleDateString()} - ${customEndDate.toLocaleDateString()}`
+                     : timeRange === "3m" ? "3 Months" : timeRange === "6m" ? "6 Months" : timeRange === "1y" ? "1 Year" : "All Time"
+                   }
+                 </Badge>
+                {selectedLevel !== "all" && (
+                  <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                    {selectedLevel.charAt(0).toUpperCase() + selectedLevel.slice(1)}
+                  </Badge>
+                )}
+                {selectedFacility !== "all" && (
+                  <Badge variant="secondary" className="bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                    {selectedFacility}
+                  </Badge>
+                )}
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-2xl font-bold text-blue-900 dark:text-blue-100">{analyticsData.totalEmployees}</div>
+              <div className="text-xs text-blue-700 dark:text-blue-300">Filtered Results</div>
+            </div>
+          </div>
+          <div className="mt-3 pt-3 border-t border-blue-200 dark:border-blue-800">
+            <div className="grid grid-cols-4 gap-4 text-center">
+              <div>
+                <div className="text-lg font-semibold text-blue-900 dark:text-blue-100">{analyticsData.completedCertifications}</div>
+                <div className="text-xs text-blue-700 dark:text-blue-300">Completed</div>
+              </div>
+              <div>
+                <div className="text-lg font-semibold text-blue-900 dark:text-blue-100">{analyticsData.inProgress}</div>
+                <div className="text-xs text-blue-700 dark:text-blue-300">In Progress</div>
+              </div>
+              <div>
+                <div className="text-lg font-semibold text-blue-900 dark:text-blue-100">
+                  {analyticsData.totalEmployees > 0 ? Math.round((analyticsData.completedCertifications / analyticsData.totalEmployees) * 100) : 0}%
+                </div>
+                <div className="text-xs text-blue-700 dark:text-blue-300">Completion Rate</div>
+              </div>
+              <div>
+                <div className="text-lg font-semibold text-blue-900 dark:text-blue-100">
+                  {timeRange === "custom" && customStartDate && customEndDate 
+                    ? Math.ceil((customEndDate.getTime() - customStartDate.getTime()) / (1000 * 60 * 60 * 24))
+                    : timeRange === "3m" ? 90 : timeRange === "6m" ? 180 : timeRange === "1y" ? 365 : 0
+                  }
+                </div>
+                <div className="text-xs text-blue-700 dark:text-blue-300">Days in Range</div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Advanced Analytics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -733,72 +998,66 @@ export default function Analytics() {
 
         <TabsContent value="trends" className="space-y-4">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Monthly Trends */}
+            {/* Time-based Certification Trends */}
             <Card>
               <CardHeader>
-                <CardTitle>Monthly Trends</CardTitle>
-                <CardDescription>Certification progress over time</CardDescription>
+                <CardTitle>Certification Trends</CardTitle>
+                <CardDescription>Certifications awarded over selected time period</CardDescription>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
-                  <AreaChart data={analyticsData.monthlyTrends}>
+                  <LineChart data={analyticsData.monthlyTrends}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="month" />
                     <YAxis />
                     <Tooltip />
-                    <Area type="monotone" dataKey="completed" stackId="1" stroke="#0088FE" fill="#0088FE" />
-                    <Area type="monotone" dataKey="inProgress" stackId="1" stroke="#FFBB28" fill="#FFBB28" />
-                    <Area type="monotone" dataKey="new" stackId="1" stroke="#00C49F" fill="#00C49F" />
-                  </AreaChart>
+                    <Line type="monotone" dataKey="completed" stroke="#0088FE" strokeWidth={2} name="Completed" />
+                    <Line type="monotone" dataKey="inProgress" stroke="#FFBB28" strokeWidth={2} name="In Progress" />
+                  </LineChart>
                 </ResponsiveContainer>
               </CardContent>
             </Card>
 
-            {/* Performance Radar */}
+            {/* Level-specific Performance */}
             <Card>
               <CardHeader>
-                <CardTitle>Performance Metrics</CardTitle>
-                <CardDescription>Multi-dimensional performance view</CardDescription>
+                <CardTitle>Level Performance</CardTitle>
+                <CardDescription>Completion rates by certification level</CardDescription>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
-                  <RadarChart data={[
-                    {
-                      metric: "Completion Rate",
-                      value: (analyticsData.completedCertifications / analyticsData.totalEmployees) * 100,
-                      fullMark: 100,
-                    },
-                    {
-                      metric: "Level 1 Progress",
-                      value: (analyticsData.level1Completed / analyticsData.totalEmployees) * 100,
-                      fullMark: 100,
-                    },
-                    {
-                      metric: "Level 2 Progress",
-                      value: (analyticsData.level2Completed / analyticsData.totalEmployees) * 100,
-                      fullMark: 100,
-                    },
-                    {
-                      metric: "Level 3 Progress",
-                      value: (analyticsData.level3Completed / analyticsData.totalEmployees) * 100,
-                      fullMark: 100,
-                    },
-                    {
-                      metric: "Advanced Certifications",
-                      value: ((analyticsData.consultantCompleted + analyticsData.coachCompleted) / analyticsData.totalEmployees) * 100,
-                      fullMark: 100,
-                    },
-                  ]}>
-                    <PolarGrid />
-                    <PolarAngleAxis dataKey="metric" />
-                    <PolarRadiusAxis angle={30} domain={[0, 100]} />
-                    <Radar name="Performance" dataKey="value" stroke="#0088FE" fill="#0088FE" fillOpacity={0.6} />
+                  <BarChart data={analyticsData.certificationProgress}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="level" />
+                    <YAxis />
                     <Tooltip />
-                  </RadarChart>
+                    <Bar dataKey="efficiency" fill="#00C49F" name="Completion Rate (%)" />
+                  </BarChart>
                 </ResponsiveContainer>
               </CardContent>
             </Card>
           </div>
+          
+          {/* Time Distribution Chart */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Certification Time Distribution</CardTitle>
+              <CardDescription>How certifications are distributed across the selected time period</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={300}>
+                <AreaChart data={analyticsData.monthlyTrends}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="month" />
+                  <YAxis />
+                  <Tooltip />
+                  <Area type="monotone" dataKey="completed" stackId="1" stroke="#0088FE" fill="#0088FE" name="Completed" />
+                  <Area type="monotone" dataKey="inProgress" stackId="1" stroke="#FFBB28" fill="#FFBB28" name="In Progress" />
+                  <Area type="monotone" dataKey="new" stackId="1" stroke="#00C49F" fill="#00C49F" name="New" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="performance" className="space-y-4">
