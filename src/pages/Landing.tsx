@@ -115,7 +115,7 @@ export default function Landing() {
   ];
 
   return (
-    <div className="aurora-background min-h-screen">
+    <div className="bg-white min-h-screen">
       {/* Floating Navigation */}
       <FloatingNav
         navItems={[

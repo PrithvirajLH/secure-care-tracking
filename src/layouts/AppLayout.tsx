@@ -11,7 +11,7 @@ export default function AppLayout({ children }: PropsWithChildren) {
 
   return (
     <AppProvider>
-      <div className="aurora-background min-h-screen w-full">
+      <div className="bg-white min-h-screen w-full">
         <div className="grid grid-cols-[auto_1fr] min-h-screen w-full">
           <div className="sticky top-0 h-screen">
             <Sidebar>
