@@ -14,6 +14,7 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 const Training = lazy(() => import("./pages/Training"));
 const Advisors = lazy(() => import("./pages/Advisors"));
 const Analytics = lazy(() => import("./pages/Analytics"));
+const Reports = lazy(() => import("./pages/Reports"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Landing = lazy(() => import("./pages/Landing"));
 
@@ -54,6 +55,7 @@ const App = () => (
                     <Route path="/training" element={<Training />} />
                     <Route path="/advisors" element={<Advisors />} />
                     <Route path="/analytics" element={<Analytics />} />
+                    <Route path="/reports" element={<Reports />} />
                     <Route path="/settings" element={<Settings />} />
                     <Route path="*" element={<NotFound />} />
                   </Routes>

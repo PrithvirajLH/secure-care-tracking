@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { BarChart3, Users2, GraduationCap, CalendarClock, Settings, Home } from "lucide-react";
+import { BarChart3, Users2, GraduationCap, CalendarClock, Settings, Home, FileText } from "lucide-react";
 import { useSidebar } from "@/components/ui/sidebar";
 import { motion } from "motion/react";
 
@@ -11,6 +11,7 @@ export default function AppSidebar() {
     { title: "Training", to: "/training", Icon: GraduationCap },
     { title: "Advisors", to: "/advisors", Icon: CalendarClock },
     { title: "Analytics", to: "/analytics", Icon: BarChart3 },
+    { title: "Reports", to: "/reports", Icon: FileText },
     { title: "Settings", to: "/settings", Icon: Settings },
   ];
 
