@@ -4,6 +4,14 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Make favicon round */
+link[rel="icon"], 
+link[rel="apple-touch-icon"] {
+  border-radius: 50% !important;
+  -webkit-border-radius: 50% !important;
+  -moz-border-radius: 50% !important;
+}
+
 @layer base {
   :root {
     --animate-aurora: aurora 60s linear infinite;
@@ -251,6 +259,17 @@ All colors MUST be HSL.
 }
 
 @theme inline {
+  @keyframes shine {
+  0% {
+    background-position: 0% 0%;
+    }
+  50% {
+    background-position: 100% 100%;
+    }
+  to {
+    background-position: 0% 0%;
+    }
+  }
   @keyframes shine {
   0% {
     background-position: 0% 0%;
