@@ -501,7 +501,7 @@ export default function Training() {
                   </span>
                 </div>
                 {isDatePickerOpen && (
-                  <div className="absolute z-50 bg-white border border-gray-300 rounded-lg shadow-lg p-2 mt-1 w-48 date-picker-popup">
+                  <div className="absolute z-50 bg-white border border-gray-300 rounded-lg shadow-lg p-2 mt-1 w-50 date-picker-popup">
                     <div className="flex flex-col gap-2 mb-3">
                       <button
                         onClick={() => handleMarkAwarded(employee.employeeId, requirement.key)}
@@ -577,7 +577,7 @@ export default function Training() {
                    <span className="text-sm">Pending</span>
                  </button>
                  {isDatePickerOpen && (
-                   <div className="absolute z-50 bg-white border border-gray-300 rounded-lg shadow-lg p-2 mt-1 w-48 date-picker-popup">
+                   <div className="absolute z-50 bg-white border border-gray-300 rounded-lg shadow-lg p-2 mt-1 w-50 date-picker-popup">
                      <div className="flex flex-col gap-2 mb-3">
                        <button
                          onClick={() => handleMarkAwarded(employee.employeeId, requirement.key)}
@@ -635,7 +635,7 @@ export default function Training() {
                  </span>
                </div>
                {isDatePickerOpen && (
-                 <div className="absolute z-50 bg-white border border-gray-300 rounded-lg shadow-lg p-2 mt-1 w-48 date-picker-popup">
+                 <div className="absolute z-50 bg-white border border-gray-300 rounded-lg shadow-lg p-2 mt-1 w-50 date-picker-popup">
                    <div className="flex flex-col gap-2 mb-3">
                      <button
                        onClick={() => handleMarkComplete(employee.employeeId, requirement.key)}
@@ -710,7 +710,7 @@ export default function Training() {
                <span className="text-sm">{isScheduling ? 'Scheduling...' : 'Pending'}</span>
              </button>
              {isDatePickerOpen && (
-               <div className="absolute z-50 bg-white border border-gray-300 rounded-lg shadow-lg p-2 mt-1 w-48 date-picker-popup">
+               <div className="absolute z-50 bg-white border border-gray-300 rounded-lg shadow-lg p-2 mt-1 w-50 date-picker-popup">
                  <DatePicker
                    date={scheduledDate}
                    onDateChange={(date) => handleScheduleDate(employee.employeeId, requirement.key, date)}

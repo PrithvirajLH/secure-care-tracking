@@ -8,11 +8,7 @@ export const PerformanceMonitor = () => {
         for (const entry of list.getEntries()) {
           if (entry.entryType === 'navigation') {
             const navEntry = entry as PerformanceNavigationTiming;
-            console.log('Page Load Performance:', {
-              'DOM Content Loaded': navEntry.domContentLoadedEventEnd - navEntry.domContentLoadedEventStart,
-              'Load Complete': navEntry.loadEventEnd - navEntry.loadEventStart,
-              'Total Load Time': navEntry.loadEventEnd - navEntry.fetchStart,
-            });
+            // Performance monitoring active (removed console.log)
           }
         }
       });

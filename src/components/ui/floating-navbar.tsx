@@ -73,7 +73,7 @@ export const FloatingNav = ({
                 initial={{ scale: 1 }}
                 animate={{ 
                   scale: isActive ? 1.05 : 1,
-                  backgroundColor: isActive ? "#f3e8ff" : "transparent"
+                  backgroundColor: isActive ? "#f3e8ff" : "rgba(0, 0, 0, 0)"
                 }}
                 whileHover={{ scale: isActive ? 1.15 : 1.05 }}
                 whileTap={{ scale: 0.95 }}
