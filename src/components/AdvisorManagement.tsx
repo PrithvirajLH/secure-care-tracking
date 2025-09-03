@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useApp } from "@/context/AppContext";
+import { useEmployees } from "@/hooks/useEmployees";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,6 +26,7 @@ import {
   CheckCircle,
   AlertCircle
 } from "lucide-react";
+import { toast } from "sonner";
 
 interface Advisor {
   id: string;
@@ -63,11 +65,17 @@ export default function AdvisorManagement() {
   const [editAdvisorOldName, setEditAdvisorOldName] = useState("");
   const [editAdvisorNewName, setEditAdvisorNewName] = useState("");
 
+  // Use the same data source as other components for consistency
+  const { employees: currentEmployees, isLoading, error } = useEmployees({}, 50); // Get all 50 employees
+
+  // Use currentEmployees if available, otherwise fall back to state.employees
+  const employees = currentEmployees && currentEmployees.length > 0 ? currentEmployees : state.employees;
+
   // Extract unique advisors from employee data
   const advisors = useMemo(() => {
     const advisorMap = new Map<string, Advisor>();
     
-    state.employees.forEach(employee => {
+    employees.forEach(employee => {
       const levels = [
         { name: 'Level 1', advisor: employee.level1Advisor, awarded: employee.level1Awarded, assignedDate: employee.level1ReliasAssigned },
         { name: 'Level 2', advisor: employee.level2Advisor, awarded: employee.level2Awarded, assignedDate: employee.level2ReliasAssigned },
@@ -118,13 +126,13 @@ export default function AdvisorManagement() {
     });
 
     return Array.from(advisorMap.values()).sort((a, b) => a.name.localeCompare(b.name));
-  }, [state.employees]);
+  }, [employees]);
 
   // Get advisor assignments
   const getAdvisorAssignments = (advisorName: string): AdvisorAssignment[] => {
     const assignments: AdvisorAssignment[] = [];
     
-    state.employees.forEach(employee => {
+    employees.forEach(employee => {
       const levels = [
         { name: 'Level 1', advisor: employee.level1Advisor, awarded: employee.level1Awarded, assignedDate: employee.level1ReliasAssigned, notes: employee.level1Notes },
         { name: 'Level 2', advisor: employee.level2Advisor, awarded: employee.level2Awarded, assignedDate: employee.level2ReliasAssigned, notes: employee.level2Notes },
@@ -198,7 +206,7 @@ export default function AdvisorManagement() {
   };
 
   const saveNotes = () => {
-    const keyMap: Record<string, keyof typeof state.employees[number]> = {
+    const keyMap: Record<string, keyof typeof employees[number]> = {
       "Level 1": "level1Notes",
       "Level 2": "level2Notes",
       "Level 3": "level3Notes",
@@ -206,7 +214,7 @@ export default function AdvisorManagement() {
       "Coach": "coachNotes",
     };
 
-    const updated = state.employees.map(emp => {
+    const updated = employees.map(emp => {
       if (emp.employeeId !== notesEmployeeId) return emp;
       const key = keyMap[notesLevel];
       return { ...emp, [key]: notesText } as typeof emp;
@@ -222,7 +230,7 @@ export default function AdvisorManagement() {
   };
 
   const saveEditAdvisor = () => {
-    const updated = state.employees.map(emp => {
+    const updated = employees.map(emp => {
       const replace = (value: string) => (value === editAdvisorOldName ? editAdvisorNewName : value);
       return {
         ...emp,
@@ -239,6 +247,8 @@ export default function AdvisorManagement() {
 
   return (
     <>
+
+
       {/* Action Buttons */}
       <div className="flex gap-2">
         <Dialog open={isAssignModalOpen} onOpenChange={setIsAssignModalOpen}>
@@ -263,7 +273,7 @@ export default function AdvisorManagement() {
                     <SelectValue placeholder="Select employee" />
                   </SelectTrigger>
                   <SelectContent>
-                    {state.employees.map(emp => (
+                    {employees.map(emp => (
                       <SelectItem key={emp.employeeId} value={emp.employeeId}>
                         {emp.name} ({emp.employeeId})
                       </SelectItem>
@@ -557,7 +567,33 @@ export default function AdvisorManagement() {
                         <Badge variant="outline">{assignment.level}</Badge>
                       </TableCell>
                       <TableCell>
-                        {state.employees.find(e => e.employeeId === assignment.employeeId)?.[`${assignment.level.toLowerCase().replace(' ', '')}Advisor` as keyof typeof state.employees[0]] || 'Unassigned'}
+                        {(() => {
+                          const employee = employees.find(e => e.employeeId === assignment.employeeId);
+                          if (!employee) return 'Unassigned';
+                          
+                          let advisor: string | undefined;
+                          switch (assignment.level) {
+                            case 'Level 1':
+                              advisor = employee.level1Advisor;
+                              break;
+                            case 'Level 2':
+                              advisor = employee.level2Advisor;
+                              break;
+                            case 'Level 3':
+                              advisor = employee.level3Advisor;
+                              break;
+                            case 'Consultant':
+                              advisor = employee.consultantAdvisor;
+                              break;
+                            case 'Coach':
+                              advisor = employee.coachAdvisor;
+                              break;
+                            default:
+                              advisor = undefined;
+                          }
+                          
+                          return advisor && advisor.trim() !== '' ? advisor : 'Unassigned';
+                        })()}
                       </TableCell>
                       <TableCell>
                         {assignment.assignedDate.toLocaleDateString()}

@@ -1,54 +1,113 @@
 import { useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Award, FileText, Plus, UsersRound, Clock, CheckCircle, AlertCircle, TrendingUp } from "lucide-react";
+import { Award, FileText, Plus, UsersRound, Clock, CheckCircle, AlertCircle, TrendingUp, RefreshCw, Home } from "lucide-react";
 import { Pie, PieChart, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from "recharts";
 import { motion } from "framer-motion";
 import { useApp } from "@/context/AppContext";
+import { useEmployees } from "@/hooks/useEmployees";
+import { useTrainingData } from "@/hooks/useTrainingData";
+import PageHeader from "@/components/PageHeader";
 
 const COLORS = ["#3b82f6", "#10b981", "#8b5cf6", "#f59e0b", "#ef4444"];
 
+// Helper function to get display names for requirement keys
+const getRequirementDisplayName = (requirementKey: string): string => {
+  const requirementMap: Record<string, string> = {
+    'level1ReliasAssigned': 'Level 1 Relias',
+    'level1ReliasCompleted': 'Level 1 Relias',
+    'level1ConferenceCompleted': 'Level 1 Conference',
+    'level1Awarded': 'Level 1 Award',
+    'level2ReliasAssigned': 'Level 2 Relias',
+    'level2ReliasCompleted': 'Level 2 Relias',
+    'level2ConferenceCompleted': 'Level 2 Conference',
+    'level2Awarded': 'Level 2 Award',
+    'level3ReliasAssigned': 'Level 3 Relias',
+    'level3ReliasCompleted': 'Level 3 Relias',
+    'level3ConferenceCompleted': 'Level 3 Conference',
+    'level3Awarded': 'Level 3 Award',
+    'consultantReliasAssigned': 'Consultant Relias',
+    'consultantReliasCompleted': 'Consultant Relias',
+    'consultantConferenceCompleted': 'Consultant Conference',
+    'consultantAwarded': 'Consultant Award',
+    'coachReliasAssigned': 'Coach Relias',
+    'coachReliasCompleted': 'Coach Relias',
+    'coachConferenceCompleted': 'Coach Conference',
+    'coachAwarded': 'Coach Award'
+  };
+  
+  return requirementMap[requirementKey] || requirementKey;
+};
+
 export default function Dashboard() {
   const { state } = useApp();
+
+  // For Dashboard, we need limited employees, so we'll use the default page size
+  // and also fall back to state.employees if the API data is not available
+  const { employees: apiEmployees, isLoading, error, isFetching } = useEmployees({});
+  const { allTrainingData, isLoadingAll } = useTrainingData();
 
   useEffect(() => {
     document.title = "SecureCare Training Dashboard";
   }, []);
 
+  // Use API employees if available, otherwise fall back to state employees
+  // This ensures the Dashboard always has data to display
+  const employees = useMemo(() => {
+    if (apiEmployees && apiEmployees.length > 0) {
+      console.log('Dashboard: Using API employees:', apiEmployees.length);
+      return apiEmployees;
+    } else if (state.employees && state.employees.length > 0) {
+      console.log('Dashboard: Using state employees:', state.employees.length);
+      return state.employees;
+    } else {
+      console.log('Dashboard: No employees available');
+      return [];
+    }
+  }, [apiEmployees, state.employees]);
+
+  // Debug logging
+  useEffect(() => {
+    console.log('Dashboard: API employees count:', apiEmployees?.length || 0);
+    console.log('Dashboard: State employees count:', state.employees?.length || 0);
+    console.log('Dashboard: Final employees count:', employees.length);
+  }, [apiEmployees, state.employees, employees]);
+
   const stats = useMemo(() => {
-    const total = state.employees.length;
+    const total = employees.length;
+    console.log('Dashboard: Calculating stats for', total, 'employees');
     
     // Calculate completion rates for each level
-    const level1Completed = state.employees.filter(e => e.level1Awarded).length;
-    const level2Completed = state.employees.filter(e => e.level2Awarded).length;
-    const level3Completed = state.employees.filter(e => e.level3Awarded).length;
-    const consultantCompleted = state.employees.filter(e => e.consultantAwarded).length;
-    const coachCompleted = state.employees.filter(e => e.coachAwarded).length;
+    const level1Completed = employees.filter(e => e.level1Awarded).length;
+    const level2Completed = employees.filter(e => e.level2Awarded).length;
+    const level3Completed = employees.filter(e => e.level3Awarded).length;
+    const consultantCompleted = employees.filter(e => e.consultantAwarded).length;
+    const coachCompleted = employees.filter(e => e.coachAwarded).length;
 
     // Calculate in-progress counts
-    const level1InProgress = state.employees.filter(e => e.level1ReliasAssigned && !e.level1Awarded).length;
-    const level2InProgress = state.employees.filter(e => e.level2ReliasAssigned && !e.level2Awarded).length;
-    const level3InProgress = state.employees.filter(e => e.level3ReliasAssigned && !e.level3Awarded).length;
-    const consultantInProgress = state.employees.filter(e => e.consultantReliasAssigned && !e.consultantAwarded).length;
-    const coachInProgress = state.employees.filter(e => e.coachReliasAssigned && !e.coachAwarded).length;
+    const level1InProgress = employees.filter(e => e.level1ReliasAssigned && !e.level1Awarded).length;
+    const level2InProgress = employees.filter(e => e.level2ReliasAssigned && !e.level2Awarded).length;
+    const level3InProgress = employees.filter(e => e.level3ReliasAssigned && !e.level3Awarded).length;
+    const consultantInProgress = employees.filter(e => e.consultantReliasAssigned && !e.consultantAwarded).length;
+    const coachInProgress = employees.filter(e => e.coachReliasAssigned && !e.coachAwarded).length;
 
     // Calculate pending counts
-    const level1Pending = state.employees.filter(e => !e.level1ReliasAssigned).length;
-    const level2Pending = state.employees.filter(e => e.level1Awarded && !e.level2ReliasAssigned).length;
-    const level3Pending = state.employees.filter(e => e.level2Awarded && !e.level3ReliasAssigned).length;
-    const consultantPending = state.employees.filter(e => e.level3Awarded && !e.consultantReliasAssigned).length;
-    const coachPending = state.employees.filter(e => e.consultantAwarded && !e.coachReliasAssigned).length;
+    const level1Pending = employees.filter(e => !e.level1ReliasAssigned).length;
+    const level2Pending = employees.filter(e => e.level1Awarded && !e.level2ReliasAssigned).length;
+    const level3Pending = employees.filter(e => e.level2Awarded && !e.level3ReliasAssigned).length;
+    const consultantPending = employees.filter(e => e.level3Awarded && !e.consultantReliasAssigned).length;
+    const coachPending = employees.filter(e => e.consultantAwarded && !e.coachReliasAssigned).length;
 
     // Calculate overdue (assigned but not completed within expected timeframe)
-    const level1Overdue = state.employees.filter(e => 
+    const level1Overdue = employees.filter(e => 
       e.level1ReliasAssigned && !e.level1Awarded && 
       new Date(e.level1ReliasAssigned.getTime() + 30 * 24 * 60 * 60 * 1000) < new Date()
     ).length;
-    const level2Overdue = state.employees.filter(e => 
+    const level2Overdue = employees.filter(e => 
       e.level2ReliasAssigned && !e.level2Awarded && 
       new Date(e.level2ReliasAssigned.getTime() + 45 * 24 * 60 * 60 * 1000) < new Date()
     ).length;
-    const level3Overdue = state.employees.filter(e => 
+    const level3Overdue = employees.filter(e => 
       e.level3ReliasAssigned && !e.level3Awarded && 
       new Date(e.level3ReliasAssigned.getTime() + 60 * 24 * 60 * 60 * 1000) < new Date()
     ).length;
@@ -60,7 +119,7 @@ export default function Dashboard() {
     const consultantPercentage = Math.round((consultantCompleted / Math.max(level3Completed, 1)) * 100);
     const coachPercentage = Math.round((coachCompleted / Math.max(consultantCompleted, 1)) * 100);
 
-    return {
+    const calculatedStats = {
       total,
       totalCompleted: level1Completed + level2Completed + level3Completed + consultantCompleted + coachCompleted,
       totalInProgress: level1InProgress + level2InProgress + level3InProgress + consultantInProgress + coachInProgress,
@@ -81,19 +140,50 @@ export default function Dashboard() {
         coach: { completed: coachCompleted, inProgress: coachInProgress, pending: coachPending, overdue: 0 }
       }
     };
-  }, [state.employees]);
+
+    console.log('Dashboard: Calculated stats:', calculatedStats);
+    return calculatedStats;
+  }, [employees]);
+
+  // Enhanced stats with real-time training data
+  const enhancedStats = useMemo(() => {
+    if (!allTrainingData || allTrainingData.length === 0) return stats;
+
+    const activeTrainingSessions = allTrainingData.filter(t => 
+      t.scheduledDate && !t.completedDate && new Date(t.scheduledDate) >= new Date()
+    ).length;
+    
+    const overdueTraining = allTrainingData.filter(t => 
+      t.scheduledDate && !t.completedDate && new Date(t.scheduledDate) < new Date()
+    ).length;
+
+    const recentCompletions = allTrainingData.filter(t => 
+      t.completedDate && new Date(t.completedDate) >= new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+    ).length;
+
+    return {
+      ...stats,
+      activeTrainingSessions,
+      overdueTraining,
+      recentCompletions
+    };
+  }, [stats, allTrainingData]) as typeof stats & {
+    activeTrainingSessions: number;
+    overdueTraining: number;
+    recentCompletions: number;
+  };
 
   const donutData = [
-    { name: "Level 1", value: stats.completion.level1 },
-    { name: "Level 2", value: stats.completion.level2 },
-    { name: "Level 3", value: stats.completion.level3 },
-    { name: "Consultant", value: stats.completion.consultant },
-    { name: "Coach", value: stats.completion.coach },
+    { name: "Level 1", value: enhancedStats.completion.level1 },
+    { name: "Level 2", value: enhancedStats.completion.level2 },
+    { name: "Level 3", value: enhancedStats.completion.level3 },
+    { name: "Consultant", value: enhancedStats.completion.consultant },
+    { name: "Coach", value: enhancedStats.completion.coach },
   ];
 
   // Generate facility data from actual employee data
   const facilityData = useMemo(() => {
-    const facilityStats = state.employees.reduce((acc, employee) => {
+    const facilityStats = employees.reduce((acc, employee) => {
       if (!acc[employee.facility]) {
         acc[employee.facility] = { total: 0, completed: 0 };
       }
@@ -111,13 +201,53 @@ export default function Dashboard() {
       }))
       .sort((a, b) => b.completed - a.completed)
       .slice(0, 5); // Top 5 facilities
-  }, [state.employees]);
+  }, [employees]);
+
+  // Loading state
+  if (isLoading || isLoadingAll) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading dashboard data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <p className="text-red-600">Failed to load employees</p>
+          <Button onClick={() => window.location.reload()} className="mt-2">
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
+      {/* Header */}
+      <PageHeader
+        icon={Home}
+        title="SecureCare Dashboard"
+        description="Comprehensive overview of training progress and employee performance"
+      />
+
       <header className="sr-only">
-        <h1>SecureCare Training Dashboard</h1>
+        <h1>SecureCare Dashboard</h1>
       </header>
+
+      {/* Data freshness indicator and refresh controls */}
+      
+
+      {/* Data source indicator */}
+      
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
@@ -127,7 +257,7 @@ export default function Dashboard() {
               <UsersRound className="h-4 w-4 text-blue-700" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-blue-700">{stats.total}</div>
+              <div className="text-3xl font-bold text-blue-700">{enhancedStats.total}</div>
               <p className="text-xs text-blue-600 mt-1">Active Staff</p>
             </CardContent>
           </Card>
@@ -139,7 +269,7 @@ export default function Dashboard() {
               <CheckCircle className="h-4 w-4 text-green-700" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-green-700">{stats.totalCompleted}</div>
+              <div className="text-3xl font-bold text-green-700">{enhancedStats.totalCompleted}</div>
               <p className="text-xs text-green-600 mt-1">Certifications</p>
             </CardContent>
           </Card>
@@ -151,7 +281,7 @@ export default function Dashboard() {
               <Clock className="h-4 w-4 text-yellow-700" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-yellow-700">{stats.totalInProgress}</div>
+              <div className="text-3xl font-bold text-yellow-700">{enhancedStats.totalInProgress}</div>
               <p className="text-xs text-yellow-600 mt-1">Active Training</p>
             </CardContent>
           </Card>
@@ -159,16 +289,140 @@ export default function Dashboard() {
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45 }}>
           <Card className="shadow-sm bg-gradient-to-br from-red-50 to-red-100 border-red-200">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-red-700">Overdue</CardTitle>
+              <CardTitle className="text-sm font-medium text-red-700">Overdue Training</CardTitle>
               <AlertCircle className="h-4 w-4 text-red-700" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-red-700">{stats.totalOverdue}</div>
-              <p className="text-xs text-red-600 mt-1">Needs Attention</p>
+              <div className="text-3xl font-bold text-red-700">
+                {allTrainingData && allTrainingData.length > 0 ? enhancedStats.overdueTraining : enhancedStats.totalOverdue}
+              </div>
+              <p className="text-xs text-red-600 mt-1">
+                {allTrainingData && allTrainingData.length > 0 
+                  ? "Scheduled sessions past due" 
+                  : "Relias training overdue"}
+              </p>
             </CardContent>
           </Card>
         </motion.div>
       </div>
+
+      {/* Enhanced stats row with real-time data */}
+      {allTrainingData && allTrainingData.length > 0 && (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <Card className="shadow-sm bg-gradient-to-br from-indigo-50 to-indigo-100 border-indigo-200">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-indigo-700">Active Sessions</CardTitle>
+              <Clock className="h-4 w-4 text-indigo-700" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-indigo-700">{enhancedStats.activeTrainingSessions}</div>
+              <p className="text-xs text-indigo-600 mt-1">Current Training</p>
+            </CardContent>
+          </Card>
+          <Card className="shadow-sm bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-orange-700">Recent Completions</CardTitle>
+              <CheckCircle className="h-4 w-4 text-orange-700" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-orange-700">{enhancedStats.recentCompletions}</div>
+              <p className="text-xs text-orange-600 mt-1">Last 7 Days</p>
+            </CardContent>
+          </Card>
+          <Card className="shadow-sm bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-purple-700">Training Efficiency</CardTitle>
+              <TrendingUp className="h-4 w-4 text-purple-700" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-purple-700">
+                {allTrainingData.length > 0 ? 
+                  Math.round((allTrainingData.filter(t => t.completedDate).length / allTrainingData.length) * 100) : 0}%
+              </div>
+              <p className="text-xs text-purple-600 mt-1">Completion Rate</p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Overdue Training Details - Actionable Information */}
+      {allTrainingData && allTrainingData.length > 0 && enhancedStats.overdueTraining > 0 && (
+        <Card className="shadow-sm border-red-200 bg-red-50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-red-700">
+              <AlertCircle className="w-5 h-5" />
+              Overdue Training Sessions
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-red-700">
+                  {enhancedStats.overdueTraining} training sessions are overdue
+                </span>
+                <span className="text-xs text-red-600">
+                  Scheduled dates have passed
+                </span>
+              </div>
+              
+              {/* Action Cards */}
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="p-3 bg-white rounded-lg border border-red-200">
+                  <div className="text-sm font-medium text-red-700">Action Required</div>
+                  <div className="text-xs text-red-600 mt-1">
+                    Reschedule or mark as complete
+                  </div>
+                </div>
+                <div className="p-3 bg-white rounded-lg border border-red-200">
+                  <div className="text-sm font-medium text-red-700">Contact Needed</div>
+                  <div className="text-xs text-red-600 mt-1">
+                    Reach out to employees
+                  </div>
+                </div>
+                <div className="p-3 bg-white rounded-lg border border-red-200">
+                  <div className="text-sm font-medium text-red-700">Update Status</div>
+                  <div className="text-xs text-red-600 mt-1">
+                    Mark completed if done
+                  </div>
+                </div>
+              </div>
+
+              {/* Overdue Training List */}
+              <div className="mt-4">
+                <div className="text-sm font-medium text-red-700 mb-2">Recent Overdue Sessions:</div>
+                <div className="space-y-2 max-h-40 overflow-y-auto">
+                  {allTrainingData
+                    .filter(t => t.scheduledDate && !t.completedDate && new Date(t.scheduledDate) < new Date())
+                    .slice(0, 5) // Show top 5 overdue
+                    .map((training, index) => {
+                      const daysOverdue = Math.ceil((new Date().getTime() - new Date(training.scheduledDate).getTime()) / (1000 * 60 * 60 * 24));
+                      // Find employee name from employees array
+                      const employee = employees.find(e => e.employeeId === training.employeeId);
+                      const employeeName = employee?.name || `Employee ${training.employeeId.slice(0, 8)}`;
+                      const requirementName = getRequirementDisplayName(training.requirementKey);
+                      
+                      return (
+                        <div key={index} className="flex items-center justify-between p-2 bg-white rounded border border-red-200">
+                          <div className="flex-1">
+                            <div className="text-sm font-medium text-gray-700">
+                              {employeeName}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {requirementName} - {daysOverdue} day{daysOverdue !== 1 ? 's' : ''} overdue
+                            </div>
+                          </div>
+                          <div className="text-xs text-red-600 font-medium">
+                            {new Date(training.scheduledDate).toLocaleDateString()}
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="shadow-sm">
@@ -226,29 +480,29 @@ export default function Dashboard() {
         <CardContent>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
             <div className="text-center p-4 bg-blue-50 rounded-lg">
-              <div className="text-2xl font-bold text-blue-700">{stats.counts.level1.completed}</div>
+              <div className="text-2xl font-bold text-blue-700">{enhancedStats.counts.level1.completed}</div>
               <div className="text-sm text-blue-600">Level 1 Completed</div>
-              <div className="text-xs text-blue-500 mt-1">{stats.counts.level1.inProgress} in progress</div>
+              <div className="text-xs text-blue-500 mt-1">{enhancedStats.counts.level1.inProgress} in progress</div>
             </div>
             <div className="text-center p-4 bg-green-50 rounded-lg">
-              <div className="text-2xl font-bold text-green-700">{stats.counts.level2.completed}</div>
+              <div className="text-2xl font-bold text-green-700">{enhancedStats.counts.level2.completed}</div>
               <div className="text-sm text-green-600">Level 2 Completed</div>
-              <div className="text-xs text-green-500 mt-1">{stats.counts.level2.inProgress} in progress</div>
+              <div className="text-xs text-green-500 mt-1">{enhancedStats.counts.level2.inProgress} in progress</div>
             </div>
             <div className="text-center p-4 bg-purple-50 rounded-lg">
-              <div className="text-2xl font-bold text-purple-700">{stats.counts.level3.completed}</div>
+              <div className="text-2xl font-bold text-purple-700">{enhancedStats.counts.level3.completed}</div>
               <div className="text-sm text-purple-600">Level 3 Completed</div>
-              <div className="text-xs text-purple-500 mt-1">{stats.counts.level3.inProgress} in progress</div>
+              <div className="text-xs text-purple-500 mt-1">{enhancedStats.counts.level3.inProgress} in progress</div>
             </div>
             <div className="text-center p-4 bg-orange-50 rounded-lg">
-              <div className="text-2xl font-bold text-orange-700">{stats.counts.consultant.completed}</div>
+              <div className="text-2xl font-bold text-orange-700">{enhancedStats.counts.consultant.completed}</div>
               <div className="text-sm text-orange-600">Consultant Completed</div>
-              <div className="text-xs text-orange-500 mt-1">{stats.counts.consultant.inProgress} in progress</div>
+              <div className="text-xs text-orange-500 mt-1">{enhancedStats.counts.consultant.inProgress} in progress</div>
             </div>
             <div className="text-center p-4 bg-teal-50 rounded-lg">
-              <div className="text-2xl font-bold text-teal-700">{stats.counts.coach.completed}</div>
+              <div className="text-2xl font-bold text-teal-700">{enhancedStats.counts.coach.completed}</div>
               <div className="text-sm text-teal-600">Coach Completed</div>
-              <div className="text-xs text-teal-500 mt-1">{stats.counts.coach.inProgress} in progress</div>
+              <div className="text-xs text-teal-500 mt-1">{enhancedStats.counts.coach.inProgress} in progress</div>
             </div>
           </div>
         </CardContent>
@@ -264,7 +518,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <ul className="space-y-3">
-              {state.employees
+              {employees
                 .filter(e => e.level1AwardedDate || e.level2AwardedDate || e.level3AwardedDate || e.consultantAwardedDate || e.coachAwardedDate)
                 .sort((a, b) => {
                   const aDate = a.level1AwardedDate || a.level2AwardedDate || a.level3AwardedDate || a.consultantAwardedDate || a.coachAwardedDate;
@@ -289,7 +543,7 @@ export default function Dashboard() {
                     </li>
                   );
                 })}
-              {state.employees.filter(e => e.level1AwardedDate || e.level2AwardedDate || e.level3AwardedDate || e.consultantAwardedDate || e.coachAwardedDate).length === 0 && (
+              {employees.filter(e => e.level1AwardedDate || e.level2AwardedDate || e.level3AwardedDate || e.consultantAwardedDate || e.coachAwardedDate).length === 0 && (
                 <li className="text-center text-muted-foreground py-4">
                   No recent activity
                 </li>
@@ -302,7 +556,7 @@ export default function Dashboard() {
             <CardTitle>Quick Actions</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-2">
-            <Button variant="hero" className="hover-scale"><Plus className="mr-2" /> Assign Training</Button>
+            <Button variant="default" className="hover-scale"><Plus className="mr-2" /> Assign Training</Button>
             <Button variant="secondary" className="hover-scale"><FileText className="mr-2" /> Run Report</Button>
             <Button variant="outline" className="hover-scale"><Award className="mr-2" /> Manage Certifications</Button>
           </CardContent>

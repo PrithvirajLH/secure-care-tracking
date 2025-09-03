@@ -11,7 +11,6 @@ export default function AppSidebar() {
     { title: "Training", to: "/training", Icon: GraduationCap },
     { title: "Advisors", to: "/advisors", Icon: CalendarClock },
     { title: "Analytics", to: "/analytics", Icon: BarChart3 },
-    { title: "Reports", to: "/reports", Icon: FileText },
     { title: "Settings", to: "/settings", Icon: Settings },
   ];
 

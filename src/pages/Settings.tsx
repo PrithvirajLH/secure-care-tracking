@@ -27,6 +27,8 @@ import {
   XCircle
 } from "lucide-react";
 import { motion } from "framer-motion";
+import { toast } from "sonner";
+import PageHeader from "@/components/PageHeader";
 
 // Comprehensive Settings Page for SecureCare Training Dashboard
 // Features: User Preferences, Notifications, Training Configuration, System Settings, Data Management
@@ -66,37 +68,226 @@ export default function Settings() {
     exportFormat: "csv"
   });
 
+  const [displayName, setDisplayName] = useState("Admin User");
+  const [email, setEmail] = useState("admin@securecare.com");
+  const [password, setPassword] = useState("••••••••");
+  const [showPassword, setShowPassword] = useState(false);
+
   const handleSave = (section: string) => {
-    // In a real app, this would save to backend
-    console.log(`Saving ${section} settings`);
+    // Save settings to localStorage (in a real app, this would save to backend)
+    try {
+      const settingsData = {
+        notifications,
+        trainingSettings,
+        systemSettings,
+        dataSettings,
+        displayName,
+        email
+      };
+      
+      localStorage.setItem('securecare-settings', JSON.stringify(settingsData));
+      
+      toast.success(`${section} settings saved successfully!`, {
+        description: "Your preferences have been updated and will be applied immediately."
+      });
+    } catch (error) {
+      toast.error("Failed to save settings", {
+        description: "Please try again or contact support if the issue persists."
+      });
+    }
   };
 
   const handleExport = () => {
-    // In a real app, this would trigger data export
-    console.log("Exporting data");
+    try {
+      const settingsData = {
+        notifications,
+        trainingSettings,
+        systemSettings,
+        dataSettings,
+        displayName,
+        email,
+        exportDate: new Date().toISOString()
+      };
+      
+      const dataStr = JSON.stringify(settingsData, null, 2);
+      const dataBlob = new Blob([dataStr], { type: 'application/json' });
+      
+      const url = URL.createObjectURL(dataBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `securecare-settings-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      toast.success("Settings exported successfully!", {
+        description: "Your configuration has been saved to a JSON file."
+      });
+    } catch (error) {
+      toast.error("Failed to export settings", {
+        description: "Please try again or contact support if the issue persists."
+      });
+    }
   };
 
   const handleImport = () => {
-    // In a real app, this would trigger data import
-    console.log("Importing data");
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          try {
+            const importedData = JSON.parse(event.target?.result as string);
+            
+            // Validate and apply imported settings
+            if (importedData.notifications) setNotifications(importedData.notifications);
+            if (importedData.trainingSettings) setTrainingSettings(importedData.trainingSettings);
+            if (importedData.systemSettings) setSystemSettings(importedData.systemSettings);
+            if (importedData.dataSettings) setDataSettings(importedData.dataSettings);
+            if (importedData.displayName) setDisplayName(importedData.displayName);
+            if (importedData.email) setEmail(importedData.email);
+            
+            // Save to localStorage
+            localStorage.setItem('securecare-settings', JSON.stringify(importedData));
+            
+            toast.success("Settings imported successfully!", {
+              description: "Your configuration has been restored from the backup file."
+            });
+          } catch (error) {
+            toast.error("Invalid settings file", {
+              description: "Please ensure you're importing a valid SecureCare settings file."
+            });
+          }
+        };
+        reader.readAsText(file);
+      }
+    };
+    input.click();
   };
 
   const handleReset = () => {
-    // In a real app, this would reset settings to defaults
-    console.log("Resetting settings");
+    // Reset to default settings
+    setNotifications({
+      email: true,
+      push: false,
+      sms: false,
+      overdue: true,
+      completions: true,
+      assignments: false
+    });
+    
+    setTrainingSettings({
+      level1Duration: 30,
+      level2Duration: 45,
+      level3Duration: 60,
+      consultantDuration: 90,
+      coachDuration: 120,
+      autoAssign: true,
+      requireApproval: true
+    });
+    
+    setSystemSettings({
+      theme: "light",
+      language: "en",
+      timezone: "UTC",
+      dateFormat: "MM/DD/YYYY",
+      timeFormat: "12h"
+    });
+    
+    setDataSettings({
+      autoBackup: true,
+      backupFrequency: "daily",
+      retentionDays: 365,
+      exportFormat: "csv"
+    });
+    
+    setDisplayName("Admin User");
+    setEmail("admin@securecare.com");
+    
+    // Clear localStorage
+    localStorage.removeItem('securecare-settings');
+    
+    toast.success("Settings reset to defaults", {
+      description: "All settings have been restored to their default values."
+    });
+  };
+
+  const handleClearData = () => {
+    if (confirm("Are you sure you want to clear all training data? This action cannot be undone.")) {
+      try {
+        // Clear all data from localStorage (in a real app, this would clear from backend)
+        localStorage.clear();
+        
+        toast.success("All data cleared successfully", {
+          description: "The system has been reset to its initial state."
+        });
+      } catch (error) {
+        toast.error("Failed to clear data", {
+          description: "Please try again or contact support if the issue persists."
+        });
+      }
+    }
+  };
+
+  const handleThemeChange = (newTheme: string) => {
+    setSystemSettings({ ...systemSettings, theme: newTheme });
+    
+    // Apply theme immediately
+    if (newTheme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    
+    toast.success("Theme updated", {
+      description: `Switched to ${newTheme} theme.`
+    });
+  };
+
+  const handleLanguageChange = (newLanguage: string) => {
+    setSystemSettings({ ...systemSettings, language: newLanguage });
+    
+    // In a real app, this would change the app's language
+    toast.success("Language updated", {
+      description: `Language changed to ${newLanguage === 'en' ? 'English' : newLanguage === 'es' ? 'Spanish' : 'French'}.`
+    });
+  };
+
+  const handleTimezoneChange = (newTimezone: string) => {
+    setSystemSettings({ ...systemSettings, timezone: newTimezone });
+    
+    toast.success("Timezone updated", {
+      description: `Timezone changed to ${newTimezone}.`
+    });
+  };
+
+  const handleDateFormatChange = (newFormat: string) => {
+    setSystemSettings({ ...systemSettings, dateFormat: newFormat });
+    
+    toast.success("Date format updated", {
+      description: `Date format changed to ${newFormat}.`
+    });
+  };
+
+  const handleTimeFormatChange = (newFormat: string) => {
+    setSystemSettings({ ...systemSettings, timeFormat: newFormat });
+    
+    toast.success("Time format updated", {
+      description: `Time format changed to ${newFormat}.`
+    });
   };
 
   return (
     <div className="space-y-6">
-      <header>
-        <div className="flex items-center gap-2">
-          <SettingsIcon className="h-6 w-6 text-blue-600" />
-          <h1 className="text-3xl font-bold">Settings & Administration</h1>
-        </div>
-        <p className="text-muted-foreground mt-2">
-          Configure your SecureCare Training Dashboard preferences and system settings.
-        </p>
-      </header>
+      <PageHeader
+        icon={SettingsIcon}
+        title="Settings & Administration"
+        description="Configure your SecureCare Training Dashboard preferences and system settings."
+      />
 
       <Tabs defaultValue="preferences" className="space-y-6">
         <TabsList className="grid w-full grid-cols-5">
@@ -143,18 +334,18 @@ export default function Settings() {
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="displayName">Display Name</Label>
-                    <Input id="displayName" placeholder="Enter your display name" defaultValue="Admin User" />
+                    <Input id="displayName" placeholder="Enter your display name" defaultValue={displayName} onChange={(e) => setDisplayName(e.target.value)} />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="email">Email Address</Label>
-                    <Input id="email" type="email" placeholder="admin@securecare.com" defaultValue="admin@securecare.com" />
+                    <Input id="email" type="email" placeholder="admin@securecare.com" defaultValue={email} onChange={(e) => setEmail(e.target.value)} />
                   </div>
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="theme">Theme</Label>
-                    <Select defaultValue={systemSettings.theme}>
+                    <Select defaultValue={systemSettings.theme} onValueChange={handleThemeChange}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select theme" />
                       </SelectTrigger>
@@ -167,7 +358,7 @@ export default function Settings() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="language">Language</Label>
-                    <Select defaultValue={systemSettings.language}>
+                    <Select defaultValue={systemSettings.language} onValueChange={handleLanguageChange}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select language" />
                       </SelectTrigger>
@@ -183,7 +374,7 @@ export default function Settings() {
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="timezone">Timezone</Label>
-                    <Select defaultValue={systemSettings.timezone}>
+                    <Select defaultValue={systemSettings.timezone} onValueChange={handleTimezoneChange}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select timezone" />
                       </SelectTrigger>
@@ -197,7 +388,7 @@ export default function Settings() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="dateFormat">Date Format</Label>
-                    <Select defaultValue={systemSettings.dateFormat}>
+                    <Select defaultValue={systemSettings.dateFormat} onValueChange={handleDateFormatChange}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select date format" />
                       </SelectTrigger>
@@ -631,7 +822,7 @@ export default function Settings() {
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
                       <Label>Export Format</Label>
-                      <Select defaultValue={dataSettings.exportFormat}>
+                      <Select defaultValue={dataSettings.exportFormat} onValueChange={(value) => setDataSettings({...dataSettings, exportFormat: value})}>
                         <SelectTrigger>
                           <SelectValue placeholder="Select format" />
                         </SelectTrigger>
@@ -645,7 +836,7 @@ export default function Settings() {
                     </div>
                     <div className="space-y-2">
                       <Label>Date Range</Label>
-                      <Select defaultValue="all">
+                      <Select defaultValue="all" onValueChange={(value) => {}}>
                         <SelectTrigger>
                           <SelectValue placeholder="Select date range" />
                         </SelectTrigger>
@@ -709,7 +900,7 @@ export default function Settings() {
                     <div className="grid gap-4 md:grid-cols-2">
                       <div className="space-y-2">
                         <Label>Backup Frequency</Label>
-                        <Select defaultValue={dataSettings.backupFrequency}>
+                        <Select defaultValue={dataSettings.backupFrequency} onValueChange={(value) => setDataSettings({...dataSettings, backupFrequency: value})}>
                           <SelectTrigger>
                             <SelectValue placeholder="Select frequency" />
                           </SelectTrigger>
@@ -744,7 +935,7 @@ export default function Settings() {
                           Permanently delete all training data
                         </p>
                       </div>
-                      <Button variant="destructive" size="sm" className="flex items-center gap-2">
+                      <Button variant="destructive" size="sm" onClick={handleClearData} className="flex items-center gap-2">
                         <Trash2 className="h-4 w-4" />
                         Clear Data
                       </Button>
@@ -769,53 +960,7 @@ export default function Settings() {
         </TabsContent>
       </Tabs>
 
-      {/* System Status */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.5 }}
-      >
-        <Card>
-          <CardHeader>
-            <CardTitle>System Status</CardTitle>
-            <CardDescription>
-              Current system health and performance metrics.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-              <div className="flex items-center gap-3 p-3 border rounded-lg">
-                <CheckCircle className="h-5 w-5 text-green-600" />
-                <div>
-                  <p className="font-medium">System Status</p>
-                  <p className="text-sm text-muted-foreground">Operational</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 p-3 border rounded-lg">
-                <Clock className="h-5 w-5 text-blue-600" />
-                <div>
-                  <p className="font-medium">Uptime</p>
-                  <p className="text-sm text-muted-foreground">99.9%</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 p-3 border rounded-lg">
-                <Database className="h-5 w-5 text-purple-600" />
-                <div>
-                  <p className="font-medium">Database</p>
-                  <p className="text-sm text-muted-foreground">Healthy</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 p-3 border rounded-lg">
-                <AlertTriangle className="h-5 w-5 text-yellow-600" />
-                <div>
-                  <p className="font-medium">Last Backup</p>
-                  <p className="text-sm text-muted-foreground">2 hours ago</p>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </motion.div>
+
     </div>
   );
 }

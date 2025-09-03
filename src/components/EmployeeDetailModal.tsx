@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { Employee } from "@/context/AppContext";
 import { format } from "date-fns";
+import { useTrainingData } from "@/hooks/useTrainingData";
 
 interface EmployeeDetailModalProps {
   employee: Employee;
@@ -45,25 +46,32 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
       onModalOpenChange(open);
     }
   }, [open, onModalOpenChange]);
-  const [scheduledDates, setScheduledDates] = useState<{[key: string]: Date}>({});
-  const [completedDates, setCompletedDates] = useState<{[key: string]: Date}>({});
+  // Use the training data hook for API operations
+  const {
+    scheduleTraining,
+    completeTraining,
+    rescheduleTraining,
+    awardTraining,
+    isScheduling,
+    isCompleting,
+    isRescheduling,
+    isAwarding,
+  } = useTrainingData();
+  
   const [inlineDatePicker, setInlineDatePicker] = useState<string | null>(null);
   const [currentLevel, setCurrentLevel] = useState("care-partner");
-  const [isCompleting, setIsCompleting] = useState(false);
-  const [isAwarding, setIsAwarding] = useState(false);
 
   const getLevelProgress = (level: string) => {
     switch (level) {
-      case "care-partner":
-        return {
-          requirements: [
-            { name: "Relias Training Assigned", key: "level1ReliasAssigned", completed: !!employee.level1ReliasAssigned, date: employee.level1ReliasAssigned },
-            { name: "Relias Training Completed", key: "level1ReliasCompleted", completed: !!employee.level1ReliasCompleted, date: employee.level1ReliasCompleted },
-            { name: "Conference Completed", key: "level1ConferenceCompleted", completed: !!employee.level1ConferenceCompleted, date: employee.level1ConferenceCompleted },
-            { name: "Level 1 Awarded", key: "level1Awarded", completed: employee.level1Awarded, date: employee.level1AwardedDate }
-          ],
-          total: 4,
-          completed: [!!employee.level1ReliasAssigned, !!employee.level1ReliasCompleted, !!employee.level1ConferenceCompleted, employee.level1Awarded].filter(Boolean).length,
+             case "care-partner":
+         return {
+           requirements: [
+             { name: "Relias Training Assigned", key: "level1ReliasAssigned", completed: !!employee.level1ReliasAssigned, date: employee.level1ReliasAssigned },
+             { name: "Relias Training Completed", key: "level1ReliasCompleted", completed: !!employee.level1ReliasCompleted, date: employee.level1ReliasCompleted },
+             { name: "Level 1 Awarded", key: "level1Awarded", completed: employee.level1Awarded, date: employee.level1AwardedDate }
+           ],
+           total: 3,
+           completed: [!!employee.level1ReliasAssigned, !!employee.level1ReliasCompleted, employee.level1Awarded].filter(Boolean).length,
           color: "text-blue-600",
           icon: Users
         };
@@ -181,72 +189,66 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
   // Scheduling functions
   const handleScheduleDate = async (employeeId: string, requirementKey: string, date: Date | undefined) => {
     const key = `${employeeId}-${requirementKey}`;
-    if (date) {
-      setScheduledDates(prev => ({ ...prev, [key]: date }));
-      toast.success('Training scheduled successfully!', {
-        description: `Scheduled for ${date.toLocaleDateString()}`,
-      });
+    if (date && scheduleTraining) {
+      console.log('Scheduling training:', { employeeId, requirementKey, date, key });
+      
+      try {
+        scheduleTraining({ employeeId, requirementKey, date });
+        
+        // Show success message
+        toast.success('Training scheduled successfully!', {
+          description: `Scheduled for ${date.toLocaleDateString()}`,
+        });
+        
+        // Close the date picker
+        setInlineDatePicker(null);
+      } catch (error) {
+        toast.error('Failed to schedule training');
+      }
     }
-    setInlineDatePicker(null);
   };
 
   const handleMarkComplete = async (employeeId: string, requirementKey: string) => {
-    const key = `${employeeId}-${requirementKey}`;
-    const scheduledDate = scheduledDates[key];
-    
-    if (scheduledDate) {
-      setIsCompleting(true);
+    if (completeTraining) {
       try {
-        setScheduledDates(prev => {
-          const newDates = { ...prev };
-          delete newDates[key];
-          return newDates;
-        });
-        
-        setCompletedDates(prev => ({
-          ...prev,
-          [key]: scheduledDate
-        }));
+        // Use current date as completion date
+        const currentDate = new Date();
+        completeTraining({ employeeId, requirementKey, date: currentDate });
         
         toast.success('Training marked as complete!', {
-          description: `Completed on ${scheduledDate.toLocaleDateString()}`,
+          description: `Completed on ${currentDate.toLocaleDateString()}`,
         });
       } catch (error) {
         toast.error('Failed to mark training as complete');
-      } finally {
-        setIsCompleting(false);
       }
     }
   };
 
   const handleMarkAwarded = async (employeeId: string, requirementKey: string) => {
-    const key = `${employeeId}-${requirementKey}`;
-    const currentDate = new Date();
-    
-    setIsAwarding(true);
-    try {
-      setCompletedDates(prev => ({
-        ...prev,
-        [key]: currentDate
-      }));
-      
-      toast.success('Level awarded successfully!', {
-        description: `Awarded on ${currentDate.toLocaleDateString()}`,
-      });
-    } catch (error) {
-      toast.error('Failed to award level');
-    } finally {
-      setIsAwarding(false);
+    if (awardTraining) {
+      try {
+        const currentDate = new Date();
+        awardTraining({ employeeId, requirementKey, date: currentDate });
+        
+        toast.success('Level awarded successfully!', {
+          description: `Awarded on ${currentDate.toLocaleDateString()}`,
+        });
+      } catch (error) {
+        toast.error('Failed to award level');
+      }
     }
   };
 
   const handleReschedule = async (employeeId: string, requirementKey: string, date: Date | undefined) => {
-    const key = `${employeeId}-${requirementKey}`;
-    if (date) {
-      setScheduledDates(prev => ({ ...prev, [key]: date }));
-      toast.success('Training rescheduled successfully!', {
-        description: `Rescheduled for ${date.toLocaleDateString()}`,
-      });
+    if (date && rescheduleTraining) {
+      try {
+        rescheduleTraining({ employeeId, requirementKey, date });
+        toast.success('Training rescheduled successfully!', {
+          description: `Rescheduled for ${date.toLocaleDateString()}`,
+        });
+      } catch (error) {
+        toast.error('Failed to reschedule training');
+      }
     }
   };
 
@@ -282,81 +284,25 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
   const getStatusBadge = (requirement: any) => {
     const value = employee[requirement.key];
     const key = `${employee.employeeId}-${requirement.key}`;
-    const scheduledDate = scheduledDates[key];
-    const completedDate = completedDates[key];
     const isInlineDatePickerOpen = inlineDatePicker === key;
+    
+    // Check if this requirement has a scheduled date in the employee data
+    // For now, we'll use a simple approach - if it's not completed, it can be scheduled
+    const canBeScheduled = !value && !requirement.key.includes("Awarded");
+    
+    console.log('getStatusBadge:', { 
+      requirementKey: requirement.key, 
+      key, 
+      value, 
+      canBeScheduled,
+      isInlineDatePickerOpen 
+    });
 
     if (requirement.key.includes("Awarded")) {
       const awardDateKey = requirement.key.replace("Awarded", "AwardedDate");
       const awardDate = employee[awardDateKey];
       
-      // Check for completed date first
-      if (completedDate) {
-        return (
-          <div className="inline-flex items-center gap-1 bg-gradient-to-r from-green-500 to-emerald-500 text-white px-2 py-1 rounded-full text-sm font-semibold shadow-sm">
-            <Award className="w-3 h-3" />
-            <span className="text-sm font-medium">
-              {completedDate.toLocaleDateString()}
-            </span>
-          </div>
-        );
-      }
-      
-                           // Check for scheduled date
-                if (scheduledDate) {
-           return (
-             <div className="flex flex-col gap-1 relative">
-              {isInlineDatePickerOpen ? (
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => handleMarkAwarded(employee.employeeId, requirement.key)}
-                    disabled={isAwarding}
-                    className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white px-3 py-1.5 rounded-lg text-sm font-semibold hover:from-green-600 hover:to-emerald-600 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <Award className="w-4 h-4" />
-                    {isAwarding ? 'Awarding...' : 'Mark Awarded'}
-                  </button>
-                  <button
-                    onClick={() => {
-                      // Show date picker for rescheduling
-                      setInlineDatePicker(`reschedule-${key}`);
-                    }}
-                    className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-yellow-500 to-orange-500 text-white px-3 py-1.5 rounded-lg text-sm font-semibold hover:from-yellow-600 hover:to-orange-600 transition-colors shadow-sm"
-                  >
-                    <Clock className="w-4 h-4" />
-                    Reschedule
-                  </button>
-                  {inlineDatePicker && inlineDatePicker.startsWith(`reschedule-${key}`) && (
-                    <div className="absolute top-full right-0 z-50 bg-white border border-gray-200 rounded-lg shadow-lg p-2 min-w-[200px]">
-                      <DatePicker
-                        date={scheduledDate}
-                        onDateChange={(date) => handleReschedule(employee.employeeId, requirement.key, date)}
-                        placeholder="Reschedule date"
-                      />
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <>
-                  <button
-                    onClick={() => openInlineDatePicker(key)}
-                    className="inline-flex items-center justify-center gap-1 bg-gradient-to-r from-yellow-500 to-orange-500 text-white px-2 py-1 rounded-full text-sm font-semibold shadow-sm hover:from-yellow-600 hover:to-orange-600 cursor-pointer transition-colors w-20"
-                  >
-                    <Clock className="w-3 h-3" />
-                    <span className="text-sm">Scheduled</span>
-                  </button>
-                  <div className="inline-flex items-center justify-center gap-1 bg-yellow-50 border border-yellow-200 rounded px-2 py-1 w-20">
-                    <span className="text-sm text-yellow-700 font-medium">
-                      {scheduledDate.toLocaleDateString()}
-                    </span>
-                  </div>
-                </>
-              )}
-            </div>
-          );
-       }
-      
-      // Check for existing awarded value
+      // Check for existing awarded value first
       if (value) {
         return (
           <div className="flex flex-col gap-1">
@@ -374,127 +320,64 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
           </div>
         );
       }
-
-             // Check if can award (all previous requirements completed)
-       const { canAward, missingRequirements } = canAwardLevel(currentLevel, requirement.key);
-       
-               if (canAward) {
-          return (
-            <div className="flex flex-col gap-1">
-              {isInlineDatePickerOpen ? (
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => handleMarkAwarded(employee.employeeId, requirement.key)}
-                    disabled={isAwarding}
-                    className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white px-3 py-1.5 rounded-lg text-sm font-semibold hover:from-green-600 hover:to-emerald-600 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <Award className="w-4 h-4" />
-                    {isAwarding ? 'Awarding...' : 'Mark Awarded'}
-                  </button>
-                </div>
-              ) : (
+      
+      // Check if can award (all previous requirements completed)
+      const { canAward, missingRequirements } = canAwardLevel(currentLevel, requirement.key);
+      
+      if (canAward) {
+        return (
+          <div className="flex flex-col gap-1">
+            {isInlineDatePickerOpen ? (
+              <div className="flex items-center gap-2">
                 <button
-                  onClick={() => openInlineDatePicker(key)}
+                  onClick={() => handleMarkAwarded(employee.employeeId, requirement.key)}
                   disabled={isAwarding}
-                  className="inline-flex items-center justify-center gap-1 bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-sm font-semibold hover:bg-gray-200 cursor-pointer transition-colors w-20 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white px-3 py-1.5 rounded-lg text-sm font-semibold hover:from-green-600 hover:to-emerald-600 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Award className="w-4 h-4" />
+                  {isAwarding ? 'Awarding...' : 'Mark Awarded'}
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => openInlineDatePicker(key)}
+                disabled={isAwarding}
+                className="inline-flex items-center justify-center gap-1 bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-sm font-semibold hover:bg-gray-200 cursor-pointer transition-colors w-20 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Clock className="w-3 h-3" />
+                <span className="text-sm">Pending</span>
+              </button>
+            )}
+          </div>
+        );
+      } else {
+        return (
+          <div className="flex flex-col gap-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  disabled
+                  className="inline-flex items-center justify-center gap-1 bg-gray-100 text-gray-400 px-2 py-1 rounded-full text-sm font-semibold cursor-not-allowed w-20"
                 >
                   <Clock className="w-3 h-3" />
                   <span className="text-sm">Pending</span>
                 </button>
-              )}
-            </div>
-          );
-       } else {
-         return (
-           <div className="flex flex-col gap-1">
-             <Tooltip>
-               <TooltipTrigger asChild>
-                 <button
-                   disabled
-                   className="inline-flex items-center justify-center gap-1 bg-gray-100 text-gray-400 px-2 py-1 rounded-full text-sm font-semibold cursor-not-allowed w-20"
-                 >
-                   <Clock className="w-3 h-3" />
-                   <span className="text-sm">Pending</span>
-                 </button>
-               </TooltipTrigger>
-               <TooltipContent>
-                 <p>Cannot be awarded until the following requirements are completed:</p>
-                 <ul className="mt-1">
-                   {missingRequirements.map((req, index) => (
-                     <li key={index} className="text-sm">• {req}</li>
-                   ))}
-                 </ul>
-               </TooltipContent>
-             </Tooltip>
-           </div>
-         );
-       }
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Cannot be awarded until the following requirements are completed:</p>
+                <ul className="mt-1">
+                  {missingRequirements.map((req, index) => (
+                    <li key={index} className="text-sm">• {req}</li>
+                  ))}
+                </ul>
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        );
+      }
     }
     
-    if (completedDate) {
-      return (
-        <div className="inline-flex items-center gap-1 bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-2 py-1 rounded-full text-sm font-semibold shadow-sm">
-          <CheckCircle className="w-3 h-3" />
-          <span className="text-sm font-medium">
-            {completedDate.toLocaleDateString()}
-          </span>
-        </div>
-      );
-    }
-    
-         if (scheduledDate) {
-       return (
-         <div className="flex flex-col gap-1 relative">
-                       {isInlineDatePickerOpen ? (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => handleMarkComplete(employee.employeeId, requirement.key)}
-                  disabled={isCompleting}
-                  className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-3 py-1.5 rounded-lg text-sm font-semibold hover:from-blue-600 hover:to-indigo-600 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <CheckCircle className="w-4 h-4" />
-                  {isCompleting ? 'Completing...' : 'Mark Complete'}
-                </button>
-                <button
-                  onClick={() => {
-                    // Show date picker for rescheduling
-                    setInlineDatePicker(`reschedule-${key}`);
-                  }}
-                  className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-yellow-500 to-orange-500 text-white px-3 py-1.5 rounded-lg text-sm font-semibold hover:from-yellow-600 hover:to-orange-600 transition-colors shadow-sm"
-                >
-                  <Clock className="w-4 h-4" />
-                  Reschedule
-                </button>
-                {inlineDatePicker && inlineDatePicker.startsWith(`reschedule-${key}`) && (
-                  <div className="absolute top-full right-0 z-50 bg-white border border-gray-200 rounded-lg shadow-lg p-2 min-w-[200px]">
-                    <DatePicker
-                      date={scheduledDate}
-                      onDateChange={(date) => handleReschedule(employee.employeeId, requirement.key, date)}
-                      placeholder="Reschedule date"
-                    />
-                  </div>
-                )}
-              </div>
-            ) : (
-             <>
-               <button
-                 onClick={() => openInlineDatePicker(key)}
-                 className="inline-flex items-center justify-center gap-1 bg-gradient-to-r from-yellow-500 to-orange-500 text-white px-2 py-1 rounded-full text-sm font-semibold shadow-sm hover:from-yellow-600 hover:to-orange-600 cursor-pointer transition-colors w-20"
-               >
-                 <Clock className="w-3 h-3" />
-                 <span className="text-sm">Scheduled</span>
-               </button>
-               <div className="inline-flex items-center justify-center gap-1 bg-yellow-50 border border-yellow-200 rounded px-2 py-1 w-20">
-                 <span className="text-sm text-yellow-700 font-medium">
-                   {scheduledDate.toLocaleDateString()}
-                 </span>
-               </div>
-             </>
-           )}
-         </div>
-       );
-     }
-    
+    // For non-awarded requirements, check if they have a value (completed)
     if (value) {
       return (
         <div className="inline-flex items-center gap-1 bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-2 py-1 rounded-full text-sm font-semibold shadow-sm">
@@ -506,15 +389,21 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
       );
     }
     
-         return (
+         // Check if can be scheduled (pending state)
+     return (
        <div className="flex flex-col gap-1">
          {isInlineDatePickerOpen ? (
            <div className="flex items-center gap-2">
-             <DatePicker
-               date={scheduledDate}
-               onDateChange={(date) => handleScheduleDate(employee.employeeId, requirement.key, date)}
-               placeholder="Select date"
-             />
+             <div className="min-w-[200px]">
+               <DatePicker
+                 date={undefined}
+                 onDateChange={(date) => {
+                   console.log('DatePicker onDateChange called with:', date);
+                   handleScheduleDate(employee.employeeId, requirement.key, date);
+                 }}
+                 placeholder="Select date"
+               />
+             </div>
            </div>
          ) : (
            <button

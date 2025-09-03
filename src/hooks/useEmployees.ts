@@ -7,6 +7,7 @@ interface EmployeeFilters {
   facility?: string;
   area?: string;
   status?: string;
+  jobTitle?: string;
   search?: string;
 }
 
@@ -25,7 +26,7 @@ interface EmployeeResponse {
 }
 
 // Mock data generator for testing - simplified to match existing Employee type
-const generateMockEmployees = (count: number = 15000): Employee[] => {
+const generateMockEmployees = (count: number = 10): Employee[] => {
   const facilities = [
     'Afton Oaks Nursing and Rehabilitation Center', 'Alvarado Meadows Nursing and Rehab', 'Amarillo Skilled Care', 'Amistad', 'Arboretum of Winnie',
     'Arlington Heights', 'Atrium of Bellmead', 'Avalon Place Kirbyville', 'Ballinger Healthcare', 'Beaumont Nursing',
@@ -195,12 +196,16 @@ const generateMockEmployees = (count: number = 15000): Employee[] => {
 };
 
 // Generate mock data once
-const MOCK_EMPLOYEES = generateMockEmployees(15000); // 15K active employees
+const MOCK_EMPLOYEES = generateMockEmployees(50); // 50 active employees for testing pagination
 
 // Mock API function for fetching employees with pagination
 const fetchEmployees = async ({ page, limit, filters }: PaginationParams): Promise<EmployeeResponse> => {
   // Simulate API delay
   await new Promise(resolve => setTimeout(resolve, 100 + Math.random() * 200));
+
+  console.log('fetchEmployees: Received filters:', filters);
+  console.log('fetchEmployees: Page:', page, 'Limit:', limit);
+  console.log('fetchEmployees: Total mock employees:', MOCK_EMPLOYEES.length);
 
   let filteredEmployees = [...MOCK_EMPLOYEES];
 
@@ -208,7 +213,7 @@ const fetchEmployees = async ({ page, limit, filters }: PaginationParams): Promi
   if (filters.level) {
     switch (filters.level) {
       case 'care-partner':
-        // Show all employees who haven't completed Level 1 yet
+        // Show all employees who haven't completed Level 1 yet (including those in progress)
         filteredEmployees = filteredEmployees.filter(e => !e.level1Awarded);
         break;
       case 'associate':
@@ -227,7 +232,13 @@ const fetchEmployees = async ({ page, limit, filters }: PaginationParams): Promi
         // Show employees who have completed Consultant but haven't completed Coach yet
         filteredEmployees = filteredEmployees.filter(e => e.consultantAwarded && !e.coachAwarded);
         break;
+      default:
+        // If no valid level is specified, show all employees
+        console.warn('useEmployees: Invalid level filter:', filters.level);
+        break;
     }
+    
+    console.log(`useEmployees: After level filtering (${filters.level}):`, filteredEmployees.length, 'employees');
   }
 
   if (filters.facility) {
@@ -250,11 +261,47 @@ const fetchEmployees = async ({ page, limit, filters }: PaginationParams): Promi
     );
   }
 
+  // Handle job title filter
+  if (filters.jobTitle) {
+    filteredEmployees = filteredEmployees.filter(e => 
+      e.staffRoles === filters.jobTitle
+    );
+  }
+
+  // Handle status filter (current training level)
+  if (filters.status) {
+    console.log('useEmployees: Applying status filter:', filters.status);
+    
+    if (filters.status === 'active') {
+      // 'active' means show all employees (no filtering)
+      console.log('useEmployees: Status is "active", showing all employees');
+    } else {
+      filteredEmployees = filteredEmployees.filter(e => {
+        // Determine current level for status filtering
+        if (e.coachReliasAssigned && !e.coachAwarded) return filters.status === "Coach In Progress";
+        if (e.consultantReliasAssigned && !e.consultantAwarded) return filters.status === "Consultant In Progress";
+        if (e.level3ReliasAssigned && !e.level3Awarded) return filters.status === "Level 3 In Progress";
+        if (e.level2ReliasAssigned && !e.level2Awarded) return filters.status === "Level 2 In Progress";
+        if (e.level1ReliasAssigned && !e.level1Awarded) return filters.status === "Level 1 In Progress";
+        if (e.coachAwarded) return filters.status === "Coach";
+        if (e.consultantAwarded) return filters.status === "Consultant";
+        if (e.level3Awarded) return filters.status === "Level 3";
+        if (e.level2Awarded) return filters.status === "Level 2";
+        if (e.level1Awarded) return filters.status === "Level 1";
+        return filters.status === "Not Started";
+      });
+    }
+    
+    console.log(`useEmployees: After status filtering: ${filteredEmployees.length} employees`);
+  }
+
   const total = filteredEmployees.length;
   const totalPages = Math.ceil(total / limit);
   const startIndex = (page - 1) * limit;
   const endIndex = startIndex + limit;
   const paginatedEmployees = filteredEmployees.slice(startIndex, endIndex);
+
+  console.log(`fetchEmployees: Final result - Total: ${total}, Page: ${page}, TotalPages: ${totalPages}, Returned: ${paginatedEmployees.length}`);
 
   return {
     employees: paginatedEmployees,
@@ -266,8 +313,19 @@ const fetchEmployees = async ({ page, limit, filters }: PaginationParams): Promi
 };
 
 // Hook for paginated employee data
-export const useEmployees = (filters: EmployeeFilters, pageSize: number = 50) => {
+export const useEmployees = (filters: EmployeeFilters, pageSize: number = 10) => {
   const [currentPage, setCurrentPage] = useState(1);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    console.log('useEmployees: Filters changed, resetting to page 1');
+    setCurrentPage(1);
+  }, [filters]);
+
+  // Debug logging for page changes
+  useEffect(() => {
+    console.log('useEmployees: Page changed to:', currentPage);
+  }, [currentPage]);
 
   const {
     data,
@@ -276,7 +334,7 @@ export const useEmployees = (filters: EmployeeFilters, pageSize: number = 50) =>
     refetch,
     isFetching
   } = useQuery({
-    queryKey: ['employees', currentPage, filters],
+    queryKey: ['employees', currentPage, JSON.stringify(filters)],
     queryFn: () => fetchEmployees({ page: currentPage, limit: pageSize, filters }),
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 10 * 60 * 1000, // 10 minutes

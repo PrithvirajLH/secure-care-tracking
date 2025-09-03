@@ -6,7 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DatePicker } from "@/components/ui/date-picker";
-import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
+import { CompactPagination } from "@/components/ui/compact-pagination";
 import { 
   Users, 
   Award, 
@@ -34,6 +34,7 @@ import { useTrainingData } from "@/hooks/useTrainingData";
 import EmployeeDetailModal from "@/components/EmployeeDetailModal";
 import { FloatingNav } from "@/components/ui/floating-navbar";
 import { useEmployees, useEmployeeStats } from "@/hooks/useEmployees";
+import PageHeader from "@/components/PageHeader";
 
 interface LevelStats {
   total: number;
@@ -71,8 +72,11 @@ export default function Training() {
   // Server-side pagination with filters
   const filters = useMemo(() => ({
     level: activeTab,
-    status: 'active' // Only fetch active employees
-  }), [activeTab]);
+    status: 'active', // Only fetch active employees
+    facility: facilityFilter !== 'all' ? facilityFilter : undefined,
+    area: areaFilter !== 'all' ? areaFilter : undefined,
+    search: query.trim() || undefined
+  }), [activeTab, facilityFilter, areaFilter, query]);
 
   const {
     employees: currentEmployees,
@@ -84,6 +88,25 @@ export default function Training() {
     totalEmployees,
     isFetching
   } = useEmployees(filters, itemsPerPage);
+
+  // Debug logging for Training page
+  useEffect(() => {
+    console.log('Training: Filters:', filters);
+    console.log('Training: Current employees:', currentEmployees?.length || 0);
+    console.log('Training: Loading:', isLoading);
+    console.log('Training: Error:', error);
+    console.log('Training: Total employees:', totalEmployees);
+    console.log('Training: Current page:', currentPage);
+    console.log('Training: Total pages:', totalPages);
+  }, [filters, currentEmployees, isLoading, error, totalEmployees, currentPage, totalPages]);
+
+  // Reset to page 1 when filters change to show filtered results from the beginning
+  useEffect(() => {
+    if (currentPage !== 1) {
+      console.log('Training: Filters changed, resetting to page 1');
+      setCurrentPage(1);
+    }
+  }, [facilityFilter, areaFilter, query, currentPage, setCurrentPage]);
 
   // Server-side statistics
   const { data: levelStats } = useEmployeeStats(activeTab);
@@ -159,7 +182,6 @@ export default function Training() {
         return [
           { name: "Relias Training\nAssigned", key: "level1ReliasAssigned" },
           { name: "Relias Training\nCompleted", key: "level1ReliasCompleted" },
-          { name: "Conference\nCompleted", key: "level1ConferenceCompleted" },
           { name: "Level 1 Awarded", key: "level1Awarded" }
         ];
       case "associate":
@@ -289,15 +311,11 @@ export default function Training() {
     });
   }, []);
 
+  // Apply only requirement status filters locally since facility/area/search are now handled at API level
   const filteredEmployees = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return currentEmployees.filter(emp => {
-      if (q) {
-        const hay = `${emp.name} ${emp.employeeId}`.toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
-      if (facilityFilter !== 'all' && emp.facility !== facilityFilter) return false;
-      if (areaFilter !== 'all' && emp.area !== areaFilter) return false;
+    console.log('Training: Applying requirement status filters to', currentEmployees?.length || 0, 'employees');
+    
+    const filtered = currentEmployees.filter(emp => {
       // Apply per-requirement filters
       const requirements = getLevelRequirements(activeTab);
       for (const r of requirements) {
@@ -308,7 +326,10 @@ export default function Training() {
       }
       return true;
     });
-  }, [currentEmployees, query, facilityFilter, areaFilter, reqStatusFilters, activeTab, scheduledDates, completedDates]);
+    
+    console.log('Training: Employees after requirement filtering:', filtered.length);
+    return filtered;
+  }, [currentEmployees, reqStatusFilters, activeTab, scheduledDates, completedDates]);
 
   const isAnyFilterActive = useMemo(() => {
     if (facilityFilter !== 'all' || areaFilter !== 'all') return true;
@@ -773,8 +794,15 @@ export default function Training() {
               activeTab={activeTab}
             />
           )}
+
+          {/* Page Header */}
+          <PageHeader
+            icon={GraduationCap}
+            title="Training Management"
+            description="Manage employee training assignments, track progress, and award certifications"
+          />
         
-                           {/* Sticky Table Header - Fixed to viewport */}
+          {/* Sticky Table Header - Fixed to viewport */}
           <div className="sticky top-0 z-20 bg-purple-100 border-b border-purple-200 shadow-md">
            <div className="px-3 sm:px-4 md:px-6 py-2 flex items-center justify-between gap-2 sm:gap-3">
              <div className="flex-1 max-w-[200px] sm:max-w-[300px] md:max-w-sm pt-5">
@@ -947,72 +975,24 @@ export default function Training() {
                      </Table>
                    </div>
 
-                   {/* Pagination */}
+                                      {/* Compact Pagination */}
                    <div className="flex-shrink-0 border-t border-gray-200 bg-white px-6 py-4">
                      <div className="flex items-center justify-between">
                        <div className="text-sm text-gray-600">
-                         Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, totalEmployees)} of {totalEmployees} employees
-                         {totalPages > 1 && ` (Page ${currentPage} of ${totalPages})`}
-                         {isFetching && <span className="ml-2 text-purple-600">• Loading...</span>}
+                         {isFetching && <span className="text-purple-600">• Loading...</span>}
                        </div>
-                         {totalPages > 1 && (
-                           <Pagination>
-                             <PaginationContent>
-                               <PaginationItem>
-                                 <PaginationPrevious 
-                                   href="#"
-                                   onClick={(e) => {
-                                     e.preventDefault();
-                                     if (currentPage > 1) setCurrentPage(currentPage - 1);
-                                   }}
-                                   className={currentPage <= 1 ? "pointer-events-none opacity-50" : ""}
-                                 />
-                               </PaginationItem>
-                               
-                               {/* Page numbers */}
-                               {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                                 let pageNum;
-                                 if (totalPages <= 5) {
-                                   pageNum = i + 1;
-                                 } else if (currentPage <= 3) {
-                                   pageNum = i + 1;
-                                 } else if (currentPage >= totalPages - 2) {
-                                   pageNum = totalPages - 4 + i;
-                                 } else {
-                                   pageNum = currentPage - 2 + i;
-                                 }
-                                 
-                                 return (
-                                   <PaginationItem key={pageNum}>
-                                     <PaginationLink
-                                       href="#"
-                                       onClick={(e) => {
-                                         e.preventDefault();
-                                         setCurrentPage(pageNum);
-                                       }}
-                                       isActive={currentPage === pageNum}
-                                     >
-                                       {pageNum}
-                                     </PaginationLink>
-                                   </PaginationItem>
-                                 );
-                               })}
-                               
-                               <PaginationItem>
-                                 <PaginationNext 
-                                   href="#"
-                                   onClick={(e) => {
-                                     e.preventDefault();
-                                     if (currentPage < totalPages) setCurrentPage(currentPage + 1);
-                                   }}
-                                   className={currentPage >= totalPages ? "pointer-events-none opacity-50" : ""}
-                                 />
-                               </PaginationItem>
-                             </PaginationContent>
-                           </Pagination>
-                         )}
-                       </div>
+                       {totalPages > 1 && (
+                         <CompactPagination
+                           currentPage={currentPage}
+                           totalPages={totalPages}
+                           onPageChange={setCurrentPage}
+                           totalItems={totalEmployees}
+                           itemsPerPage={itemsPerPage}
+                           showInfo={false}
+                         />
+                       )}
                      </div>
+                   </div>
                  </CardContent>
                </Card>
              </TabsContent>

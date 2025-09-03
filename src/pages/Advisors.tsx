@@ -1,15 +1,16 @@
 import React from "react";
+import { CalendarClock } from "lucide-react";
 import AdvisorManagement from "@/components/AdvisorManagement";
+import PageHeader from "@/components/PageHeader";
 
 export default function Advisors() {
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Advisor Management</h1>
-          <p className="text-muted-foreground">Manage advisor assignments and track performance</p>
-        </div>
-      </div>
+      <PageHeader
+        icon={CalendarClock}
+        title="Advisor Management"
+        description="Manage advisor assignments and track performance"
+      />
       
       <AdvisorManagement />
     </div>

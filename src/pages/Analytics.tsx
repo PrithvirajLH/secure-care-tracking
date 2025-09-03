@@ -47,6 +47,10 @@ import {
   Activity,
   Target
 } from "lucide-react";
+import { useTrainingData } from "@/hooks/useTrainingData";
+import { useEmployees } from "@/hooks/useEmployees";
+import { toast } from "sonner";
+import PageHeader from "@/components/PageHeader";
 
 export default function Analytics() {
   const { state } = useApp();
@@ -55,6 +59,24 @@ export default function Analytics() {
   const [selectedLevel, setSelectedLevel] = useState<string>("all");
   const [customStartDate, setCustomStartDate] = useState<Date | undefined>(undefined);
   const [customEndDate, setCustomEndDate] = useState<Date | undefined>(undefined);
+
+  const { allTrainingData, isLoadingAll } = useTrainingData();
+
+  // Use the same data source as Training and Employees pages for consistency
+  const filters = useMemo(() => ({
+    facility: selectedFacility !== "all" ? selectedFacility : undefined,
+    area: undefined, // Include all areas for analytics
+    status: 'active' // Only active employees
+  }), [selectedFacility]);
+
+  const {
+    employees: currentEmployees,
+    isLoading: isLoadingEmployees,
+    error: employeesError
+  } = useEmployees(filters); // Get employees for analytics (default 10)
+
+  // Use currentEmployees from API instead of state.employees for consistency
+  const employees = currentEmployees || [];
 
   // Helper functions for advanced analytics
   const calculateAverageCompletionTime = (employees: any[]) => {
@@ -252,7 +274,7 @@ export default function Analytics() {
 
   // Calculate analytics data with dynamic filtering
   const analyticsData = useMemo(() => {
-    let employees = state.employees;
+    let employees = currentEmployees;
     
     // Apply facility filter
     if (selectedFacility !== "all") {
@@ -445,8 +467,8 @@ export default function Analytics() {
       },
     ];
 
-         // Top performing facilities with efficiency metrics (always use all data, not filtered)
-     const allFacilityStats = state.employees.reduce((acc, emp) => {
+               // Top performing facilities with efficiency metrics (always use all data, not filtered)
+      const allFacilityStats = currentEmployees.reduce((acc, emp) => {
        if (!acc[emp.facility]) {
          acc[emp.facility] = { 
            total: 0, 
@@ -469,7 +491,7 @@ export default function Analytics() {
      Object.keys(allFacilityStats).forEach(facility => {
        const stats = allFacilityStats[facility];
        stats.efficiency = (stats.completed / stats.total) * 100;
-       stats.avgTime = calculateFacilityAvgTime(state.employees.filter(e => e.facility === facility));
+               stats.avgTime = calculateFacilityAvgTime(currentEmployees.filter(e => e.facility === facility));
      });
 
      const topFacilities = Object.entries(allFacilityStats)
@@ -532,7 +554,34 @@ export default function Analytics() {
       bottleneckAnalysis,
       predictions
     };
-  }, [state.employees, timeRange, selectedFacility, selectedLevel, customStartDate, customEndDate]);
+  }, [currentEmployees, timeRange, selectedFacility, selectedLevel, customStartDate, customEndDate]);
+
+  // Enhanced analytics data with real-time training data integration
+  const enhancedAnalyticsData = useMemo(() => {
+    const baseData = analyticsData;
+    
+    // Integrate with real training data if available
+    if (allTrainingData && allTrainingData.length > 0) {
+      // Add real-time training metrics
+      const realTimeMetrics = {
+        activeTrainingSessions: allTrainingData.filter(t => 
+          t.scheduledDate && !t.completedDate && new Date(t.scheduledDate) >= new Date()
+        ).length,
+        overdueTraining: allTrainingData.filter(t => 
+          t.scheduledDate && !t.completedDate && new Date(t.scheduledDate) < new Date()
+        ).length,
+        recentCompletions: allTrainingData.filter(t => 
+          t.completedDate && new Date(t.completedDate) >= new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+        ).length,
+        trainingEfficiency: allTrainingData.length > 0 ? 
+          (allTrainingData.filter(t => t.completedDate).length / allTrainingData.length * 100).toFixed(1) : 0
+      };
+      
+      return { ...baseData, realTimeMetrics };
+    }
+    
+    return baseData;
+  }, [analyticsData, allTrainingData]);
 
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
 
@@ -554,6 +603,11 @@ export default function Analytics() {
   };
 
   const handleExport = () => {
+    if (isLoadingAll) {
+      toast.error("Please wait for data to load before exporting");
+      return;
+    }
+
     const lines: string[] = [];
 
     // Filter Information
@@ -582,6 +636,16 @@ export default function Analytics() {
     lines.push(["Avg Completion Time (days)", analyticsData.averageCompletionTime].map(csvEscape).join(","));
     lines.push(["Certification Velocity (per day)", analyticsData.certificationVelocity].map(csvEscape).join(","));
     lines.push(["Retention Rate (%)", analyticsData.retentionRate].map(csvEscape).join(","));
+    
+    // Add real-time metrics if available
+    if ('realTimeMetrics' in enhancedAnalyticsData && enhancedAnalyticsData.realTimeMetrics) {
+      const metrics = enhancedAnalyticsData.realTimeMetrics;
+      lines.push(["Active Training Sessions", metrics.activeTrainingSessions].map(csvEscape).join(","));
+      lines.push(["Overdue Training", metrics.overdueTraining].map(csvEscape).join(","));
+      lines.push(["Recent Completions (7 days)", metrics.recentCompletions].map(csvEscape).join(","));
+      lines.push(["Training Efficiency (%)", metrics.trainingEfficiency].map(csvEscape).join(","));
+    }
+    
     lines.push("");
 
     // Level completions
@@ -636,67 +700,19 @@ export default function Analytics() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+    
+    toast.success("Analytics report exported successfully!");
   };
 
   return (
     <div className="space-y-6">
-      <header className="mb-6">
-        <h1>Analytics Dashboard</h1>
-        <p className="text-muted-foreground">
-          Comprehensive insights into training progress and performance metrics
-        </p>
-      </header>
+      <PageHeader
+        icon={BarChart3}
+        title="Analytics Dashboard"
+        description="Comprehensive insights into training progress and performance metrics"
+      />
 
-      {/* Enhanced Filters with Magic UI */}
-      <div className="space-y-6">
-        <BentoGrid className="grid-cols-1 md:grid-cols-3 lg:grid-cols-4">
-          <BentoCard
-            name="Time Range"
-            description="Filter by certification award period"
-            className="col-span-1"
-            background={
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-blue-950/50 dark:to-indigo-950/50" />
-            }
-            Icon={Calendar}
-            href="#"
-            cta="Select Period"
-          />
-          <BentoCard
-            name="Certification Level"
-            description="Filter by specific certification levels"
-            className="col-span-1"
-            background={
-              <div className="absolute inset-0 bg-gradient-to-br from-green-50 to-emerald-100 dark:from-green-950/50 dark:to-emerald-950/50" />
-            }
-            Icon={Award}
-            href="#"
-            cta="Select Level"
-          />
-          <BentoCard
-            name="Facility"
-            description="Filter by specific facilities"
-            className="col-span-1"
-            background={
-              <div className="absolute inset-0 bg-gradient-to-br from-purple-50 to-violet-100 dark:from-purple-950/50 dark:to-violet-950/50" />
-            }
-            Icon={Building}
-            href="#"
-            cta="Select Facility"
-          />
-          <BentoCard
-            name="Export Data"
-            description="Download filtered analytics report"
-            className="col-span-1"
-            background={
-              <div className="absolute inset-0 bg-gradient-to-br from-orange-50 to-amber-100 dark:from-orange-950/50 dark:to-amber-950/50" />
-            }
-            Icon={Download}
-            href="#"
-            cta="Export Report"
-          />
-        </BentoGrid>
-
-        {/* Filter Controls */}
+      {/* Filter Controls */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between bg-white dark:bg-gray-900 rounded-lg p-4 border border-gray-200 dark:border-gray-800">
           <div className="flex flex-wrap items-center gap-4">
             <div className="space-y-1">
@@ -765,7 +781,7 @@ export default function Analytics() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Facilities</SelectItem>
-                  {Object.keys(state.employees.reduce((acc, emp) => {
+                  {Object.keys(currentEmployees.reduce((acc, emp) => {
                     acc[emp.facility] = true;
                     return acc;
                   }, {} as Record<string, boolean>)).map(facility => (
@@ -780,7 +796,18 @@ export default function Analytics() {
             Export Report
           </Button>
         </div>
-      </div>
+
+      {/* Loading State */}
+      {(isLoadingEmployees || isLoadingAll) && (
+        <Card className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/50 dark:to-indigo-950/50 border-blue-200 dark:border-blue-800">
+          <CardContent className="p-4 text-center">
+            <div className="flex items-center justify-center gap-2">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+              <span className="text-blue-600">Loading analytics data...</span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Filter Summary */}
       <Card className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/50 dark:to-indigo-950/50 border-blue-200 dark:border-blue-800">
@@ -845,57 +872,7 @@ export default function Analytics() {
         </CardContent>
       </Card>
 
-      {/* Advanced Analytics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Certification Velocity</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{analyticsData.certificationVelocity}</div>
-            <p className="text-xs text-muted-foreground">
-              completions per day
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Avg Completion Time</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{analyticsData.averageCompletionTime}</div>
-            <p className="text-xs text-muted-foreground">
-              days to complete
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Retention Rate</CardTitle>
-            <Target className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{analyticsData.retentionRate}%</div>
-            <p className="text-xs text-muted-foreground">
-              advanced certifications
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Bottlenecks</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{analyticsData.bottleneckAnalysis.length}</div>
-            <p className="text-xs text-muted-foreground">
-              {analyticsData.bottleneckAnalysis.length > 0 ? analyticsData.bottleneckAnalysis.join(', ') : 'No bottlenecks'}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+
 
       {/* Main Analytics Tabs */}
       <Tabs defaultValue="overview" className="space-y-4">
@@ -903,7 +880,7 @@ export default function Analytics() {
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="trends">Trends</TabsTrigger>
           <TabsTrigger value="performance">Performance</TabsTrigger>
-          <TabsTrigger value="reports">Reports</TabsTrigger>
+
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
@@ -1112,91 +1089,7 @@ export default function Analytics() {
           </div>
         </TabsContent>
 
-        <TabsContent value="reports" className="space-y-4">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Recent Activity */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Recent Achievements</CardTitle>
-                <CardDescription>Latest certification completions</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {analyticsData.recentActivity.map((activity, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <Badge variant="secondary">{activity.achievement}</Badge>
-                        <div>
-                          <p className="font-medium">{activity.employee}</p>
-                          <p className="text-sm text-muted-foreground">{activity.facility}</p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm text-muted-foreground">
-                          {activity.date ? new Date(activity.date).toLocaleDateString() : 'N/A'}
-                        </p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <Badge 
-                            variant="outline" 
-                            className={`text-xs ${
-                              activity.performance === 'Excellent' ? 'text-green-600 border-green-200' :
-                              activity.performance === 'Good' ? 'text-blue-600 border-blue-200' :
-                              'text-orange-600 border-orange-200'
-                            }`}
-                          >
-                            {activity.performance}
-                          </Badge>
-                          <span className="text-xs text-gray-500">
-                            {activity.timeToComplete} days
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
 
-            {/* Predictive Analytics */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Predictive Analytics</CardTitle>
-                <CardDescription>Forecasted performance metrics</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">Next Month Predictions</span>
-                    <Badge variant="outline">
-                      {analyticsData.predictions.nextMonth} completions
-                    </Badge>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">Projected Completion Rate</span>
-                    <Badge variant="outline">{analyticsData.predictions.completionRate}%</Badge>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">Target Achievement</span>
-                    <Badge variant="outline">{analyticsData.predictions.targetAchievement}%</Badge>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">Velocity Trend</span>
-                    <Badge variant="outline" className="text-green-600">
-                      <TrendingUp className="w-3 h-3 mr-1" />
-                      {parseFloat(analyticsData.certificationVelocity) > 0.5 ? 'High' : 'Normal'}
-                    </Badge>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">Efficiency Score</span>
-                    <Badge variant="outline">
-                      {analyticsData.averageCompletionTime < 90 ? 'Excellent' : analyticsData.averageCompletionTime < 150 ? 'Good' : 'Needs Improvement'}
-                    </Badge>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
       </Tabs>
     </div>
   );

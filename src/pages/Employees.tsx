@@ -1,12 +1,9 @@
 import React, { useCallback, useMemo, useRef, useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
-import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -15,9 +12,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { CheckCircle, Clock, Award, Star, Trophy, Medal, Crown, Filter, X, Eye, ChevronUp, ChevronDown } from "lucide-react";
+import { CheckCircle, Clock, Award, Star, Trophy, Medal, Crown, Eye, ChevronUp, ChevronDown, Users2 } from "lucide-react";
 import EmployeeDetailModal from "@/components/EmployeeDetailModal";
-import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
+import { CompactPagination } from "@/components/ui/compact-pagination";
+import { useEmployees } from "@/hooks/useEmployees";
+import PageHeader from "@/components/PageHeader";
+import EmployeeFilters from "@/components/EmployeeFilters";
 
 export default function Employees() {
   const { state, dispatch } = useApp();
@@ -29,8 +29,68 @@ export default function Employees() {
   const [sortField, setSortField] = useState<string>("name");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const [itemsPerPage] = useState<number>(10);
+  const [itemsPerPage] = useState<number>(10); // Changed from 100 to test pagination
   const [selectedJobTitle, setSelectedJobTitle] = useState<string>("all");
+
+  // Use the same data source as Training page for consistency
+  const filters = useMemo(() => ({
+    facility: selectedFacility !== "all" ? selectedFacility : undefined,
+    area: selectedArea !== "all" ? selectedArea : undefined,
+    status: selectedStatus !== "all" ? selectedStatus : undefined,
+    search: state.filters.query || undefined
+  }), [selectedFacility, selectedArea, selectedStatus, state.filters.query]);
+
+  // Create a stable filter object for the API call
+  const stableFilters = useMemo(() => {
+    const filterObj: any = {};
+    if (selectedFacility !== "all") filterObj.facility = selectedFacility;
+    if (selectedArea !== "all") filterObj.area = selectedArea;
+    if (selectedStatus !== "all") filterObj.status = selectedStatus;
+    if (selectedJobTitle !== "all") filterObj.jobTitle = selectedJobTitle;
+    if (state.filters.query) filterObj.search = state.filters.query;
+    return filterObj;
+  }, [selectedFacility, selectedArea, selectedStatus, selectedJobTitle, state.filters.query]);
+
+  const {
+    employees: currentEmployees,
+    isLoading,
+    error,
+    currentPage: apiCurrentPage,
+    setCurrentPage: setApiCurrentPage,
+    totalPages,
+    totalEmployees,
+    isFetching
+  } = useEmployees(stableFilters, itemsPerPage);
+
+  // Sync local state with API state
+  useEffect(() => {
+    if (currentEmployees && currentEmployees.length > 0) {
+      dispatch({ type: "setEmployees", payload: currentEmployees });
+    }
+  }, [currentEmployees, dispatch]);
+
+  // Sync local currentPage with API currentPage
+  useEffect(() => {
+    if (apiCurrentPage !== currentPage) {
+      setCurrentPage(apiCurrentPage);
+    }
+  }, [apiCurrentPage, currentPage]);
+
+  // Debug logging for pagination and filters
+  useEffect(() => {
+    console.log('Employees: API Page changed to:', apiCurrentPage);
+    console.log('Employees: Local Page changed to:', currentPage);
+    console.log('Employees: Total Pages:', totalPages);
+    console.log('Employees: Total Employees:', totalEmployees);
+  }, [apiCurrentPage, currentPage, totalPages, totalEmployees]);
+
+  useEffect(() => {
+    console.log('Employees: Filters changed:', stableFilters);
+  }, [stableFilters]);
+
+  useEffect(() => {
+    console.log('Employees: Sorting changed - Field:', sortField, 'Direction:', sortDirection);
+  }, [sortField, sortDirection]);
 
   // Load initial state from URL
   useEffect(() => {
@@ -49,7 +109,9 @@ export default function Employees() {
     setSelectedJobTitle(jt);
     setSortField(sf);
     setSortDirection(sd);
-    setCurrentPage(Number.isFinite(pg) && pg > 0 ? pg : 1);
+    const pageNumber = Number.isFinite(pg) && pg > 0 ? pg : 1;
+    setCurrentPage(pageNumber);
+    setApiCurrentPage(pageNumber);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -66,6 +128,51 @@ export default function Employees() {
     params.set("page", String(currentPage));
     setSearchParams(params, { replace: true });
   }, [state.filters.query, selectedFacility, selectedArea, selectedStatus, selectedJobTitle, sortField, sortDirection, currentPage]);
+
+  // Use currentEmployees from API instead of state.employees for consistency
+  const employees = currentEmployees || [];
+
+  // Apply sorting to the API data
+  const sortedEmployees = useMemo(() => {
+    if (!currentEmployees || currentEmployees.length === 0) return [];
+    
+    const sorted = [...currentEmployees].sort((a, b) => {
+      let aValue: string | number;
+      let bValue: string | number;
+
+      switch (sortField) {
+        case "name":
+          aValue = a.name.toLowerCase();
+          bValue = b.name.toLowerCase();
+          break;
+        case "employeeId":
+          aValue = a.employeeId.toLowerCase();
+          bValue = b.employeeId.toLowerCase();
+          break;
+        case "facility":
+          aValue = a.facility.toLowerCase();
+          bValue = b.facility.toLowerCase();
+          break;
+        case "area":
+          aValue = a.area.toLowerCase();
+          bValue = b.area.toLowerCase();
+          break;
+        case "jobTitle":
+          aValue = (a.staffRoles || '').toLowerCase();
+          bValue = (b.staffRoles || '').toLowerCase();
+          break;
+        default:
+          aValue = a.name.toLowerCase();
+          bValue = b.name.toLowerCase();
+      }
+
+      if (aValue < bValue) return sortDirection === "asc" ? -1 : 1;
+      if (aValue > bValue) return sortDirection === "asc" ? 1 : -1;
+      return 0;
+    });
+
+    return sorted;
+  }, [currentEmployees, sortField, sortDirection]);
 
     const getCurrentLevel = (employee: any) => {
     // Check for current progress first (what they're working on now)
@@ -193,89 +300,78 @@ export default function Employees() {
     };
   };
 
-    const employees = useMemo(() => {
-    const q = state.filters.query.toLowerCase();
-    let filtered = state.employees.filter(e => {
-      const matchesQuery = `${e.name} ${e.employeeId} ${e.facility} ${e.area} ${e.staffRoles || ''}`.toLowerCase().includes(q);
-      const matchesFacility = !selectedFacility || selectedFacility === "all" || e.facility === selectedFacility;
-      const matchesArea = !selectedArea || selectedArea === "all" || e.area === selectedArea;
-      const matchesStatus = !selectedStatus || selectedStatus === "all" || getCurrentLevel(e).level === selectedStatus;
-      const matchesJobTitle = !selectedJobTitle || selectedJobTitle === "all" || e.staffRoles === selectedJobTitle;
-      return matchesQuery && matchesFacility && matchesArea && matchesStatus && matchesJobTitle;
-    });
+         // Note: Filtering and sorting are now handled by the API and local sorting respectively
 
-    // Sort the filtered results
-    filtered.sort((a, b) => {
-      let aValue: string | number;
-      let bValue: string | number;
+  // Pagination is handled by the useEmployees hook
+  // No need for local pagination logic
 
-             switch (sortField) {
-         case "name":
-           aValue = a.name.toLowerCase();
-           bValue = b.name.toLowerCase();
-           break;
-         case "employeeId":
-           aValue = a.employeeId.toLowerCase();
-           bValue = b.employeeId.toLowerCase();
-           break;
-         case "facility":
-           aValue = a.facility.toLowerCase();
-           bValue = b.facility.toLowerCase();
-           break;
-         case "area":
-           aValue = a.area.toLowerCase();
-           bValue = b.area.toLowerCase();
-           break;
-         case "jobTitle":
-           aValue = (a.staffRoles || '').toLowerCase();
-           bValue = (b.staffRoles || '').toLowerCase();
-           break;
-         default:
-           aValue = a.name.toLowerCase();
-           bValue = b.name.toLowerCase();
-       }
-
-        if (aValue < bValue) return sortDirection === "asc" ? -1 : 1;
-        if (aValue > bValue) return sortDirection === "asc" ? 1 : -1;
-        return 0;
-      });
-
-      return filtered;
-    }, [state.employees, state.filters.query, selectedFacility, selectedArea, selectedStatus, selectedJobTitle, sortField, sortDirection]);
-
-  // Pagination logic
-  const totalPages = Math.ceil(employees.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentEmployees = employees.slice(startIndex, endIndex);
-
-    // Reset to first page when filters change
+    // Reset to first page when filters or sorting change
   useEffect(() => {
     setCurrentPage(1);
+    setApiCurrentPage(1);
   }, [state.filters.query, selectedFacility, selectedArea, selectedStatus, selectedJobTitle, sortField, sortDirection]);
 
-   // Get unique facilities and areas for filter options
-    const facilities = useMemo(() => {
-      const uniqueFacilities = [...new Set(state.employees.map(e => e.facility))].sort();
-      return uniqueFacilities;
-    }, [state.employees]);
+               // Get unique facilities and areas for filter options
+      // IMPORTANT: Use static lists for filter options to ensure they're always available
+      const facilities = useMemo(() => [
+        'Afton Oaks Nursing and Rehabilitation Center', 'Alvarado Meadows Nursing and Rehab', 'Amarillo Skilled Care', 'Amistad', 'Arboretum of Winnie',
+        'Arlington Heights', 'Atrium of Bellmead', 'Avalon Place Kirbyville', 'Ballinger Healthcare', 'Beaumont Nursing',
+        'Beltline Healthcare Center', 'Bertram Nursing', 'Big Spring', 'Birchwood Nursing', 'Bluebonnet Nursing',
+        'Bluebonnet Point Wellness', 'Brentwood Terrace', 'Brownwood', 'Buena Vida Odessa', 'Buena Vida San Antonio',
+        'Caprock', 'Care Nursing', 'Castle Pines', 'Cedar Creek', 'Cedar Manor', 'Central Texas',
+        'Chatfield', 'Cherokee Rose', 'Chisolm Trail Nursing and Rehabilitation Center', 'Concho Health and Rehab', 'Copperas Hollow Assisted Living',
+        'Copperas Hollow Nursing and Rehab', 'Cottonwood', 'Country View Nursing', 'Crossroads', 'Deerings', 'Deleon',
+        'Desoto Nursing and Rehabilitation Center', 'Devine', 'Dogwood', 'Downtown', 'Eagle Pass', 'El Paso Health and Rehab',
+        'Estates Healthcare', 'Fair Park Health & Rehabilitation Center', 'Fairfield', 'Five Points Amarillo', 'Five Points Desoto',
+        'Five Points of College Station', 'Five Points of Lake Highlands', 'Five Points of Pflugerville', 'Fortress', 'Fountains of Tyler',
+        'Franklin', 'Franklin Heights', 'Ganado', 'Georgia Manor', 'Gilmer Nursing', 'Grace Pointe Wellness Center',
+        'Graham Oaks', 'Granbury Care', 'Great Plains', 'Greenbrier of Tyler', 'Greenbrier Palestine',
+        'Greenhill Villas', 'Heritage House', 'Heritage House of Marshall', 'Heritage Place of Decatur', 'Hillcrest Manor Nursing and Rehabilitation',
+        'Hills Nursing', 'Honey Grove Nursing Center', 'Huebner Creek', 'Interlochen', 'Kemp Care Center',
+        'Kenedy', 'Kerens Care Center', 'La Bahia Nursing', 'La Hacienda', 'La Vida Serena',
+        'Lake Lodge', 'Lampasas Nursing and Rehabilitation Center', 'Lampstand', 'Lancaster Nursing and Rehabilitation', 'Landmark of Amarillo Rehab and Nursing',
+        'Landmark of Plano Rehab and Nursing', 'Legacy at Corsicana Rehabilitation and Healthcare', 'Legacy at Jacksonville', 'Longmeadow', 'Longview',
+        'Lubbock Health', 'Madisonville', 'Madisonville Assisted Living', 'Marine Creek Nursing', 'Matagorda',
+        'McLean Care', 'Memphis Convalescent', 'Mesa Vista', 'Mexia Skilled Care', 'Mineral Wells',
+        'Mission Ridge Nursing', 'Mount Pleasant ALF', 'Mountain View', 'Mullican Care Center', 'Navasota Nursing',
+        'Normandy Terrace', 'North Park', 'North Pointe', 'Oak Ridge Manor', 'Oakmont of Humble',
+        'Oakmont of Katy', 'Oaks at Granbury', 'Oasis', 'Park Highlands', 'Park Place Care Center',
+        'Park Plaza', 'Parkview Manor Nursing and Rehab', 'Peach Tree', 'Pebble Creek', 'Pecan Tree Rehab and Health Care Center',
+        'Pine Tree Lodge', 'Pleasant Springs', 'Premier Memory Care of Alice', 'Premier SNF of Alice', 'River City Care Center',
+        'River Oaks Nursing and Rehabilitation Center', 'Rock Creek', 'Rockwall Nursing Care Center', 'San Saba', 'Seven Oaks Nursing',
+        'Shady Oak', 'Shiner', 'Sienna', 'Silver Tree', 'Slaton Care Center', 'Songbird',
+        'Southern Specialty', 'St Giles', 'St Teresa Nursing and Rehab', 'Sunflower Park', 'Texoma',
+        'The Arbors', 'The Homestead Assisted Living', 'The Park', 'The Plaza at Richardson', 'The Rio at Mission Trails',
+        'The Village at Heritage Oaks', 'The Village at Heritage Oaks - Alf', 'Treemont Healthcare', 'Turner Park', 'Twilight',
+        'Twin Oaks', 'Twin Pines', 'Twin Pines North', 'University Park Nursing', 'University Rehabilitation Center',
+        'Vidor', 'Villa of Toscana', 'Villa of Wolfforth', 'Vintage Assisted Living of Denton', 'Vintage Health Care Center',
+        'Vista Hills', 'Wellington Care', 'Westward Trails', 'Whispering Pines Lodge', 'Whisperwood',
+        'Whitesboro Health & Rehabilitation Center', 'Winnie L Nursing And Rehab', 'Yorktown Nursing & Rehabilitation Center'
+      ].sort(), []);
 
-    const areas = useMemo(() => {
-      const uniqueAreas = [...new Set(state.employees.map(e => e.area))].sort();
-      return uniqueAreas;
-    }, [state.employees]);
+      const areas = useMemo(() => {
+        const areaList = [
+          'Area 1', 'Area 2', 'Area 3', 'Area 4', 'Area 5', 'Area 6', 'Area 7', 'Area 8', 'Area 9', 'Area 10', 
+          'Area 11', 'Area 12', 'Area 13', 'Area 14', 'Area 15', 'Area 16'
+        ];
+        return areaList.sort((a, b) => {
+          // Extract numeric part and sort numerically
+          const aNum = parseInt(a.replace(/\D/g, '')) || 0;
+          const bNum = parseInt(b.replace(/\D/g, '')) || 0;
+          return aNum - bNum;
+        });
+      }, []);
 
-    // Get unique job titles for filter options
-    const jobTitles = useMemo(() => {
-      const uniqueJobTitles = [...new Set(state.employees.map(e => e.staffRoles || 'N/A').filter(title => title !== 'N/A'))].sort();
-      return uniqueJobTitles;
-    }, [state.employees]);
+      // Get unique job titles for filter options
+      const jobTitles = useMemo(() => [
+        'Nurse', 'Doctor', 'Technician', 'Therapist', 'Administrator'
+      ].sort(), []);
 
-    // Get unique statuses for filter options
-    const statuses = useMemo(() => {
-      const uniqueStatuses = [...new Set(state.employees.map(e => getCurrentLevel(e).level))].sort();
-      return uniqueStatuses;
-    }, [state.employees]);
+      // Get unique statuses for filter options
+      const statuses = useMemo(() => [
+        'Not Started', 'Level 1 In Progress', 'Level 1', 'Level 2 In Progress', 'Level 2', 
+        'Level 3 In Progress', 'Level 3', 'Consultant In Progress', 'Consultant', 'Coach In Progress', 'Coach'
+      ].sort(), []);
 
   const handleSort = (field: string) => {
     if (sortField === field) {
@@ -314,133 +410,36 @@ export default function Employees() {
   return (
     <div>
       {/* Combined Header and Filters */}
-      <div className="mb-6 space-y-4 bg-white/80 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-gray-200/50">
+      <div className="space-y-4">
         {/* Header */}
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Employee Directory</h1>
-          <p className="text-gray-700 text-lg mt-2">Manage your employee roster and view basic training status</p>
-        </div>
+        <PageHeader
+          icon={Users2}
+          title="Employee Directory"
+          description="Manage your employee roster and view basic training status"
+        />
 
-        {/* Search Row */}
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <Input
-            placeholder="Search by name, ID, facility, area"
-            value={state.filters.query}
-            onChange={(e) => dispatch({ type: "setQuery", payload: e.target.value })}
-            className="w-full sm:max-w-sm bg-white/90 border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          />
-        </div>
-
-        {/* Filters Row */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:gap-6">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
-            <div className="flex items-center gap-2">
-              <Filter className="w-4 h-4 text-gray-600" />
-              <Label className="text-sm font-semibold text-gray-800">Filters:</Label>
-            </div>
-            
-            <div className="flex flex-col gap-2 sm:flex-row sm:gap-4">
-              <div className="space-y-1">
-                <Label htmlFor="facility-filter" className="text-xs text-gray-700 font-medium">Facility</Label>
-                <Select value={selectedFacility} onValueChange={setSelectedFacility}>
-                  <SelectTrigger id="facility-filter" className="w-full sm:w-[200px] bg-white/90 border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                    <SelectValue placeholder="All Facilities" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-[300px] bg-white/95 backdrop-blur-sm border border-gray-200 shadow-lg">
-                    <SelectItem value="all">All Facilities</SelectItem>
-                    {facilities.map((facility) => (
-                      <SelectItem key={facility} value={facility}>
-                        {facility}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1">
-                <Label htmlFor="area-filter" className="text-xs text-gray-700 font-medium">Area</Label>
-                <Select value={selectedArea} onValueChange={setSelectedArea}>
-                  <SelectTrigger id="area-filter" className="w-full sm:w-[180px] bg-white/90 border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                    <SelectValue placeholder="All Areas" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-white/95 backdrop-blur-sm border border-gray-200 shadow-lg">
-                    <SelectItem value="all">All Areas</SelectItem>
-                    {areas.map((area) => (
-                      <SelectItem key={area} value={area}>
-                        {area}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1">
-                <Label htmlFor="status-filter" className="text-xs text-gray-700 font-medium">Current Status</Label>
-                <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-                  <SelectTrigger id="status-filter" className="w-full sm:w-[200px] bg-white/90 border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                    <SelectValue placeholder="All Statuses" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-[300px] bg-white/95 backdrop-blur-sm border border-gray-200 shadow-lg">
-                    <SelectItem value="all">All Statuses</SelectItem>
-                    {statuses.map((status) => (
-                      <SelectItem key={status} value={status}>
-                        {status}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-                             {/* Job Title Filter */}
-               <div className="space-y-1">
-                 <Label htmlFor="job-title-filter" className="text-xs text-gray-700 font-medium">Job Title</Label>
-                 <Select value={selectedJobTitle} onValueChange={setSelectedJobTitle}>
-                   <SelectTrigger id="job-title-filter" className="w-full sm:w-[180px] bg-white/90 border-gray-300 shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                     <SelectValue placeholder="All Job Titles" />
-                   </SelectTrigger>
-                   <SelectContent className="max-h-[300px] bg-white/95 backdrop-blur-sm border border-gray-200 shadow-lg">
-                     <SelectItem value="all">All Job Titles</SelectItem>
-                     {jobTitles.map((jobTitle) => (
-                       <SelectItem key={jobTitle} value={jobTitle}>
-                         {jobTitle}
-                       </SelectItem>
-                     ))}
-                   </SelectContent>
-                 </Select>
-               </div>
-            </div>
-          </div>
-
-                     {/* Clear Filters Button */}
-           {(selectedFacility && selectedFacility !== "all") || (selectedArea && selectedArea !== "all") || (selectedStatus && selectedStatus !== "all") || (selectedJobTitle && selectedJobTitle !== "all") ? (
-             <Button
-               variant="ghost"
-               size="sm"
-               onClick={() => {
-                 setSelectedFacility("all");
-                 setSelectedArea("all");
-                 setSelectedStatus("all");
-                 setSelectedJobTitle("all");
-               }}
-               className="flex items-center gap-1 text-gray-700 hover:text-gray-900 bg-white/70 hover:bg-white/90 px-3 py-1 rounded-md border border-gray-200 shadow-sm"
-             >
-               <X className="w-3 h-3" />
-               Clear Filters
-             </Button>
-           ) : null}
-        </div>
-
-                                   {/* Results Summary */}
-          <div className="text-sm text-gray-700 font-medium bg-white/70 rounded-lg p-3 border border-gray-200 shadow-sm">
-            {((selectedFacility && selectedFacility !== "all") || (selectedArea && selectedArea !== "all") || (selectedStatus && selectedStatus !== "all") || (selectedJobTitle && selectedJobTitle !== "all")) && (
-              <span className="ml-2">
-                {selectedFacility && selectedFacility !== "all" && <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded-md text-xs font-medium shadow-sm">Facility: {selectedFacility}</span>}
-                {selectedArea && selectedArea !== "all" && <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded-md text-xs font-medium shadow-sm ml-2">Area: {selectedArea}</span>}
-                {selectedStatus && selectedStatus !== "all" && <span className="inline-flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-700 rounded-md text-xs font-medium shadow-sm ml-2">Status: {selectedStatus}</span>}
-                {selectedJobTitle && selectedJobTitle !== "all" && <span className="inline-flex items-center gap-1 px-2 py-1 bg-orange-100 text-orange-700 rounded-md text-xs font-medium shadow-sm ml-2">Job Title: {selectedJobTitle}</span>}
-              </span>
-            )}
-          </div>
+        <EmployeeFilters
+          query={state.filters.query || ""}
+          onQueryChange={(value) => dispatch({ type: "setQuery", payload: value })}
+          selectedFacility={selectedFacility}
+          onFacilityChange={setSelectedFacility}
+          selectedArea={selectedArea}
+          onAreaChange={setSelectedArea}
+          selectedStatus={selectedStatus}
+          onStatusChange={setSelectedStatus}
+          selectedJobTitle={selectedJobTitle}
+          onJobTitleChange={setSelectedJobTitle}
+          onClearFilters={() => {
+            setSelectedFacility("all");
+            setSelectedArea("all");
+            setSelectedStatus("all");
+            setSelectedJobTitle("all");
+          }}
+          facilities={facilities}
+          areas={areas}
+          statuses={statuses}
+          jobTitles={jobTitles}
+        />
       </div>
 
       <div className="rounded-lg border bg-white/95 backdrop-blur-sm shadow-lg border-gray-200 overflow-auto">
@@ -510,11 +509,11 @@ export default function Employees() {
                <TableHead className="w-[20%] font-semibold text-gray-700 text-base">Current Status</TableHead>
              </TableRow>
            </TableHeader>
-                                           <TableBody>
-              {currentEmployees.map((e, index) => {
-                const currentLevel = getCurrentLevel(e);
-                return (
-                                    <TableRow key={e.employeeId} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'} hover:bg-gray-100/50 transition-colors`}>
+                                                                                       <TableBody>
+               {sortedEmployees.map((e, index) => {
+                 const currentLevel = getCurrentLevel(e);
+                 return (
+                                     <TableRow key={e.employeeId} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'} hover:bg-gray-100/50 transition-colors`}>
                      <TableCell className="font-medium text-base py-3">
                        <EmployeeDetailModal employee={e}>
                          <Button variant="ghost" className="h-auto p-0 justify-start hover:bg-transparent group">
@@ -546,55 +545,18 @@ export default function Employees() {
                  </Table>
        </div>
 
-       {/* Pagination */}
-       {totalPages > 1 && (
-         <div className="mt-6 flex items-center justify-between">
-           <div className="text-sm text-gray-600">
-             Showing {startIndex + 1} to {Math.min(endIndex, employees.length)} of {employees.length} employees
-           </div>
-           <Pagination>
-             <PaginationContent>
-               <PaginationItem>
-                 <PaginationPrevious 
-                   href="#"
-                   onClick={(e) => {
-                     e.preventDefault();
-                     if (currentPage > 1) setCurrentPage(currentPage - 1);
-                   }}
-                   className={currentPage <= 1 ? "pointer-events-none opacity-50" : ""}
-                 />
-               </PaginationItem>
-               
-               {/* Page numbers */}
-               {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                 <PaginationItem key={page}>
-                   <PaginationLink
-                     href="#"
-                     onClick={(e) => {
-                       e.preventDefault();
-                       setCurrentPage(page);
-                     }}
-                     isActive={currentPage === page}
-                   >
-                     {page}
-                   </PaginationLink>
-                 </PaginationItem>
-               ))}
-               
-               <PaginationItem>
-                 <PaginationNext 
-                   href="#"
-                   onClick={(e) => {
-                     e.preventDefault();
-                     if (currentPage < totalPages) setCurrentPage(currentPage + 1);
-                   }}
-                   className={currentPage >= totalPages ? "pointer-events-none opacity-50" : ""}
-                 />
-               </PaginationItem>
-             </PaginationContent>
-           </Pagination>
-         </div>
-       )}
+               {/* Compact Pagination */}
+        {totalPages > 1 && (
+          <div className="mt-6">
+            <CompactPagination
+              currentPage={apiCurrentPage}
+              totalPages={totalPages}
+              onPageChange={setApiCurrentPage}
+              totalItems={totalEmployees}
+              itemsPerPage={itemsPerPage}
+            />
+          </div>
+        )}
      </div>
    );
  }
