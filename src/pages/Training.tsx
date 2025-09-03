@@ -56,6 +56,7 @@ export default function Training() {
   const [completedDates, setCompletedDates] = useState<{[key: string]: Date}>({});
   const [openDatePicker, setOpenDatePicker] = useState<string | null>(null);
   const [query, setQuery] = useState<string>("");
+  const [debouncedQuery, setDebouncedQuery] = useState<string>("");
   
   // Training data hook for database operations
   const {
@@ -69,14 +70,23 @@ export default function Training() {
     isAwarding,
   } = useTrainingData();
 
+  // Debounce search query to prevent excessive API calls
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(query);
+    }, 500); // 500ms delay
+
+    return () => clearTimeout(timer);
+  }, [query]);
+
   // Server-side pagination with filters
   const filters = useMemo(() => ({
     level: activeTab,
     status: 'active', // Only fetch active employees
     facility: facilityFilter !== 'all' ? facilityFilter : undefined,
     area: areaFilter !== 'all' ? areaFilter : undefined,
-    search: query.trim() || undefined
-  }), [activeTab, facilityFilter, areaFilter, query]);
+    search: debouncedQuery.trim() || undefined
+  }), [activeTab, facilityFilter, areaFilter, debouncedQuery]);
 
   const {
     employees: currentEmployees,
@@ -106,7 +116,7 @@ export default function Training() {
       console.log('Training: Filters changed, resetting to page 1');
       setCurrentPage(1);
     }
-  }, [facilityFilter, areaFilter, query, currentPage, setCurrentPage]);
+  }, [facilityFilter, areaFilter, debouncedQuery, currentPage, setCurrentPage]);
 
   // Server-side statistics
   const { data: levelStats } = useEmployeeStats(activeTab);
@@ -151,6 +161,8 @@ export default function Training() {
     // Reset filters on tab change
     setFacilityFilter('all');
     setAreaFilter('all');
+    setQuery('');
+    setDebouncedQuery('');
     const next: Record<string, 'all' | 'completed' | 'scheduled' | 'pending'> = {};
     getLevelRequirements(activeTab).forEach(r => {
       next[r.key] = 'all';
@@ -348,6 +360,7 @@ export default function Training() {
     setFacilityFilter('all');
     setAreaFilter('all');
     setQuery('');
+    setDebouncedQuery('');
     const reset: Record<string, 'all' | 'completed' | 'scheduled' | 'pending'> = {};
     getLevelRequirements(activeTab).forEach(r => { reset[r.key] = 'all'; });
     setReqStatusFilters(reset);
@@ -806,12 +819,19 @@ export default function Training() {
           <div className="sticky top-0 z-20 bg-purple-100 border-b border-purple-200 shadow-md">
            <div className="px-3 sm:px-4 md:px-6 py-2 flex items-center justify-between gap-2 sm:gap-3">
              <div className="flex-1 max-w-[200px] sm:max-w-[300px] md:max-w-sm pt-5">
-               <Input
-                 value={query}
-                 onChange={(e) => setQuery(e.target.value)}
-                 placeholder="Search employee by name or ID"
-                 className="h-8 sm:h-9 text-sm sm:text-base"
-               />
+               <div className="relative">
+                 <Input
+                   value={query}
+                   onChange={(e) => setQuery(e.target.value)}
+                   placeholder="Search employee by name or ID"
+                   className="h-8 sm:h-9 text-sm sm:text-base pr-8"
+                 />
+                 {query !== debouncedQuery && (
+                   <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
+                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600"></div>
+                   </div>
+                 )}
+               </div>
              </div>
             {isAnyFilterActive && (
               <Button
