@@ -1,4 +1,4 @@
-// API service for training data operations
+// API service for SecureCare operations using new configuration
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
 
 export interface TrainingUpdate {
@@ -17,25 +17,73 @@ export interface TrainingData {
   awardedDate?: Date;
 }
 
-class TrainingAPI {
+export interface EmployeeResponse {
+  employees: any[];
+  pagination: {
+    currentPage: number;
+    totalPages: number;
+    totalEmployees: number;
+    itemsPerPage: number;
+  };
+}
+
+class SecureCareAPI {
   private baseURL: string;
 
   constructor(baseURL: string = API_BASE_URL) {
     this.baseURL = baseURL;
   }
 
+  // Get employees by level using new view-based approach
+  async getEmployeesByLevel(level: string, filters: any = {}): Promise<EmployeeResponse> {
+    const params = new URLSearchParams({
+      page: (filters.page || 1).toString(),
+      limit: (filters.limit || 50).toString()
+    });
+    
+    if (filters.facility && filters.facility !== 'all') {
+      params.append('facility', filters.facility);
+    }
+    
+    if (filters.area && filters.area !== 'all') {
+      params.append('area', filters.area);
+    }
+    
+    if (filters.search) {
+      params.append('search', filters.search);
+    }
+    
+    const response = await fetch(`${this.baseURL}/securecare/employees/${encodeURIComponent(level)}?${params}`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch employees: ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+
+  // Get employee by ID
+  async getEmployeeById(employeeId: string): Promise<any> {
+    const response = await fetch(`${this.baseURL}/securecare/employee/${employeeId}`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch employee: ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+
   // Schedule a training requirement
-  async scheduleTraining(employeeId: string, requirementKey: string, date: Date): Promise<TrainingData> {
-    const response = await fetch(`${this.baseURL}/training/schedule`, {
+  async scheduleTraining(employeeId: string, columnName: string, date: Date): Promise<TrainingData> {
+    const response = await fetch(`${this.baseURL}/securecare/schedule`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         employeeId,
-        requirementKey,
-        scheduledDate: date.toISOString(),
-        action: 'schedule'
+        columnName,
+        date: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`, // Send date in YYYY-MM-DD format using local date components
       }),
     });
 
@@ -47,17 +95,16 @@ class TrainingAPI {
   }
 
   // Mark a training requirement as complete
-  async completeTraining(employeeId: string, requirementKey: string, date: Date): Promise<TrainingData> {
-    const response = await fetch(`${this.baseURL}/training/complete`, {
+  async completeTraining(employeeId: string, scheduleColumn: string, completeColumn: string): Promise<TrainingData> {
+    const response = await fetch(`${this.baseURL}/securecare/complete`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         employeeId,
-        requirementKey,
-        completedDate: date.toISOString(),
-        action: 'complete'
+        scheduleColumn,
+        completeColumn
       }),
     });
 
@@ -68,92 +115,69 @@ class TrainingAPI {
     return response.json();
   }
 
-  // Award a level to an employee
-  async awardTraining(employeeId: string, requirementKey: string, date: Date): Promise<TrainingData> {
-    const response = await fetch(`${this.baseURL}/training/award`, {
+  // Approve a conference completion
+  async approveConference(employeeId: string, notes?: string): Promise<{ success: boolean }> {
+    const response = await fetch(`${this.baseURL}/securecare/approve`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
         employeeId,
-        requirementKey,
-        awardedDate: date.toISOString(),
-        action: 'award'
-      }),
+        notes 
+      })
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to award training: ${response.statusText}`);
+      throw new Error(`Failed to approve conference: ${response.statusText}`);
     }
-
     return response.json();
   }
 
-  // Reschedule a training requirement
-  async rescheduleTraining(employeeId: string, requirementKey: string, date: Date): Promise<TrainingData> {
-    const response = await fetch(`${this.baseURL}/training/reschedule`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        employeeId,
-        requirementKey,
-        scheduledDate: date.toISOString(),
-        action: 'reschedule'
-      }),
-    });
+  // Reject a conference completion (UI-only for now)
+  async rejectConference(employeeId: string, notes?: string): Promise<{ success: boolean }> {
+    // For now, this is UI-only as per your specification
+    return Promise.resolve({ success: true });
+  }
+
+  // Get all advisors
+  async getAdvisors(): Promise<any[]> {
+    const response = await fetch(`${this.baseURL}/securecare/advisors`);
 
     if (!response.ok) {
-      throw new Error(`Failed to reschedule training: ${response.statusText}`);
+      throw new Error(`Failed to fetch advisors: ${response.statusText}`);
     }
 
     return response.json();
   }
 
-  // Get all training data for an employee
-  async getEmployeeTrainingData(employeeId: string): Promise<TrainingData[]> {
-    const response = await fetch(`${this.baseURL}/training/employee/${employeeId}`);
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch training data: ${response.statusText}`);
-    }
-
-    return response.json();
-  }
-
-  // Get all training data
+  // Legacy compatibility methods
   async getAllTrainingData(): Promise<TrainingData[]> {
-    const response = await fetch(`${this.baseURL}/training`);
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch training data: ${response.statusText}`);
-    }
-
-    return response.json();
+    // This would need to be implemented if still needed
+    return [];
   }
 
-  // Update training data (generic method)
+  async getEmployeeTrainingData(employeeId: string): Promise<TrainingData[]> {
+    // This would need to be implemented if still needed
+    return [];
+  }
+
   async updateTrainingData(update: TrainingUpdate): Promise<TrainingData> {
-    const response = await fetch(`${this.baseURL}/training/update`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(update),
-    });
+    // This would need to be implemented based on the action type
+    throw new Error('Not implemented - use specific methods instead');
+  }
 
-    if (!response.ok) {
-      throw new Error(`Failed to update training data: ${response.statusText}`);
-    }
+  // Reschedule training (same as schedule for now)
+  async rescheduleTraining(employeeId: string, columnName: string, date: Date): Promise<TrainingData> {
+    return this.scheduleTraining(employeeId, columnName, date);
+  }
 
-    return response.json();
+  // Award training (read-only for now as per your specification)
+  async awardTraining(employeeId: string, requirementKey: string, date: Date): Promise<TrainingData> {
+    throw new Error('Awards are read-only in this version');
   }
 }
 
 // Create and export a singleton instance
-export const trainingAPI = new TrainingAPI();
+export const trainingAPI = new SecureCareAPI();
 
 // Export the class for testing or custom instances
-export default TrainingAPI;
+export default SecureCareAPI;

@@ -11,6 +11,21 @@ node_modules
 dist
 dist-ssr
 *.local
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Temporary files
+*.tmp
+*.temp
+*~
 
 # Editor directories and files
 .vscode/*

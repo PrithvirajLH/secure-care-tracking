@@ -14,6 +14,7 @@ export const FloatingNav = ({
   className,
   alwaysVisible,
   activeTab,
+  onTabChange,
 }: {
   navItems: {
     name: string;
@@ -23,6 +24,7 @@ export const FloatingNav = ({
   className?: string;
   alwaysVisible?: boolean;
   activeTab?: string;
+  onTabChange?: (tab: string) => void;
 }) => {
   const { scrollYProgress } = useScroll();
   const [visible, setVisible] = useState(true);
@@ -54,13 +56,13 @@ export const FloatingNav = ({
         )}
       >
         {navItems.map((navItem: any, idx: number) => {
-          const isActive = activeTab === navItem.link.replace('#', '');
+          const isActive = activeTab === navItem.link;
           return (
-            <a
+            <button
               key={`link=${idx}`}
-              href={navItem.link}
+              onClick={() => onTabChange?.(navItem.link)}
               className={cn(
-                "relative dark:text-neutral-50 items-center flex space-x-2 dark:hover:text-neutral-300 hover:text-neutral-500 transition-all duration-300 group"
+                "relative dark:text-neutral-50 items-center flex space-x-2 dark:hover:text-neutral-300 hover:text-neutral-500 transition-all duration-300 group cursor-pointer"
               )}
             >
               <motion.div
@@ -126,7 +128,7 @@ export const FloatingNav = ({
                   transition={{ duration: 0.2 }}
                 />
               </motion.div>
-            </a>
+            </button>
           );
         })}
       </motion.div>

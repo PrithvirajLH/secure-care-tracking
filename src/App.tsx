@@ -5,7 +5,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { lazy, Suspense } from "react";
 import AppLayout from "./layouts/AppLayout";
-import { PerformanceMonitor } from "./components/PerformanceMonitor";
 
 // Lazy load all page components
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -39,7 +38,6 @@ const queryClient = new QueryClient({
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <PerformanceMonitor />
       <Toaster />
       <Sonner />
       <BrowserRouter

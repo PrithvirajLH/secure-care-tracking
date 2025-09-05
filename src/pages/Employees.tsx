@@ -136,34 +136,73 @@ export default function Employees() {
   const sortedEmployees = useMemo(() => {
     if (!currentEmployees || currentEmployees.length === 0) return [];
     
-    const sorted = [...currentEmployees].sort((a, b) => {
+    let filtered = [...currentEmployees];
+    
+    // Apply status filter
+    if (selectedStatus !== "all") {
+      filtered = filtered.filter(employee => {
+        switch (selectedStatus) {
+          case "Awaiting Approval":
+            return employee.awaiting === false; // awaiting = 0 means waiting for approval
+          case "Conference Rejected":
+            return employee.conferenceRejected === true;
+          case "Not Started":
+            return !employee.awardType && !employee.assignedDate;
+          case "Level 1 In Progress":
+            return employee.awardType === "Level 1" && employee.assignedDate && !employee.secureCareAwarded;
+          case "Level 1":
+            return employee.awardType === "Level 1" && employee.secureCareAwarded === true;
+          case "Level 2 In Progress":
+            return employee.awardType === "Level 2" && employee.assignedDate && !employee.secureCareAwarded;
+          case "Level 2":
+            return employee.awardType === "Level 2" && employee.secureCareAwarded === true;
+          case "Level 3 In Progress":
+            return employee.awardType === "Level 3" && employee.assignedDate && !employee.secureCareAwarded;
+          case "Level 3":
+            return employee.awardType === "Level 3" && employee.secureCareAwarded === true;
+          case "Consultant In Progress":
+            return employee.awardType === "Consultant" && employee.assignedDate && !employee.secureCareAwarded;
+          case "Consultant":
+            return employee.awardType === "Consultant" && employee.secureCareAwarded === true;
+          case "Coach In Progress":
+            return employee.awardType === "Coach" && employee.assignedDate && !employee.secureCareAwarded;
+          case "Coach":
+            return employee.awardType === "Coach" && employee.secureCareAwarded === true;
+          default:
+            return true;
+        }
+      });
+    }
+    
+    // Apply sorting
+    const sorted = filtered.sort((a, b) => {
       let aValue: string | number;
       let bValue: string | number;
 
       switch (sortField) {
         case "name":
-          aValue = a.name.toLowerCase();
-          bValue = b.name.toLowerCase();
+          aValue = (a.name || '').toLowerCase();
+          bValue = (b.name || '').toLowerCase();
           break;
         case "employeeId":
-          aValue = a.employeeId.toLowerCase();
-          bValue = b.employeeId.toLowerCase();
+          aValue = String(a.employeeNumber || a.employeeId || '').toLowerCase();
+          bValue = String(b.employeeNumber || b.employeeId || '').toLowerCase();
           break;
         case "facility":
-          aValue = a.facility.toLowerCase();
-          bValue = b.facility.toLowerCase();
+          aValue = (a.facility || '').toLowerCase();
+          bValue = (b.facility || '').toLowerCase();
           break;
         case "area":
-          aValue = a.area.toLowerCase();
-          bValue = b.area.toLowerCase();
+          aValue = (a.area || '').toLowerCase();
+          bValue = (b.area || '').toLowerCase();
           break;
         case "jobTitle":
           aValue = (a.staffRoles || '').toLowerCase();
           bValue = (b.staffRoles || '').toLowerCase();
           break;
         default:
-          aValue = a.name.toLowerCase();
-          bValue = b.name.toLowerCase();
+          aValue = (a.name || '').toLowerCase();
+          bValue = (b.name || '').toLowerCase();
       }
 
       if (aValue < bValue) return sortDirection === "asc" ? -1 : 1;
@@ -172,12 +211,12 @@ export default function Employees() {
     });
 
     return sorted;
-  }, [currentEmployees, sortField, sortDirection]);
+  }, [currentEmployees, sortField, sortDirection, selectedStatus]);
 
     const getCurrentLevel = (employee: any) => {
     // Check for current progress first (what they're working on now)
-    // Coach in progress: has coachReliasAssigned but not coachAwarded
-    if (employee.coachReliasAssigned && !employee.coachAwarded) return { 
+    // Coach in progress: has awardType Coach but not secureCareAwarded
+    if (employee.awardType === 'Coach' && employee.assignedDate && !employee.secureCareAwarded) return { 
       level: "Coach In Progress", 
       variant: "outline", 
       icon: Crown,
@@ -188,8 +227,8 @@ export default function Employees() {
       className: "shadow-sm hover:shadow-md transition-all duration-200"
     };
     
-    // Consultant in progress: has consultantReliasAssigned but not consultantAwarded
-    if (employee.consultantReliasAssigned && !employee.consultantAwarded) return { 
+    // Consultant in progress: has awardType Consultant but not secureCareAwarded
+    if (employee.awardType === 'Consultant' && employee.assignedDate && !employee.secureCareAwarded) return { 
       level: "Consultant In Progress", 
       variant: "outline", 
       icon: Trophy,
@@ -200,8 +239,8 @@ export default function Employees() {
       className: "shadow-sm hover:shadow-md transition-all duration-200"
     };
     
-    // Level 3 in progress: has level3ReliasAssigned but not level3Awarded
-    if (employee.level3ReliasAssigned && !employee.level3Awarded) return { 
+    // Level 3 in progress: has awardType Level 3 but not secureCareAwarded
+    if (employee.awardType === 'Level 3' && employee.assignedDate && !employee.secureCareAwarded) return { 
       level: "Level 3 In Progress", 
       variant: "outline", 
       icon: Medal,
@@ -212,8 +251,8 @@ export default function Employees() {
       className: "shadow-sm hover:shadow-md transition-all duration-200"
     };
     
-    // Level 2 in progress: has level2ReliasAssigned but not level2Awarded
-    if (employee.level2ReliasAssigned && !employee.level2Awarded) return { 
+    // Level 2 in progress: has awardType Level 2 but not secureCareAwarded
+    if (employee.awardType === 'Level 2' && employee.assignedDate && !employee.secureCareAwarded) return { 
       level: "Level 2 In Progress", 
       variant: "outline", 
       icon: Star,
@@ -224,8 +263,8 @@ export default function Employees() {
       className: "shadow-sm hover:shadow-md transition-all duration-200"
     };
     
-    // Level 1 in progress: has level1ReliasAssigned but not level1Awarded
-    if (employee.level1ReliasAssigned && !employee.level1Awarded) return { 
+    // Level 1 in progress: has awardType Level 1 but not secureCareAwarded
+    if (employee.awardType === 'Level 1' && employee.assignedDate && !employee.secureCareAwarded) return { 
       level: "Level 1 In Progress", 
       variant: "outline", 
       icon: Clock,
@@ -236,8 +275,8 @@ export default function Employees() {
       className: "shadow-sm hover:shadow-md transition-all duration-200"
     };
 
-    // If not currently working on anything, show highest completed level
-    if (employee.coachAwarded) return { 
+    // If awarded, show completed level
+    if (employee.awardType === 'Coach' && employee.secureCareAwarded) return { 
       level: "Coach", 
       variant: "outline", 
       icon: Crown,
@@ -247,7 +286,7 @@ export default function Employees() {
       textColor: "text-yellow-700",
       className: "shadow-sm hover:shadow-md transition-all duration-200"
     };
-    if (employee.consultantAwarded) return { 
+    if (employee.awardType === 'Consultant' && employee.secureCareAwarded) return { 
       level: "Consultant", 
       variant: "outline", 
       icon: Trophy,
@@ -257,7 +296,7 @@ export default function Employees() {
       textColor: "text-purple-700",
       className: "shadow-sm hover:shadow-md transition-all duration-200"
     };
-    if (employee.level3Awarded) return { 
+    if (employee.awardType === 'Level 3' && employee.secureCareAwarded) return { 
       level: "Level 3", 
       variant: "outline", 
       icon: Medal,
@@ -267,7 +306,7 @@ export default function Employees() {
       textColor: "text-blue-700",
       className: "shadow-sm hover:shadow-md transition-all duration-200"
     };
-    if (employee.level2Awarded) return { 
+    if (employee.awardType === 'Level 2' && employee.secureCareAwarded) return { 
       level: "Level 2", 
       variant: "outline", 
       icon: Star,
@@ -277,7 +316,7 @@ export default function Employees() {
       textColor: "text-orange-700",
       className: "shadow-sm hover:shadow-md transition-all duration-200"
     };
-    if (employee.level1Awarded) return { 
+    if (employee.awardType === 'Level 1' && employee.secureCareAwarded) return { 
       level: "Level 1", 
       variant: "outline", 
       icon: Award,
@@ -370,7 +409,8 @@ export default function Employees() {
       // Get unique statuses for filter options
       const statuses = useMemo(() => [
         'Not Started', 'Level 1 In Progress', 'Level 1', 'Level 2 In Progress', 'Level 2', 
-        'Level 3 In Progress', 'Level 3', 'Consultant In Progress', 'Consultant', 'Coach In Progress', 'Coach'
+        'Level 3 In Progress', 'Level 3', 'Consultant In Progress', 'Consultant', 'Coach In Progress', 'Coach',
+        'Awaiting Approval', 'Conference Rejected'
       ].sort(), []);
 
   const handleSort = (field: string) => {
@@ -519,13 +559,13 @@ export default function Employees() {
                          <Button variant="ghost" className="h-auto p-0 justify-start hover:bg-transparent group">
                            <div className="text-left">
                              <div className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors text-base">{e.name}</div>
-                             <div className="text-base text-gray-500">{e.employeeId}</div>
+                             <div className="text-base text-gray-500">{e.employeeNumber || e.employeeId}</div>
                            </div>
                            <Eye className="w-4 h-4 ml-2 text-gray-400 group-hover:text-blue-500 transition-colors" />
                          </Button>
                        </EmployeeDetailModal>
                      </TableCell>
-                     <TableCell className="text-gray-600 font-mono text-base py-3">{e.employeeId}</TableCell>
+                     <TableCell className="text-gray-600 font-mono text-base py-3">{e.employeeNumber || e.employeeId}</TableCell>
                      <TableCell className="text-gray-700 text-base py-3">{e.facility}</TableCell>
                      <TableCell className="text-gray-700 text-base py-3">{e.area}</TableCell>
                                            <TableCell className="text-gray-700 text-base py-3">{e.staffRoles || 'N/A'}</TableCell>

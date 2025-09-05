@@ -9,6 +9,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { fmt, parseDate } from "@/config/awardTypes";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Calendar, 
@@ -52,10 +53,14 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
     completeTraining,
     rescheduleTraining,
     awardTraining,
+    approveConference,
+    rejectConference,
     isScheduling,
     isCompleting,
     isRescheduling,
     isAwarding,
+    isApprovingConference,
+    isRejectingConference,
   } = useTrainingData();
   
   const [inlineDatePicker, setInlineDatePicker] = useState<string | null>(null);
@@ -66,72 +71,72 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
              case "care-partner":
          return {
            requirements: [
-             { name: "Relias Training Assigned", key: "level1ReliasAssigned", completed: !!employee.level1ReliasAssigned, date: employee.level1ReliasAssigned },
-             { name: "Relias Training Completed", key: "level1ReliasCompleted", completed: !!employee.level1ReliasCompleted, date: employee.level1ReliasCompleted },
-             { name: "Level 1 Awarded", key: "level1Awarded", completed: employee.level1Awarded, date: employee.level1AwardedDate }
+             { name: "Relias Training Assigned", key: "assignedDate", completed: !!employee.assignedDate, date: employee.assignedDate },
+             { name: "Relias Training Completed", key: "completedDate", completed: !!employee.completedDate, date: employee.completedDate },
+             { name: "Level 1 Awarded", key: "secureCareAwarded", completed: employee.secureCareAwarded, date: employee.secureCareAwardedDate }
            ],
            total: 3,
-           completed: [!!employee.level1ReliasAssigned, !!employee.level1ReliasCompleted, employee.level1Awarded].filter(Boolean).length,
+           completed: [!!employee.assignedDate, !!employee.completedDate, employee.secureCareAwarded].filter(Boolean).length,
           color: "text-blue-600",
           icon: Users
         };
       case "associate":
         return {
           requirements: [
-            { name: "Conference Completed", key: "level2ConferenceCompleted", completed: !!employee.level2ConferenceCompleted, date: employee.level2ConferenceCompleted },
-            { name: "Standing Video", key: "level2StandingVideo", completed: !!employee.level2StandingVideo, date: employee.level2StandingVideo },
-            { name: "Sleeping/Sitting Video", key: "level2SleepingSittingVideo", completed: !!employee.level2SleepingSittingVideo, date: employee.level2SleepingSittingVideo },
-            { name: "Feeding Video", key: "level2FeedingVideo", completed: !!employee.level2FeedingVideo, date: employee.level2FeedingVideo },
-            { name: "Level 2 Awarded", key: "level2Awarded", completed: employee.level2Awarded, date: employee.level2AwardedDate }
+            { name: "Conference Completed", key: "conferenceCompleted", completed: !!employee.conferenceCompleted, date: employee.conferenceCompleted },
+            { name: "Standing Video", key: "standingVideo", completed: !!employee.standingVideo, date: employee.standingVideo },
+            { name: "Sleeping/Sitting Video", key: "sleepingVideo", completed: !!employee.sleepingVideo, date: employee.sleepingVideo },
+            { name: "Feeding Video", key: "feedGradVideo", completed: !!employee.feedGradVideo, date: employee.feedGradVideo },
+            { name: "Level 2 Awarded", key: "secureCareAwarded", completed: employee.secureCareAwarded, date: employee.secureCareAwardedDate }
           ],
           total: 5,
-          completed: [!!employee.level2ConferenceCompleted, 
-                     !!employee.level2StandingVideo, !!employee.level2SleepingSittingVideo, !!employee.level2FeedingVideo, employee.level2Awarded].filter(Boolean).length,
+          completed: [!!employee.conferenceCompleted, 
+                     !!employee.standingVideo, !!employee.sleepingVideo, !!employee.feedGradVideo, employee.secureCareAwarded].filter(Boolean).length,
           color: "text-green-600",
           icon: Award
         };
       case "champion":
         return {
           requirements: [
-            { name: "Conference Completed", key: "level3ConferenceCompleted", completed: !!employee.level3ConferenceCompleted, date: employee.level3ConferenceCompleted },
-            { name: "Sitting/Standing/Approaching", key: "level3SittingStandingApproaching", completed: !!employee.level3SittingStandingApproaching, date: employee.level3SittingStandingApproaching },
-            { name: "No Hand/No Speak", key: "level3NoHandNoSpeak", completed: !!employee.level3NoHandNoSpeak, date: employee.level3NoHandNoSpeak },
-            { name: "Challenge Sleeping", key: "level3ChallengeSleeping", completed: !!employee.level3ChallengeSleeping, date: employee.level3ChallengeSleeping },
-            { name: "Level 3 Awarded", key: "level3Awarded", completed: employee.level3Awarded, date: employee.level3AwardedDate }
+            { name: "Conference Completed", key: "conferenceCompleted", completed: !!employee.conferenceCompleted, date: employee.conferenceCompleted },
+            { name: "Sitting/Standing/Approaching", key: "standingVideo", completed: !!employee.standingVideo, date: employee.standingVideo },
+            { name: "No Hand/No Speak", key: "noHandnoSpeak", completed: !!employee.noHandnoSpeak, date: employee.noHandnoSpeak },
+            { name: "Challenge Sleeping", key: "sleepingVideo", completed: !!employee.sleepingVideo, date: employee.sleepingVideo },
+            { name: "Level 3 Awarded", key: "secureCareAwarded", completed: employee.secureCareAwarded, date: employee.secureCareAwardedDate }
           ],
           total: 5,
-          completed: [!!employee.level3ConferenceCompleted,
-                     !!employee.level3SittingStandingApproaching, !!employee.level3NoHandNoSpeak, !!employee.level3ChallengeSleeping, employee.level3Awarded].filter(Boolean).length,
+          completed: [!!employee.conferenceCompleted,
+                     !!employee.standingVideo, !!employee.noHandnoSpeak, !!employee.sleepingVideo, employee.secureCareAwarded].filter(Boolean).length,
           color: "text-purple-600",
           icon: Star
         };
       case "consultant":
         return {
           requirements: [
-            { name: "Conference Completed", key: "consultantConferenceCompleted", completed: !!employee.consultantConferenceCompleted, date: employee.consultantConferenceCompleted },
-            { name: "Coaching Session 1", key: "consultantCoachingSession1", completed: !!employee.consultantCoachingSession1, date: employee.consultantCoachingSession1 },
-            { name: "Coaching Session 2", key: "consultantCoachingSession2", completed: !!employee.consultantCoachingSession2, date: employee.consultantCoachingSession2 },
-            { name: "Coaching Session 3", key: "consultantCoachingSession3", completed: !!employee.consultantCoachingSession3, date: employee.consultantCoachingSession3 },
-            { name: "Consultant Awarded", key: "consultantAwarded", completed: employee.consultantAwarded, date: employee.consultantAwardedDate }
+            { name: "Conference Completed", key: "conferenceCompleted", completed: !!employee.conferenceCompleted, date: employee.conferenceCompleted },
+            { name: "Coaching Session 1", key: "session1", completed: !!employee.session1, date: employee.session1 },
+            { name: "Coaching Session 2", key: "session2", completed: !!employee.session2, date: employee.session2 },
+            { name: "Coaching Session 3", key: "session3", completed: !!employee.session3, date: employee.session3 },
+            { name: "Consultant Awarded", key: "secureCareAwarded", completed: employee.secureCareAwarded, date: employee.secureCareAwardedDate }
           ],
           total: 5,
-          completed: [!!employee.consultantConferenceCompleted,
-                     !!employee.consultantCoachingSession1, !!employee.consultantCoachingSession2, !!employee.consultantCoachingSession3, employee.consultantAwarded].filter(Boolean).length,
+          completed: [!!employee.conferenceCompleted,
+                     !!employee.session1, !!employee.session2, !!employee.session3, employee.secureCareAwarded].filter(Boolean).length,
           color: "text-orange-600",
           icon: GraduationCap
         };
       case "coach":
         return {
           requirements: [
-            { name: "Conference Completed", key: "coachConferenceCompleted", completed: !!employee.coachConferenceCompleted, date: employee.coachConferenceCompleted },
-            { name: "Coaching Session 1", key: "coachCoachingSession1", completed: !!employee.coachCoachingSession1, date: employee.coachCoachingSession1 },
-            { name: "Coaching Session 2", key: "coachCoachingSession2", completed: !!employee.coachCoachingSession2, date: employee.coachCoachingSession2 },
-            { name: "Coaching Session 3", key: "coachCoachingSession3", completed: !!employee.coachCoachingSession3, date: employee.coachCoachingSession3 },
-            { name: "Coach Awarded", key: "coachAwarded", completed: employee.coachAwarded, date: employee.coachAwardedDate }
+            { name: "Conference Completed", key: "conferenceCompleted", completed: !!employee.conferenceCompleted, date: employee.conferenceCompleted },
+            { name: "Coaching Session 1", key: "session1", completed: !!employee.session1, date: employee.session1 },
+            { name: "Coaching Session 2", key: "session2", completed: !!employee.session2, date: employee.session2 },
+            { name: "Coaching Session 3", key: "session3", completed: !!employee.session3, date: employee.session3 },
+            { name: "Coach Awarded", key: "secureCareAwarded", completed: employee.secureCareAwarded, date: employee.secureCareAwardedDate }
           ],
           total: 5,
-          completed: [!!employee.coachConferenceCompleted,
-                     !!employee.coachCoachingSession1, !!employee.coachCoachingSession2, !!employee.coachCoachingSession3, employee.coachAwarded].filter(Boolean).length,
+          completed: [!!employee.conferenceCompleted,
+                     !!employee.session1, !!employee.session2, !!employee.session3, employee.secureCareAwarded].filter(Boolean).length,
           color: "text-teal-600",
           icon: TrendingUp
         };
@@ -211,12 +216,11 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
   const handleMarkComplete = async (employeeId: string, requirementKey: string) => {
     if (completeTraining) {
       try {
-        // Use current date as completion date
-        const currentDate = new Date();
-        completeTraining({ employeeId, requirementKey, date: currentDate });
+        // Backend will handle copying scheduled date to completion date
+        completeTraining({ employeeId, requirementKey });
         
         toast.success('Training marked as complete!', {
-          description: `Completed on ${currentDate.toLocaleDateString()}`,
+          description: 'Completed using scheduled date',
         });
       } catch (error) {
         toast.error('Failed to mark training as complete');
@@ -285,6 +289,24 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
     const value = employee[requirement.key];
     const key = `${employee.employeeId}-${requirement.key}`;
     const isInlineDatePickerOpen = inlineDatePicker === key;
+    const isConferenceRequirement = /ConferenceCompleted/i.test(requirement.key);
+    const isLevel1 = currentLevel === 'care-partner';
+    const awaiting = (employee as any).awaiting;
+    const conferenceRejected = (employee as any).conferenceRejected;
+    const awardTypeFromLevel = (levelKey: string): string => {
+      switch (levelKey) {
+        case 'associate':
+          return 'Level 2';
+        case 'champion':
+          return 'Level 3';
+        case 'consultant':
+          return 'Consultant';
+        case 'coach':
+          return 'Coach';
+        default:
+          return 'Level 1';
+      }
+    };
     
     // Check if this requirement has a scheduled date in the employee data
     // For now, we'll use a simple approach - if it's not completed, it can be scheduled
@@ -313,7 +335,7 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
             {awardDate && (
               <div className="inline-flex items-center justify-center gap-1 bg-green-50 border border-green-200 rounded px-2 py-1 w-20">
                 <span className="text-sm text-green-700 font-medium">
-                  {awardDate.toLocaleDateString()}
+                  {fmt.date(awardDate)}
                 </span>
               </div>
             )}
@@ -330,7 +352,7 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
             {isInlineDatePickerOpen ? (
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => handleMarkAwarded(employee.employeeId, requirement.key)}
+                  onClick={() => handleMarkAwarded(String(employee.employeeId), requirement.key)}
                   disabled={isAwarding}
                   className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white px-3 py-1.5 rounded-lg text-sm font-semibold hover:from-green-600 hover:to-emerald-600 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -377,13 +399,50 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
       }
     }
     
+    // Conference approval flow for all levels except Level 1
+    if (isConferenceRequirement && !isLevel1) {
+      if (conferenceRejected) {
+        return (
+          <div className="inline-flex items-center gap-1 bg-red-100 text-red-700 px-2 py-1 rounded-full text-sm font-semibold border border-red-200">
+            <AlertCircle className="w-3 h-3" />
+            <span className="text-sm">Rejected</span>
+          </div>
+        );
+      }
+      if (awaiting) {
+        return (
+          <div className="flex items-center gap-2">
+            <div className="inline-flex items-center gap-1 bg-amber-100 text-amber-800 px-2 py-1 rounded-full text-sm font-semibold border border-amber-200">
+              <Clock className="w-3 h-3" />
+              <span className="text-sm">Awaiting Approval</span>
+            </div>
+            <button
+              onClick={() => approveConference && approveConference({ employeeId: String(employee.employeeId) })}
+              disabled={isApprovingConference}
+              className="inline-flex items-center justify-center gap-1 bg-green-600 text-white px-2 py-1 rounded-md text-sm hover:bg-green-700 disabled:opacity-50"
+            >
+              {isApprovingConference ? 'Approving...' : 'Approve'}
+            </button>
+            <button
+              onClick={() => rejectConference && rejectConference({ employeeId: String(employee.employeeId) })}
+              disabled={isRejectingConference}
+              className="inline-flex items-center justify-center gap-1 bg-red-600 text-white px-2 py-1 rounded-md text-sm hover:bg-red-700 disabled:opacity-50"
+            >
+              {isRejectingConference ? 'Rejecting...' : 'Reject'}
+            </button>
+          </div>
+        );
+      }
+      // If approved already, fall-through to completed rendering below
+    }
+
     // For non-awarded requirements, check if they have a value (completed)
     if (value) {
       return (
         <div className="inline-flex items-center gap-1 bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-2 py-1 rounded-full text-sm font-semibold shadow-sm">
           <CheckCircle className="w-3 h-3" />
           <span className="text-sm font-medium">
-            {value.toLocaleDateString()}
+            {fmt.date(value)}
           </span>
         </div>
       );
@@ -399,7 +458,7 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
                  date={undefined}
                  onDateChange={(date) => {
                    console.log('DatePicker onDateChange called with:', date);
-                   handleScheduleDate(employee.employeeId, requirement.key, date);
+                   handleScheduleDate(String(employee.employeeId), requirement.key, date);
                  }}
                  placeholder="Select date"
                />

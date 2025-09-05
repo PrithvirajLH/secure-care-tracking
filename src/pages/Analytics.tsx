@@ -60,7 +60,8 @@ export default function Analytics() {
   const [customStartDate, setCustomStartDate] = useState<Date | undefined>(undefined);
   const [customEndDate, setCustomEndDate] = useState<Date | undefined>(undefined);
 
-  const { allTrainingData, isLoadingAll } = useTrainingData();
+  // Note: allTrainingData not available in useTrainingData hook, using employee data instead
+  const isLoadingAll = false;
 
   // Use the same data source as Training and Employees pages for consistency
   const filters = useMemo(() => ({
@@ -80,14 +81,16 @@ export default function Analytics() {
 
   // Helper functions for advanced analytics
   const calculateAverageCompletionTime = (employees: any[]) => {
-    const completedEmployees = employees.filter(e => e.level1AwardedDate || e.level2AwardedDate || e.level3AwardedDate);
+    const completedEmployees = employees.filter(e => e.secureCareAwardedDate);
     if (completedEmployees.length === 0) return 0;
     
     const totalDays = completedEmployees.reduce((sum, emp) => {
-      const dates = [emp.level1AwardedDate, emp.level2AwardedDate, emp.level3AwardedDate]
-        .filter(date => date)
-        .map(date => new Date(date).getTime());
-      return sum + Math.max(...dates);
+      if (emp.assignedDate && emp.secureCareAwardedDate) {
+        const startTime = new Date(emp.assignedDate).getTime();
+        const endTime = new Date(emp.secureCareAwardedDate).getTime();
+        return sum + (endTime - startTime);
+      }
+      return sum;
     }, 0);
     
     return Math.round(totalDays / completedEmployees.length / (1000 * 60 * 60 * 24));
@@ -96,20 +99,14 @@ export default function Analytics() {
   const calculateCertificationVelocity = (employees: any[], days: number) => {
     // Handle case when days is 0 (all time)
     if (days === 0) {
-      const totalCompletions = employees.filter(e => 
-        e.level1AwardedDate || e.level2AwardedDate || e.level3AwardedDate
-      ).length;
+      const totalCompletions = employees.filter(e => e.secureCareAwardedDate).length;
       return totalCompletions > 0 ? "1.00" : "0.00";
     }
     
     const recentCompletions = employees.filter(e => {
-      const hasRecentCompletion = e.level1AwardedDate || e.level2AwardedDate || e.level3AwardedDate;
-      if (hasRecentCompletion) {
-        const latestDate = [e.level1AwardedDate, e.level2AwardedDate, e.level3AwardedDate]
-          .filter(date => date)
-          .sort()
-          .pop();
-        return latestDate && (new Date().getTime() - new Date(latestDate).getTime()) <= (days * 24 * 60 * 60 * 1000);
+      if (e.secureCareAwardedDate) {
+        const awardDate = new Date(e.secureCareAwardedDate);
+        return (new Date().getTime() - awardDate.getTime()) <= (days * 24 * 60 * 60 * 1000);
       }
       return false;
     }).length;
@@ -118,16 +115,18 @@ export default function Analytics() {
   };
 
   const calculateRetentionRate = (employees: any[]) => {
-    const advancedCertifications = employees.filter(e => e.level3Awarded || e.consultantAwarded || e.coachAwarded).length;
-    const totalWithBasic = employees.filter(e => e.level1Awarded).length;
+    const advancedCertifications = employees.filter(e => 
+      (e.awardType === 'Level 3' || e.awardType === 'Consultant' || e.awardType === 'Coach') && e.secureCareAwarded
+    ).length;
+    const totalWithBasic = employees.filter(e => e.awardType === 'Level 1' && e.secureCareAwarded).length;
     return totalWithBasic > 0 ? ((advancedCertifications / totalWithBasic) * 100).toFixed(1) : 0;
   };
 
   const analyzeBottlenecks = (employees: any[]) => {
     const bottlenecks = [];
-    const level1InProgress = employees.filter(e => e.level1ReliasAssigned && !e.level1Awarded).length;
-    const level2InProgress = employees.filter(e => e.level2ReliasAssigned && !e.level2Awarded).length;
-    const level3InProgress = employees.filter(e => e.level3ReliasAssigned && !e.level3Awarded).length;
+    const level1InProgress = employees.filter(e => e.awardType === 'Level 1' && e.assignedDate && !e.secureCareAwarded).length;
+    const level2InProgress = employees.filter(e => e.awardType === 'Level 2' && e.assignedDate && !e.secureCareAwarded).length;
+    const level3InProgress = employees.filter(e => e.awardType === 'Level 3' && e.assignedDate && !e.secureCareAwarded).length;
     
     if (level1InProgress > employees.length * 0.3) bottlenecks.push('Level 1');
     if (level2InProgress > employees.length * 0.2) bottlenecks.push('Level 2');
@@ -137,60 +136,51 @@ export default function Analytics() {
   };
 
   const calculateFacilityAvgTime = (facilityEmployees: any[]) => {
-    const completed = facilityEmployees.filter(e => e.level1AwardedDate || e.level2AwardedDate || e.level3AwardedDate);
+    const completed = facilityEmployees.filter(e => e.secureCareAwardedDate);
     if (completed.length === 0) return 0;
     
     const totalTime = completed.reduce((sum, emp) => {
-      const dates = [emp.level1AwardedDate, emp.level2AwardedDate, emp.level3AwardedDate]
-        .filter(date => date)
-        .map(date => new Date(date).getTime());
-      return sum + Math.max(...dates);
+      if (emp.assignedDate && emp.secureCareAwardedDate) {
+        const startTime = new Date(emp.assignedDate).getTime();
+        const endTime = new Date(emp.secureCareAwardedDate).getTime();
+        return sum + (endTime - startTime);
+      }
+      return sum;
     }, 0);
     
     return Math.round(totalTime / completed.length / (1000 * 60 * 60 * 24));
   };
 
   const calculateLevelAvgTime = (employees: any[], level: string) => {
-    const levelEmployees = employees.filter(e => {
-      switch(level) {
-        case 'level1': return e.level1AwardedDate;
-        case 'level2': return e.level2AwardedDate;
-        case 'level3': return e.level3AwardedDate;
-        case 'consultant': return e.consultantAwardedDate;
-        case 'coach': return e.coachAwardedDate;
-        default: return false;
-      }
-    });
+    const awardTypeMap = {
+      'level1': 'Level 1',
+      'level2': 'Level 2', 
+      'level3': 'Level 3',
+      'consultant': 'Consultant',
+      'coach': 'Coach'
+    };
+    
+    const targetAwardType = awardTypeMap[level as keyof typeof awardTypeMap];
+    const levelEmployees = employees.filter(e => e.awardType === targetAwardType && e.secureCareAwardedDate);
     
     if (levelEmployees.length === 0) return 0;
     
     const totalTime = levelEmployees.reduce((sum, emp) => {
-      const date = emp[`${level}AwardedDate`];
-      return sum + new Date(date).getTime();
+      if (emp.assignedDate && emp.secureCareAwardedDate) {
+        const startTime = new Date(emp.assignedDate).getTime();
+        const endTime = new Date(emp.secureCareAwardedDate).getTime();
+        return sum + (endTime - startTime);
+      }
+      return sum;
     }, 0);
     
     return Math.round(totalTime / levelEmployees.length / (1000 * 60 * 60 * 24));
   };
 
   const calculateTimeToComplete = (employee: any, achievement: string) => {
-    let startDate, endDate;
-    
-    switch(achievement) {
-      case 'Level 1':
-        startDate = employee.level1ReliasAssignedDate;
-        endDate = employee.level1AwardedDate;
-        break;
-      case 'Level 2':
-        startDate = employee.level2ReliasAssignedDate;
-        endDate = employee.level2AwardedDate;
-        break;
-      case 'Level 3':
-        startDate = employee.level3ReliasAssignedDate;
-        endDate = employee.level3AwardedDate;
-        break;
-      default:
-        return 0;
-    }
+    // Use the actual database fields
+    const startDate = employee.assignedDate;
+    const endDate = employee.secureCareAwardedDate;
     
     if (!startDate || !endDate) return 0;
     return Math.round((new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24));
@@ -209,41 +199,22 @@ export default function Analytics() {
       
       // Count employees with certifications awarded in this month
       const monthEmployees = employees.filter(e => {
-        const certificationDates = [
-          e.level1AwardedDate,
-          e.level2AwardedDate,
-          e.level3AwardedDate,
-          e.consultantAwardedDate,
-          e.coachAwardedDate
-        ].filter(date => date);
-        
-        return certificationDates.some(date => {
-          const awardDate = new Date(date);
+        if (e.secureCareAwardedDate) {
+          const awardDate = new Date(e.secureCareAwardedDate);
           return awardDate.getMonth() === targetDate.getMonth() && 
                  awardDate.getFullYear() === targetDate.getFullYear();
-        });
+        }
+        return false;
       });
       
       // Count in-progress employees for this month
       const inProgressEmployees = employees.filter(e => {
-        const hasInProgress = e.level1ReliasAssigned || e.level2ReliasAssigned || e.level3ReliasAssigned || 
-                             e.consultantReliasAssigned || e.coachReliasAssigned;
-        if (!hasInProgress) return false;
-        
-        // Check if they started in this month
-        const startDates = [
-          e.level1ReliasAssigned,
-          e.level2ReliasAssigned,
-          e.level3ReliasAssigned,
-          e.consultantReliasAssigned,
-          e.coachReliasAssigned
-        ].filter(date => date);
-        
-        return startDates.some(date => {
-          const startDate = new Date(date);
+        if (e.assignedDate && !e.secureCareAwarded) {
+          const startDate = new Date(e.assignedDate);
           return startDate.getMonth() === targetDate.getMonth() && 
                  startDate.getFullYear() === targetDate.getFullYear();
-        });
+        }
+        return false;
       });
       
       return {
@@ -258,9 +229,7 @@ export default function Analytics() {
   const generatePredictions = (employees: any[], days: number) => {
     const currentRate = parseFloat(calculateCertificationVelocity(employees, days));
     const totalEmployees = employees.length;
-    const completed = employees.filter(e => 
-      e.level1Awarded || e.level2Awarded || e.level3Awarded || e.consultantAwarded || e.coachAwarded
-    ).length;
+    const completed = employees.filter(e => e.secureCareAwarded).length;
     
     const remaining = totalEmployees - completed;
     const predictedCompletions = Math.min(remaining, Math.round(currentRate * 30)); // Next 30 days
@@ -309,56 +278,43 @@ export default function Analytics() {
     
     if (startDate && endDate) {
       filteredEmployees = employees.filter(e => {
-        // Check if employee has any certification activity within the date range
-        const certificationDates = [
-          e.level1AwardedDate,
-          e.level2AwardedDate, 
-          e.level3AwardedDate,
-          e.consultantAwardedDate,
-          e.coachAwardedDate
-        ].filter(date => date);
-        
-        if (certificationDates.length === 0) return false;
-        
-        // Check if any certification was awarded within the date range
-        return certificationDates.some(date => {
-          const awardDate = new Date(date);
+        // Check if employee has certification activity within the date range
+        if (e.secureCareAwardedDate) {
+          const awardDate = new Date(e.secureCareAwardedDate);
           return awardDate >= startDate! && awardDate <= endDate!;
-        });
+        }
+        return false;
       });
     }
     
     // Apply level filter
     if (selectedLevel !== "all") {
+      const levelMap = {
+        "level1": "Level 1",
+        "level2": "Level 2", 
+        "level3": "Level 3",
+        "consultant": "Consultant",
+        "coach": "Coach"
+      };
+      
+      const targetLevel = levelMap[selectedLevel as keyof typeof levelMap];
       filteredEmployees = filteredEmployees.filter(e => {
-        switch(selectedLevel) {
-          case "level1": return e.level1Awarded;
-          case "level2": return e.level2Awarded;
-          case "level3": return e.level3Awarded;
-          case "consultant": return e.consultantAwarded;
-          case "coach": return e.coachAwarded;
-          default: return true;
-        }
+        return e.awardType === targetLevel && e.secureCareAwarded;
       });
     }
 
     // Overall statistics
     const totalEmployees = filteredEmployees.length;
-    const completedCertifications = filteredEmployees.filter(e => 
-      e.level1Awarded || e.level2Awarded || e.level3Awarded || e.consultantAwarded || e.coachAwarded
-    ).length;
-    const inProgress = filteredEmployees.filter(e => 
-      e.level1ReliasAssigned || e.level2ReliasAssigned || e.level3ReliasAssigned || 
-      e.consultantReliasAssigned || e.coachReliasAssigned
-    ).length;
+    const completedCertifications = filteredEmployees.filter(e => e.secureCareAwarded).length;
+    const inProgress = filteredEmployees.filter(e => e.assignedDate && !e.secureCareAwarded).length;
     const notStarted = totalEmployees - completedCertifications - inProgress;
 
     // Level-wise breakdown
-    const level1Completed = filteredEmployees.filter(e => e.level1Awarded).length;
-    const level2Completed = filteredEmployees.filter(e => e.level2Awarded).length;
-    const level3Completed = filteredEmployees.filter(e => e.level3Awarded).length;
-    const consultantCompleted = filteredEmployees.filter(e => e.consultantAwarded).length;
-    const coachCompleted = filteredEmployees.filter(e => e.coachAwarded).length;
+    const level1Completed = filteredEmployees.filter(e => e.awardType === 'Level 1' && e.secureCareAwarded).length;
+    const level2Completed = filteredEmployees.filter(e => e.awardType === 'Level 2' && e.secureCareAwarded).length;
+    const level3Completed = filteredEmployees.filter(e => e.awardType === 'Level 3' && e.secureCareAwarded).length;
+    const consultantCompleted = filteredEmployees.filter(e => e.awardType === 'Consultant' && e.secureCareAwarded).length;
+    const coachCompleted = filteredEmployees.filter(e => e.awardType === 'Coach' && e.secureCareAwarded).length;
 
     // Advanced metrics
     const averageCompletionTime = calculateAverageCompletionTime(filteredEmployees);
@@ -378,9 +334,9 @@ export default function Analytics() {
         };
       }
       acc[emp.facility].total++;
-      if (emp.level1Awarded || emp.level2Awarded || emp.level3Awarded || emp.consultantAwarded || emp.coachAwarded) {
+      if (emp.secureCareAwarded) {
         acc[emp.facility].completed++;
-      } else if (emp.level1ReliasAssigned || emp.level2ReliasAssigned || emp.level3ReliasAssigned || emp.consultantReliasAssigned || emp.coachReliasAssigned) {
+      } else if (emp.assignedDate && !emp.secureCareAwarded) {
         acc[emp.facility].inProgress++;
       }
       return acc;
@@ -405,9 +361,9 @@ export default function Analytics() {
         };
       }
       acc[emp.area].total++;
-      if (emp.level1Awarded || emp.level2Awarded || emp.level3Awarded || emp.consultantAwarded || emp.coachAwarded) {
+      if (emp.secureCareAwarded) {
         acc[emp.area].completed++;
-      } else if (emp.level1ReliasAssigned || emp.level2ReliasAssigned || emp.level3ReliasAssigned || emp.consultantReliasAssigned || emp.coachReliasAssigned) {
+      } else if (emp.assignedDate && !emp.secureCareAwarded) {
         acc[emp.area].inProgress++;
       }
       return acc;
@@ -428,7 +384,7 @@ export default function Analytics() {
       { 
         level: "Level 1", 
         completed: level1Completed, 
-        inProgress: filteredEmployees.filter(e => e.level1ReliasAssigned && !e.level1Awarded).length, 
+        inProgress: filteredEmployees.filter(e => e.awardType === 'Level 1' && e.assignedDate && !e.secureCareAwarded).length, 
         target: totalEmployees * 0.8,
         efficiency: (level1Completed / totalEmployees) * 100,
         avgTime: calculateLevelAvgTime(filteredEmployees, 'level1')
@@ -436,7 +392,7 @@ export default function Analytics() {
       { 
         level: "Level 2", 
         completed: level2Completed, 
-        inProgress: filteredEmployees.filter(e => e.level2ReliasAssigned && !e.level2Awarded).length, 
+        inProgress: filteredEmployees.filter(e => e.awardType === 'Level 2' && e.assignedDate && !e.secureCareAwarded).length, 
         target: totalEmployees * 0.6,
         efficiency: (level2Completed / totalEmployees) * 100,
         avgTime: calculateLevelAvgTime(filteredEmployees, 'level2')
@@ -444,7 +400,7 @@ export default function Analytics() {
       { 
         level: "Level 3", 
         completed: level3Completed, 
-        inProgress: filteredEmployees.filter(e => e.level3ReliasAssigned && !e.level3Awarded).length, 
+        inProgress: filteredEmployees.filter(e => e.awardType === 'Level 3' && e.assignedDate && !e.secureCareAwarded).length, 
         target: totalEmployees * 0.4,
         efficiency: (level3Completed / totalEmployees) * 100,
         avgTime: calculateLevelAvgTime(filteredEmployees, 'level3')
@@ -452,7 +408,7 @@ export default function Analytics() {
       { 
         level: "Consultant", 
         completed: consultantCompleted, 
-        inProgress: filteredEmployees.filter(e => e.consultantReliasAssigned && !e.consultantAwarded).length, 
+        inProgress: filteredEmployees.filter(e => e.awardType === 'Consultant' && e.assignedDate && !e.secureCareAwarded).length, 
         target: totalEmployees * 0.2,
         efficiency: (consultantCompleted / totalEmployees) * 100,
         avgTime: calculateLevelAvgTime(filteredEmployees, 'consultant')
@@ -460,7 +416,7 @@ export default function Analytics() {
       { 
         level: "Coach", 
         completed: coachCompleted, 
-        inProgress: filteredEmployees.filter(e => e.coachReliasAssigned && !e.coachAwarded).length, 
+        inProgress: filteredEmployees.filter(e => e.awardType === 'Coach' && e.assignedDate && !e.secureCareAwarded).length, 
         target: totalEmployees * 0.1,
         efficiency: (coachCompleted / totalEmployees) * 100,
         avgTime: calculateLevelAvgTime(filteredEmployees, 'coach')
@@ -479,9 +435,9 @@ export default function Analytics() {
          };
        }
        acc[emp.facility].total++;
-       if (emp.level1Awarded || emp.level2Awarded || emp.level3Awarded || emp.consultantAwarded || emp.coachAwarded) {
+       if (emp.secureCareAwarded) {
          acc[emp.facility].completed++;
-       } else if (emp.level1ReliasAssigned || emp.level2ReliasAssigned || emp.level3ReliasAssigned || emp.consultantReliasAssigned || emp.coachReliasAssigned) {
+       } else if (emp.assignedDate && !emp.secureCareAwarded) {
          acc[emp.facility].inProgress++;
        }
        return acc;
@@ -496,32 +452,28 @@ export default function Analytics() {
 
      const topFacilities = Object.entries(allFacilityStats)
        .map(([facility, stats]) => ({
-         facility,
-         completionRate: (stats.completed / stats.total) * 100,
-         efficiency: stats.efficiency,
-         avgTime: stats.avgTime,
-         total: stats.total,
-         completed: stats.completed
+                 facility,
+        completionRate: ((stats as any).completed / (stats as any).total) * 100,
+        efficiency: (stats as any).efficiency,
+        avgTime: (stats as any).avgTime,
+        total: (stats as any).total,
+        completed: (stats as any).completed
        }))
        .sort((a, b) => b.efficiency - a.efficiency)
        .slice(0, 5);
 
     // Recent activity with performance indicators
     const recentActivity = filteredEmployees
-      .filter(e => e.level1AwardedDate || e.level2AwardedDate || e.level3AwardedDate)
+      .filter(e => e.secureCareAwardedDate)
       .map(e => {
-        const latestAward = [e.level1AwardedDate, e.level2AwardedDate, e.level3AwardedDate]
-          .filter(date => date)
-          .sort()
-          .pop();
-        const achievement = e.level3Awarded ? "Level 3" : e.level2Awarded ? "Level 2" : "Level 1";
+        const achievement = e.awardType || "Level 1";
         const timeToComplete = calculateTimeToComplete(e, achievement);
         
         return {
           employee: e.name,
           facility: e.facility,
           achievement,
-          date: latestAward,
+          date: e.secureCareAwardedDate,
           timeToComplete,
           performance: timeToComplete < 120 ? 'Excellent' : timeToComplete < 180 ? 'Good' : 'Average'
         };
@@ -556,32 +508,27 @@ export default function Analytics() {
     };
   }, [currentEmployees, timeRange, selectedFacility, selectedLevel, customStartDate, customEndDate]);
 
-  // Enhanced analytics data with real-time training data integration
+  // Enhanced analytics data (simplified without real-time training data)
   const enhancedAnalyticsData = useMemo(() => {
     const baseData = analyticsData;
     
-    // Integrate with real training data if available
-    if (allTrainingData && allTrainingData.length > 0) {
-      // Add real-time training metrics
-      const realTimeMetrics = {
-        activeTrainingSessions: allTrainingData.filter(t => 
-          t.scheduledDate && !t.completedDate && new Date(t.scheduledDate) >= new Date()
-        ).length,
-        overdueTraining: allTrainingData.filter(t => 
-          t.scheduledDate && !t.completedDate && new Date(t.scheduledDate) < new Date()
-        ).length,
-        recentCompletions: allTrainingData.filter(t => 
-          t.completedDate && new Date(t.completedDate) >= new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-        ).length,
-        trainingEfficiency: allTrainingData.length > 0 ? 
-          (allTrainingData.filter(t => t.completedDate).length / allTrainingData.length * 100).toFixed(1) : 0
-      };
-      
-      return { ...baseData, realTimeMetrics };
-    }
+    // Add basic training metrics using employee data
+    const realTimeMetrics = {
+      activeTrainingSessions: currentEmployees.filter(e => e.assignedDate && !e.secureCareAwarded).length,
+      overdueTraining: currentEmployees.filter(e => 
+        e.assignedDate && !e.secureCareAwarded && 
+        new Date(e.assignedDate.getTime() + 30 * 24 * 60 * 60 * 1000) < new Date()
+      ).length,
+      recentCompletions: currentEmployees.filter(e => 
+        e.secureCareAwardedDate && 
+        new Date(e.secureCareAwardedDate) >= new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+      ).length,
+      trainingEfficiency: currentEmployees.length > 0 ? 
+        (currentEmployees.filter(e => e.secureCareAwarded).length / currentEmployees.length * 100).toFixed(1) : '0'
+    };
     
-    return baseData;
-  }, [analyticsData, allTrainingData]);
+    return { ...baseData, realTimeMetrics };
+  }, [analyticsData, currentEmployees]);
 
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
 
@@ -637,14 +584,12 @@ export default function Analytics() {
     lines.push(["Certification Velocity (per day)", analyticsData.certificationVelocity].map(csvEscape).join(","));
     lines.push(["Retention Rate (%)", analyticsData.retentionRate].map(csvEscape).join(","));
     
-    // Add real-time metrics if available
-    if ('realTimeMetrics' in enhancedAnalyticsData && enhancedAnalyticsData.realTimeMetrics) {
-      const metrics = enhancedAnalyticsData.realTimeMetrics;
-      lines.push(["Active Training Sessions", metrics.activeTrainingSessions].map(csvEscape).join(","));
-      lines.push(["Overdue Training", metrics.overdueTraining].map(csvEscape).join(","));
-      lines.push(["Recent Completions (7 days)", metrics.recentCompletions].map(csvEscape).join(","));
-      lines.push(["Training Efficiency (%)", metrics.trainingEfficiency].map(csvEscape).join(","));
-    }
+    // Add real-time metrics
+    const metrics = enhancedAnalyticsData.realTimeMetrics;
+    lines.push(["Active Training Sessions", metrics.activeTrainingSessions].map(csvEscape).join(","));
+    lines.push(["Overdue Training", metrics.overdueTraining].map(csvEscape).join(","));
+    lines.push(["Recent Completions (7 days)", metrics.recentCompletions].map(csvEscape).join(","));
+    lines.push(["Training Efficiency (%)", metrics.trainingEfficiency].map(csvEscape).join(","));
     
     lines.push("");
 
@@ -1049,8 +994,8 @@ export default function Analytics() {
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={Object.entries(analyticsData.facilityStats).map(([facility, stats]) => ({
                     facility,
-                    completionRate: (stats.completed / stats.total) * 100,
-                    inProgressRate: (stats.inProgress / stats.total) * 100,
+                    completionRate: ((stats as any).completed / (stats as any).total) * 100,
+                    inProgressRate: ((stats as any).inProgress / (stats as any).total) * 100,
                   }))}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="facility" />
@@ -1073,8 +1018,8 @@ export default function Analytics() {
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={Object.entries(analyticsData.areaStats).map(([area, stats]) => ({
                     area,
-                    completionRate: (stats.completed / stats.total) * 100,
-                    inProgressRate: (stats.inProgress / stats.total) * 100,
+                    completionRate: ((stats as any).completed / (stats as any).total) * 100,
+                    inProgressRate: ((stats as any).inProgress / (stats as any).total) * 100,
                   }))}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="area" />

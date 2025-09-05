@@ -7,6 +7,7 @@ import { motion } from "framer-motion";
 import { useApp } from "@/context/AppContext";
 import { useEmployees } from "@/hooks/useEmployees";
 import { useTrainingData } from "@/hooks/useTrainingData";
+import { parseDate } from "@/config/awardTypes";
 import PageHeader from "@/components/PageHeader";
 
 const COLORS = ["#3b82f6", "#10b981", "#8b5cf6", "#f59e0b", "#ef4444"];
@@ -45,7 +46,8 @@ export default function Dashboard() {
   // For Dashboard, we need limited employees, so we'll use the default page size
   // and also fall back to state.employees if the API data is not available
   const { employees: apiEmployees, isLoading, error, isFetching } = useEmployees({});
-  const { allTrainingData, isLoadingAll } = useTrainingData();
+  // Note: allTrainingData not available in useTrainingData hook, using employee data instead
+  const isLoadingAll = false;
 
   useEffect(() => {
     document.title = "SecureCare Training Dashboard";
@@ -77,40 +79,49 @@ export default function Dashboard() {
     const total = employees.length;
     console.log('Dashboard: Calculating stats for', total, 'employees');
     
-    // Calculate completion rates for each level
-    const level1Completed = employees.filter(e => e.level1Awarded).length;
-    const level2Completed = employees.filter(e => e.level2Awarded).length;
-    const level3Completed = employees.filter(e => e.level3Awarded).length;
-    const consultantCompleted = employees.filter(e => e.consultantAwarded).length;
-    const coachCompleted = employees.filter(e => e.coachAwarded).length;
+    // Calculate completion rates for each level using correct database fields
+    const level1Completed = employees.filter(e => e.awardType === 'Level 1' && e.secureCareAwarded).length;
+    const level2Completed = employees.filter(e => e.awardType === 'Level 2' && e.secureCareAwarded).length;
+    const level3Completed = employees.filter(e => e.awardType === 'Level 3' && e.secureCareAwarded).length;
+    const consultantCompleted = employees.filter(e => e.awardType === 'Consultant' && e.secureCareAwarded).length;
+    const coachCompleted = employees.filter(e => e.awardType === 'Coach' && e.secureCareAwarded).length;
 
     // Calculate in-progress counts
-    const level1InProgress = employees.filter(e => e.level1ReliasAssigned && !e.level1Awarded).length;
-    const level2InProgress = employees.filter(e => e.level2ReliasAssigned && !e.level2Awarded).length;
-    const level3InProgress = employees.filter(e => e.level3ReliasAssigned && !e.level3Awarded).length;
-    const consultantInProgress = employees.filter(e => e.consultantReliasAssigned && !e.consultantAwarded).length;
-    const coachInProgress = employees.filter(e => e.coachReliasAssigned && !e.coachAwarded).length;
+    const level1InProgress = employees.filter(e => e.awardType === 'Level 1' && e.assignedDate && !e.secureCareAwarded).length;
+    const level2InProgress = employees.filter(e => e.awardType === 'Level 2' && e.assignedDate && !e.secureCareAwarded).length;
+    const level3InProgress = employees.filter(e => e.awardType === 'Level 3' && e.assignedDate && !e.secureCareAwarded).length;
+    const consultantInProgress = employees.filter(e => e.awardType === 'Consultant' && e.assignedDate && !e.secureCareAwarded).length;
+    const coachInProgress = employees.filter(e => e.awardType === 'Coach' && e.assignedDate && !e.secureCareAwarded).length;
 
-    // Calculate pending counts
-    const level1Pending = employees.filter(e => !e.level1ReliasAssigned).length;
-    const level2Pending = employees.filter(e => e.level1Awarded && !e.level2ReliasAssigned).length;
-    const level3Pending = employees.filter(e => e.level2Awarded && !e.level3ReliasAssigned).length;
-    const consultantPending = employees.filter(e => e.level3Awarded && !e.consultantReliasAssigned).length;
-    const coachPending = employees.filter(e => e.consultantAwarded && !e.coachReliasAssigned).length;
+    // Calculate pending counts (no award type assigned yet)
+    const level1Pending = employees.filter(e => !e.awardType || e.awardType === 'Level 1' && !e.assignedDate).length;
+    const level2Pending = employees.filter(e => e.awardType === 'Level 1' && e.secureCareAwarded && !employees.some(emp => emp.employeeId === e.employeeId && emp.awardType === 'Level 2')).length;
+    const level3Pending = employees.filter(e => e.awardType === 'Level 2' && e.secureCareAwarded && !employees.some(emp => emp.employeeId === e.employeeId && emp.awardType === 'Level 3')).length;
+    const consultantPending = employees.filter(e => e.awardType === 'Level 3' && e.secureCareAwarded && !employees.some(emp => emp.employeeId === e.employeeId && emp.awardType === 'Consultant')).length;
+    const coachPending = employees.filter(e => e.awardType === 'Consultant' && e.secureCareAwarded && !employees.some(emp => emp.employeeId === e.employeeId && emp.awardType === 'Coach')).length;
 
     // Calculate overdue (assigned but not completed within expected timeframe)
-    const level1Overdue = employees.filter(e => 
-      e.level1ReliasAssigned && !e.level1Awarded && 
-      new Date(e.level1ReliasAssigned.getTime() + 30 * 24 * 60 * 60 * 1000) < new Date()
-    ).length;
-    const level2Overdue = employees.filter(e => 
-      e.level2ReliasAssigned && !e.level2Awarded && 
-      new Date(e.level2ReliasAssigned.getTime() + 45 * 24 * 60 * 60 * 1000) < new Date()
-    ).length;
-    const level3Overdue = employees.filter(e => 
-      e.level3ReliasAssigned && !e.level3Awarded && 
-      new Date(e.level3ReliasAssigned.getTime() + 60 * 24 * 60 * 60 * 1000) < new Date()
-    ).length;
+    const level1Overdue = employees.filter(e => {
+      if (e.awardType !== 'Level 1' || !e.assignedDate || e.secureCareAwarded) return false;
+      const assignedDate = parseDate(e.assignedDate);
+      if (!assignedDate) return false;
+      const overdueDate = new Date(assignedDate.getTime() + 30 * 24 * 60 * 60 * 1000);
+      return overdueDate < new Date();
+    }).length;
+    const level2Overdue = employees.filter(e => {
+      if (e.awardType !== 'Level 2' || !e.assignedDate || e.secureCareAwarded) return false;
+      const assignedDate = parseDate(e.assignedDate);
+      if (!assignedDate) return false;
+      const overdueDate = new Date(assignedDate.getTime() + 45 * 24 * 60 * 60 * 1000);
+      return overdueDate < new Date();
+    }).length;
+    const level3Overdue = employees.filter(e => {
+      if (e.awardType !== 'Level 3' || !e.assignedDate || e.secureCareAwarded) return false;
+      const assignedDate = parseDate(e.assignedDate);
+      if (!assignedDate) return false;
+      const overdueDate = new Date(assignedDate.getTime() + 60 * 24 * 60 * 60 * 1000);
+      return overdueDate < new Date();
+    }).length;
 
     // Calculate completion percentages
     const level1Percentage = Math.round((level1Completed / Math.max(total, 1)) * 100);
@@ -145,29 +156,16 @@ export default function Dashboard() {
     return calculatedStats;
   }, [employees]);
 
-  // Enhanced stats with real-time training data
+  // Enhanced stats with basic employee data (no real-time training data available)
   const enhancedStats = useMemo(() => {
-    if (!allTrainingData || allTrainingData.length === 0) return stats;
-
-    const activeTrainingSessions = allTrainingData.filter(t => 
-      t.scheduledDate && !t.completedDate && new Date(t.scheduledDate) >= new Date()
-    ).length;
-    
-    const overdueTraining = allTrainingData.filter(t => 
-      t.scheduledDate && !t.completedDate && new Date(t.scheduledDate) < new Date()
-    ).length;
-
-    const recentCompletions = allTrainingData.filter(t => 
-      t.completedDate && new Date(t.completedDate) >= new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-    ).length;
-
+    // Use basic stats without real-time training integration
     return {
       ...stats,
-      activeTrainingSessions,
-      overdueTraining,
-      recentCompletions
+      activeTrainingSessions: 0,
+      overdueTraining: stats.totalOverdue,
+      recentCompletions: 0
     };
-  }, [stats, allTrainingData]) as typeof stats & {
+  }, [stats]) as typeof stats & {
     activeTrainingSessions: number;
     overdueTraining: number;
     recentCompletions: number;
@@ -181,14 +179,14 @@ export default function Dashboard() {
     { name: "Coach", value: enhancedStats.completion.coach },
   ];
 
-  // Generate facility data from actual employee data
+  // Generate facility data from actual employee data using correct database fields
   const facilityData = useMemo(() => {
     const facilityStats = employees.reduce((acc, employee) => {
       if (!acc[employee.facility]) {
         acc[employee.facility] = { total: 0, completed: 0 };
       }
       acc[employee.facility].total++;
-      if (employee.level1Awarded || employee.level2Awarded || employee.level3Awarded || employee.consultantAwarded || employee.coachAwarded) {
+      if (employee.secureCareAwarded) {
         acc[employee.facility].completed++;
       }
       return acc;
@@ -197,7 +195,7 @@ export default function Dashboard() {
     return Object.entries(facilityStats)
       .map(([name, stats]) => ({
         name,
-        completed: Math.round((stats.completed / Math.max(stats.total, 1)) * 100)
+        completed: Math.round(((stats as any).completed / Math.max((stats as any).total, 1)) * 100)
       }))
       .sort((a, b) => b.completed - a.completed)
       .slice(0, 5); // Top 5 facilities
@@ -294,59 +292,55 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-red-700">
-                {allTrainingData && allTrainingData.length > 0 ? enhancedStats.overdueTraining : enhancedStats.totalOverdue}
+                {enhancedStats.totalOverdue}
               </div>
               <p className="text-xs text-red-600 mt-1">
-                {allTrainingData && allTrainingData.length > 0 
-                  ? "Scheduled sessions past due" 
-                  : "Relias training overdue"}
+                Training overdue
               </p>
             </CardContent>
           </Card>
         </motion.div>
       </div>
 
-      {/* Enhanced stats row with real-time data */}
-      {allTrainingData && allTrainingData.length > 0 && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <Card className="shadow-sm bg-gradient-to-br from-indigo-50 to-indigo-100 border-indigo-200">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-indigo-700">Active Sessions</CardTitle>
-              <Clock className="h-4 w-4 text-indigo-700" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-indigo-700">{enhancedStats.activeTrainingSessions}</div>
-              <p className="text-xs text-indigo-600 mt-1">Current Training</p>
-            </CardContent>
-          </Card>
-          <Card className="shadow-sm bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-orange-700">Recent Completions</CardTitle>
-              <CheckCircle className="h-4 w-4 text-orange-700" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-orange-700">{enhancedStats.recentCompletions}</div>
-              <p className="text-xs text-orange-600 mt-1">Last 7 Days</p>
-            </CardContent>
-          </Card>
-          <Card className="shadow-sm bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-purple-700">Training Efficiency</CardTitle>
-              <TrendingUp className="h-4 w-4 text-purple-700" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-purple-700">
-                {allTrainingData.length > 0 ? 
-                  Math.round((allTrainingData.filter(t => t.completedDate).length / allTrainingData.length) * 100) : 0}%
-              </div>
-              <p className="text-xs text-purple-600 mt-1">Completion Rate</p>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+      {/* Additional stats row */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <Card className="shadow-sm bg-gradient-to-br from-indigo-50 to-indigo-100 border-indigo-200">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-indigo-700">Active Sessions</CardTitle>
+            <Clock className="h-4 w-4 text-indigo-700" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-indigo-700">{enhancedStats.activeTrainingSessions}</div>
+            <p className="text-xs text-indigo-600 mt-1">Current Training</p>
+          </CardContent>
+        </Card>
+        <Card className="shadow-sm bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-orange-700">Recent Completions</CardTitle>
+            <CheckCircle className="h-4 w-4 text-orange-700" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-orange-700">{enhancedStats.recentCompletions}</div>
+            <p className="text-xs text-orange-600 mt-1">Last 7 Days</p>
+          </CardContent>
+        </Card>
+        <Card className="shadow-sm bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-purple-700">Training Efficiency</CardTitle>
+            <TrendingUp className="h-4 w-4 text-purple-700" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-purple-700">
+              {employees.length > 0 ? 
+                Math.round((employees.filter(e => e.secureCareAwarded).length / employees.length) * 100) : 0}%
+            </div>
+            <p className="text-xs text-purple-600 mt-1">Completion Rate</p>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Overdue Training Details - Actionable Information */}
-      {allTrainingData && allTrainingData.length > 0 && enhancedStats.overdueTraining > 0 && (
+      {enhancedStats.overdueTraining > 0 && (
         <Card className="shadow-sm border-red-200 bg-red-50">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-red-700">
@@ -389,30 +383,32 @@ export default function Dashboard() {
 
               {/* Overdue Training List */}
               <div className="mt-4">
-                <div className="text-sm font-medium text-red-700 mb-2">Recent Overdue Sessions:</div>
+                <div className="text-sm font-medium text-red-700 mb-2">Overdue Employees:</div>
                 <div className="space-y-2 max-h-40 overflow-y-auto">
-                  {allTrainingData
-                    .filter(t => t.scheduledDate && !t.completedDate && new Date(t.scheduledDate) < new Date())
+                  {employees
+                    .filter(e => {
+                      if (!e.assignedDate || e.secureCareAwarded) return false;
+                      const assignedDate = new Date(e.assignedDate);
+                      const overdueDate = new Date(assignedDate.getTime() + 30 * 24 * 60 * 60 * 1000);
+                      return overdueDate < new Date();
+                    })
                     .slice(0, 5) // Show top 5 overdue
-                    .map((training, index) => {
-                      const daysOverdue = Math.ceil((new Date().getTime() - new Date(training.scheduledDate).getTime()) / (1000 * 60 * 60 * 24));
-                      // Find employee name from employees array
-                      const employee = employees.find(e => e.employeeId === training.employeeId);
-                      const employeeName = employee?.name || `Employee ${training.employeeId.slice(0, 8)}`;
-                      const requirementName = getRequirementDisplayName(training.requirementKey);
+                    .map((employee, index) => {
+                      const assignedDate = new Date(employee.assignedDate);
+                      const daysOverdue = Math.ceil((new Date().getTime() - assignedDate.getTime()) / (1000 * 60 * 60 * 24));
                       
                       return (
                         <div key={index} className="flex items-center justify-between p-2 bg-white rounded border border-red-200">
                           <div className="flex-1">
                             <div className="text-sm font-medium text-gray-700">
-                              {employeeName}
+                              {employee.name}
                             </div>
                             <div className="text-xs text-gray-500">
-                              {requirementName} - {daysOverdue} day{daysOverdue !== 1 ? 's' : ''} overdue
+                              {employee.awardType || 'Training'} - {daysOverdue} day{daysOverdue !== 1 ? 's' : ''} overdue
                             </div>
                           </div>
                           <div className="text-xs text-red-600 font-medium">
-                            {new Date(training.scheduledDate).toLocaleDateString()}
+                            {new Date(employee.assignedDate).toLocaleDateString()}
                           </div>
                         </div>
                       );
@@ -519,19 +515,16 @@ export default function Dashboard() {
           <CardContent>
             <ul className="space-y-3">
               {employees
-                .filter(e => e.level1AwardedDate || e.level2AwardedDate || e.level3AwardedDate || e.consultantAwardedDate || e.coachAwardedDate)
+                .filter(e => e.secureCareAwardedDate)
                 .sort((a, b) => {
-                  const aDate = a.level1AwardedDate || a.level2AwardedDate || a.level3AwardedDate || a.consultantAwardedDate || a.coachAwardedDate;
-                  const bDate = b.level1AwardedDate || b.level2AwardedDate || b.level3AwardedDate || b.consultantAwardedDate || b.coachAwardedDate;
+                  const aDate = new Date(a.secureCareAwardedDate);
+                  const bDate = new Date(b.secureCareAwardedDate);
                   return bDate.getTime() - aDate.getTime();
                 })
                 .slice(0, 5)
                 .map((employee, index) => {
-                  const awardDate = employee.level1AwardedDate || employee.level2AwardedDate || employee.level3AwardedDate || employee.consultantAwardedDate || employee.coachAwardedDate;
-                  const level = employee.coachAwardedDate ? 'Coach' : 
-                               employee.consultantAwardedDate ? 'Consultant' : 
-                               employee.level3AwardedDate ? 'Level 3' : 
-                               employee.level2AwardedDate ? 'Level 2' : 'Level 1';
+                  const awardDate = new Date(employee.secureCareAwardedDate);
+                  const level = employee.awardType || 'Level 1';
                   
                   const daysAgo = Math.floor((new Date().getTime() - awardDate.getTime()) / (1000 * 60 * 60 * 24));
                   const timeText = daysAgo === 0 ? 'Today' : daysAgo === 1 ? 'Yesterday' : `${daysAgo} days ago`;
@@ -543,7 +536,7 @@ export default function Dashboard() {
                     </li>
                   );
                 })}
-              {employees.filter(e => e.level1AwardedDate || e.level2AwardedDate || e.level3AwardedDate || e.consultantAwardedDate || e.coachAwardedDate).length === 0 && (
+              {employees.filter(e => e.secureCareAwardedDate).length === 0 && (
                 <li className="text-center text-muted-foreground py-4">
                   No recent activity
                 </li>
