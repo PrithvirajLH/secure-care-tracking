@@ -149,6 +149,46 @@ class SecureCareAPI {
     return response.json();
   }
 
+  // Update employee notes
+  async updateEmployeeNotes(employeeId: string, notes: string): Promise<{ success: boolean; message: string }> {
+    const response = await fetch(`${this.baseURL}/securecare/update-notes`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        employeeId,
+        notes
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to update notes: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  // Update employee advisor
+  async updateEmployeeAdvisor(employeeId: string, advisorId: number | null): Promise<{ success: boolean; message: string }> {
+    const response = await fetch(`${this.baseURL}/securecare/update-advisor`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        employeeId,
+        advisorId
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to update advisor: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
   // Legacy compatibility methods
   async getAllTrainingData(): Promise<TrainingData[]> {
     // This would need to be implemented if still needed

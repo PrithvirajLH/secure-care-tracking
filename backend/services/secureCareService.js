@@ -245,6 +245,46 @@ class SecureCareService {
     return result.recordset;
   }
   
+  // Update employee notes
+  async updateEmployeeNotes(employeeId, notes) {
+    const pool = await getPool();
+    const request = pool.request();
+    request.input('employeeId', sql.Int, employeeId);
+    request.input('notes', sql.VarChar, notes || null);
+    
+    const result = await request.query(`
+      UPDATE dbo.SecureCareEmployee 
+      SET notes = @notes 
+      WHERE employeeId = @employeeId
+    `);
+    
+    if (result.rowsAffected[0] === 0) {
+      throw new Error('Employee not found');
+    }
+    
+    return { success: true, message: 'Notes updated successfully' };
+  }
+
+  // Update employee advisor
+  async updateEmployeeAdvisor(employeeId, advisorId) {
+    const pool = await getPool();
+    const request = pool.request();
+    request.input('employeeId', sql.Int, employeeId);
+    request.input('advisorId', sql.Int, advisorId || null);
+    
+    const result = await request.query(`
+      UPDATE dbo.SecureCareEmployee 
+      SET advisorId = @advisorId 
+      WHERE employeeId = @employeeId
+    `);
+    
+    if (result.rowsAffected[0] === 0) {
+      throw new Error('Employee not found');
+    }
+    
+    return { success: true, message: 'Advisor updated successfully' };
+  }
+
   // Get employee by ID
   async getEmployeeById(employeeId) {
     const pool = await getPool();

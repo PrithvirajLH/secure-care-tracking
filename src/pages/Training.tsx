@@ -22,11 +22,23 @@ import {
   Star,
   TrendingUp,
   Filter,
-  X
+  X,
+  MessageSquare,
+  UserCheck,
+  Edit3,
+  Save,
+  ChevronDown
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { ShineBorder } from "@/components/magicui/shine-border";
+import { motion, AnimatePresence } from "framer-motion";
+import { EnhancedSelect } from "@/components/ui/enhanced-select";
 
 import { toast } from "sonner";
 import { useTrainingData } from "@/hooks/useTrainingData";
@@ -46,6 +58,7 @@ import {
   LevelConfig,
   getLevelFromTabKey,
   getTabKeyFromLevel,
+  NOTES_OPTIONS,
   type AwardType 
 } from "@/config/awardTypes";
 
@@ -75,6 +88,14 @@ export default function Training() {
   const [facilityFilter, setFacilityFilter] = useState<string>("all");
   const [areaFilter, setAreaFilter] = useState<string>("all");
   const [reqStatusFilters, setReqStatusFilters] = useState<Record<string, 'all' | 'completed' | 'scheduled' | 'pending'>>({});
+  
+  // Enhanced UI state
+  const [advisors, setAdvisors] = useState<any[]>([]);
+  const [isLoadingAdvisors, setIsLoadingAdvisors] = useState(false);
+  const [editingNotes, setEditingNotes] = useState<string | null>(null);
+  const [editingAdvisor, setEditingAdvisor] = useState<string | null>(null);
+  const [tempNotes, setTempNotes] = useState<string>("");
+  const [tempAdvisor, setTempAdvisor] = useState<string>("");
   const [scheduledDates, setScheduledDates] = useState<{[key: string]: Date}>({});
   const [completedDates, setCompletedDates] = useState<{[key: string]: Date}>({});
   const [openDatePicker, setOpenDatePicker] = useState<string | null>(null);
@@ -86,6 +107,16 @@ export default function Training() {
   const [currentPopupEmployee, setCurrentPopupEmployee] = useState<any>(null);
   const [currentPopupFieldKey, setCurrentPopupFieldKey] = useState<string | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  
+  // Column visibility controls with localStorage persistence
+  const [showNotesColumn, setShowNotesColumn] = useState<boolean>(() => {
+    const saved = localStorage.getItem('showNotesColumn');
+    return saved ? JSON.parse(saved) : false;
+  });
+  const [showAdvisorColumn, setShowAdvisorColumn] = useState<boolean>(() => {
+    const saved = localStorage.getItem('showAdvisorColumn');
+    return saved ? JSON.parse(saved) : false;
+  });
   
   // Click outside handler for date pickers
   useEffect(() => {
@@ -139,6 +170,73 @@ export default function Training() {
     }
   }, [query]);
 
+  // Load advisors when component mounts or when needed
+  const loadAdvisors = useCallback(async () => {
+    if (advisors.length > 0) return; // Already loaded
+    
+    setIsLoadingAdvisors(true);
+    try {
+      const advisorList = await trainingAPI.getAdvisors();
+      setAdvisors(advisorList);
+    } catch (error) {
+      console.error('Failed to load advisors:', error);
+      toast.error('Failed to load advisors');
+    } finally {
+      setIsLoadingAdvisors(false);
+    }
+  }, [advisors.length]);
+
+  // Enhanced notes editing handlers
+  const handleEditNotes = (employeeId: string, currentNotes: string) => {
+    setEditingNotes(employeeId);
+    setTempNotes(currentNotes || '');
+  };
+
+  const handleSaveNotes = async (employeeId: string) => {
+    try {
+      await trainingAPI.updateEmployeeNotes(employeeId, tempNotes);
+      toast.success('Notes updated successfully');
+      setEditingNotes(null);
+      setTempNotes('');
+      // Invalidate queries to refresh data without page reload
+      window.dispatchEvent(new CustomEvent('refreshEmployees'));
+    } catch (error) {
+      console.error('Failed to update notes:', error);
+      toast.error('Failed to update notes');
+    }
+  };
+
+  const handleCancelNotes = () => {
+    setEditingNotes(null);
+    setTempNotes('');
+  };
+
+  // Enhanced advisor editing handlers
+  const handleEditAdvisor = (employeeId: string, currentAdvisorId: string) => {
+    setEditingAdvisor(employeeId);
+    setTempAdvisor(currentAdvisorId || 'none');
+  };
+
+  const handleSaveAdvisor = async (employeeId: string) => {
+    try {
+      const advisorId = (tempAdvisor === '' || tempAdvisor === 'none') ? null : parseInt(tempAdvisor);
+      await trainingAPI.updateEmployeeAdvisor(employeeId, advisorId);
+      toast.success('Advisor updated successfully');
+      setEditingAdvisor(null);
+      setTempAdvisor('');
+      // Invalidate queries to refresh data without page reload
+      window.dispatchEvent(new CustomEvent('refreshEmployees'));
+    } catch (error) {
+      console.error('Failed to update advisor:', error);
+      toast.error('Failed to update advisor');
+    }
+  };
+
+  const handleCancelAdvisor = () => {
+    setEditingAdvisor(null);
+    setTempAdvisor('none');
+  };
+
   // Server-side pagination with filters
   const filters = useMemo(() => ({
     level: activeTab,
@@ -156,7 +254,8 @@ export default function Training() {
     setCurrentPage,
     totalPages,
     totalEmployees,
-    isFetching
+    isFetching,
+    refetch
   } = useEmployees(filters, itemsPerPage);
 
   // Get current level configuration
@@ -164,6 +263,19 @@ export default function Training() {
   const currentLevelConfig = LevelConfig[currentLevel];
   const currentColumns = LevelColumns[currentLevel];
   const currentFieldMapping = LevelFieldMapping[currentLevel];
+  
+  // Filter columns based on visibility settings (only for levels 2-5)
+  const filteredColumns = useMemo(() => {
+    if (currentLevel === 'Level 1') {
+      return currentColumns; // Level 1 doesn't have Notes/Advisor columns
+    }
+    
+    return currentColumns.filter(column => {
+      if (column === 'Notes' && !showNotesColumn) return false;
+      if (column === 'Advisor' && !showAdvisorColumn) return false;
+      return true;
+    });
+  }, [currentColumns, showNotesColumn, showAdvisorColumn, currentLevel]);
 
   // Reset to page 1 when filters change (excluding search to prevent focus loss)
   useEffect(() => {
@@ -185,14 +297,41 @@ export default function Training() {
     setQuery('');
     setSearchQuery('');
     const next: Record<string, 'all' | 'completed' | 'scheduled' | 'pending'> = {};
-    currentColumns.forEach(col => {
+    filteredColumns.forEach(col => {
       const fieldKey = currentFieldMapping[col];
       if (fieldKey) {
         next[fieldKey] = 'all';
       }
     });
     setReqStatusFilters(next);
-  }, [activeTab, setCurrentPage]);
+  }, [activeTab, setCurrentPage, filteredColumns, currentFieldMapping]);
+
+  // Load advisors when component mounts
+  useEffect(() => {
+    loadAdvisors();
+  }, [loadAdvisors]);
+
+  // Persist column visibility state to localStorage
+  useEffect(() => {
+    localStorage.setItem('showNotesColumn', JSON.stringify(showNotesColumn));
+  }, [showNotesColumn]);
+
+  useEffect(() => {
+    localStorage.setItem('showAdvisorColumn', JSON.stringify(showAdvisorColumn));
+  }, [showAdvisorColumn]);
+
+  // Listen for refresh events to update data without page reload
+  useEffect(() => {
+    const handleRefresh = () => {
+      // Trigger a refetch of the current data
+      refetch();
+    };
+
+    window.addEventListener('refreshEmployees', handleRefresh);
+    return () => {
+      window.removeEventListener('refreshEmployees', handleRefresh);
+    };
+  }, [refetch]);
 
   // Removed old hash-based navigation - now using URL search params
 
@@ -280,7 +419,7 @@ export default function Training() {
   const filteredEmployees = useMemo(() => {
     const filtered = currentEmployees.filter(emp => {
       // Apply per-requirement filters
-      for (const column of currentColumns) {
+      for (const column of filteredColumns) {
         const fieldKey = currentFieldMapping[column];
         if (!fieldKey) continue;
         
@@ -294,26 +433,26 @@ export default function Training() {
     });
     
     return filtered;
-  }, [currentEmployees, reqStatusFilters, currentColumns, currentFieldMapping, scheduledDates, completedDates]);
+  }, [currentEmployees, reqStatusFilters, filteredColumns, currentFieldMapping, scheduledDates, completedDates]);
 
   const isAnyFilterActive = useMemo(() => {
     if (facilityFilter !== 'all' || areaFilter !== 'all') return true;
-    return currentColumns.some(col => {
+    return filteredColumns.some(col => {
       const fieldKey = currentFieldMapping[col];
       return fieldKey && (reqStatusFilters[fieldKey] || 'all') !== 'all';
     });
-  }, [facilityFilter, areaFilter, reqStatusFilters, currentColumns, currentFieldMapping]);
+  }, [facilityFilter, areaFilter, reqStatusFilters, filteredColumns, currentFieldMapping]);
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (facilityFilter !== 'all') count++;
     if (areaFilter !== 'all') count++;
-    count += currentColumns.reduce((acc, col) => {
+    count += filteredColumns.reduce((acc, col) => {
       const fieldKey = currentFieldMapping[col];
       return acc + (fieldKey && ((reqStatusFilters[fieldKey] || 'all') !== 'all') ? 1 : 0);
     }, 0);
     return count;
-  }, [facilityFilter, areaFilter, reqStatusFilters, currentColumns, currentFieldMapping]);
+  }, [facilityFilter, areaFilter, reqStatusFilters, filteredColumns, currentFieldMapping]);
 
   const clearFilters = () => {
     setFacilityFilter('all');
@@ -321,7 +460,7 @@ export default function Training() {
     setQuery('');
     setSearchQuery('');
     const reset: Record<string, 'all' | 'completed' | 'scheduled' | 'pending'> = {};
-    currentColumns.forEach(col => {
+    filteredColumns.forEach(col => {
       const fieldKey = currentFieldMapping[col];
       if (fieldKey) {
         reset[fieldKey] = 'all';
@@ -333,6 +472,67 @@ export default function Training() {
   // Helper function to check if conference is rejected
   const isConferenceRejected = (employee: any): boolean => {
     return employee.conferenceCompleted && employee.awaiting === null;
+  };
+
+  // Standardized badge component for consistent sizing
+  const StatusBadge = ({ 
+    children, 
+    variant = 'default', 
+    onClick, 
+    disabled = false, 
+    className = '',
+    icon: Icon,
+    text,
+    date
+  }: {
+    children?: React.ReactNode;
+    variant?: 'default' | 'pending' | 'scheduled' | 'completed' | 'awaiting' | 'rejected' | 'awarded' | 'notes' | 'advisor';
+    onClick?: (e?: React.MouseEvent) => void;
+    disabled?: boolean;
+    className?: string;
+    icon?: React.ComponentType<{ className?: string }>;
+    text?: string;
+    date?: string;
+  }) => {
+    const baseClasses = "inline-flex items-center justify-center gap-2 px-3 py-2 rounded-full text-sm font-semibold shadow-sm min-w-[120px] h-8 transition-colors";
+    
+    const variantClasses = {
+      default: "bg-gray-100 text-gray-600 hover:bg-gray-200",
+      pending: "bg-gray-100 text-gray-600 hover:bg-gray-200",
+      scheduled: "bg-gradient-to-r from-yellow-500 to-orange-500 text-white hover:from-yellow-600 hover:to-orange-600",
+      completed: "bg-gradient-to-r from-blue-500 to-indigo-500 text-white",
+      awaiting: "bg-gradient-to-r from-amber-500 to-yellow-500 text-white hover:from-amber-600 hover:to-yellow-600",
+      rejected: "bg-gradient-to-r from-red-500 to-pink-500 text-white",
+      awarded: "bg-gradient-to-r from-blue-500 to-indigo-500 text-white",
+      notes: "bg-gradient-to-r from-cyan-50 to-blue-50 text-cyan-700 border border-cyan-200 hover:from-cyan-100 hover:to-blue-100 hover:border-cyan-300",
+      advisor: "bg-gradient-to-r from-purple-50 to-indigo-50 text-purple-700 border border-purple-200 hover:from-purple-100 hover:to-indigo-100 hover:border-purple-300"
+    };
+
+    const disabledClasses = disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer";
+    
+    const content = (
+      <>
+        {Icon && <Icon className="w-4 h-4" />}
+        <span className="text-sm font-medium">{text}</span>
+      </>
+    );
+
+    if (onClick && !disabled) {
+      return (
+        <button
+          onClick={onClick}
+          className={`${baseClasses} ${variantClasses[variant]} ${disabledClasses} ${className}`}
+        >
+          {content}
+        </button>
+      );
+    }
+
+    return (
+      <div className={`${baseClasses} ${variantClasses[variant]} ${disabledClasses} ${className}`}>
+        {content}
+      </div>
+    );
   };
 
   // Status badge rendering using new configuration
@@ -354,96 +554,88 @@ export default function Training() {
         const isPending = awardStatus === 'Pending';
         
         return (
-          <div className={`inline-flex items-center justify-center gap-2 px-2 py-1 rounded-full text-sm font-semibold shadow-sm min-w-[100px] ${
-            isPending 
-              ? 'bg-gray-100 text-gray-600' 
-              : 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white'
-          }`}>
-            {!isPending && <CheckCircle className="w-4 h-4" />}
-            {isPending && <Clock className="w-4 h-4" />}
-            <span className="text-sm font-medium">
-              {awardStatus}
-              </span>
-          </div>
+          <StatusBadge
+            variant={isPending ? 'pending' : 'awarded'}
+            icon={isPending ? Clock : CheckCircle}
+            text={awardStatus}
+          />
         );
       }
 
       if (value) {
         return (
-          <div className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-3 py-2 rounded-full text-sm font-semibold shadow-sm min-w-[100px]">
-            <CheckCircle className="w-4 h-4" />
-            <span className="text-sm font-medium">
-              {fmt.date(value)}
-            </span>
-          </div>
+          <StatusBadge
+            variant="completed"
+            icon={CheckCircle}
+            text={fmt.date(value)}
+          />
         );
       }
 
-        return (
-        <div className="inline-flex items-center justify-center gap-2 bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-sm font-semibold min-w-[100px]">
-          <Clock className="w-4 h-4" />
-          <span className="text-sm">Pending</span>
-          </div>
-        );
-      }
+      return (
+        <StatusBadge
+          variant="pending"
+          icon={Clock}
+          text="Pending"
+        />
+      );
+    }
 
     // Conference approval logic for other levels
     if (fieldKey === 'conferenceCompleted') {
       const status = fmt.conference(employee.awaiting, value);
       
       if (status.startsWith('Awaiting')) {
-      return (
-        <div className="flex flex-col items-center gap-1 w-full">
-          <button
+        return (
+          <div className="flex flex-col items-center gap-1 w-full">
+            <StatusBadge
+              variant="awaiting"
+              icon={Clock}
+              text="Awaiting"
               onClick={(e) => {
-                const rect = e.currentTarget.getBoundingClientRect();
+                const rect = (e.target as HTMLElement).getBoundingClientRect();
                 setPopupPosition({ x: rect.left + rect.width / 2, y: rect.bottom + 8 });
                 setCurrentPopupEmployee(employee);
                 setCurrentPopupFieldKey(fieldKey);
                 setOpenDatePicker(key);
               }}
-              className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-amber-500 to-yellow-500 text-white px-2 py-1 rounded-full text-sm font-semibold shadow-sm min-w-[100px] hover:from-amber-600 hover:to-yellow-600 cursor-pointer transition-colors"
-          >
-            <Clock className="w-4 h-4" />
-              <span className="text-sm">Awaiting</span>
-          </button>
-            <div className="inline-flex items-center justify-center gap-1 bg-amber-50 border border-amber-200 rounded px-2 py-1 min-w-[100px]">
-              <span className="text-sm text-amber-700 font-medium">
+            />
+            <div className="inline-flex items-center justify-center gap-1 bg-amber-50 border border-amber-200 rounded px-3 py-1 min-w-[120px] h-6">
+              <span className="text-xs text-amber-700 font-medium">
                 {fmt.date(value)}
               </span>
             </div>
-        </div>
-      );
-    }
+          </div>
+        );
+      }
 
       if (status === 'Rejected') {
         return (
-          <div className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-red-500 to-pink-500 text-white px-3 py-2 rounded-full text-sm font-semibold shadow-sm min-w-[100px]">
-            <AlertCircle className="w-4 h-4" />
-            <span className="text-sm">Rejected</span>
-          </div>
+          <StatusBadge
+            variant="rejected"
+            icon={AlertCircle}
+            text="Rejected"
+          />
         );
       }
       
       if (value) {
         return (
-          <div className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-3 py-2 rounded-full text-sm font-semibold shadow-sm min-w-[100px]">
-            <CheckCircle className="w-4 h-4" />
-            <span className="text-sm font-medium">
-              {fmt.date(value)}
-              </span>
-          </div>
+          <StatusBadge
+            variant="completed"
+            icon={CheckCircle}
+            text={fmt.date(value)}
+          />
         );
       }
       
-        return (
-            <button
+      return (
+        <StatusBadge
+          variant="pending"
+          icon={Clock}
+          text="Pending"
           onClick={() => setOpenDatePicker(key)}
-          className="inline-flex items-center justify-center gap-2 bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-sm font-semibold shadow-sm min-w-[100px] hover:bg-gray-200 cursor-pointer transition-colors"
-            >
-              <Clock className="w-4 h-4" />
-          <span className="text-sm">Pending</span>
-            </button>
+        />
       );
     }
 
@@ -452,20 +644,14 @@ export default function Training() {
       const awardStatus = fmt.awarded(employee.secureCareAwarded, employee.secureCareAwardedDate);
       const isPending = awardStatus === 'Pending';
       
-        return (
-        <div className={`inline-flex items-center justify-center gap-2 px-2 py-1 rounded-full text-sm font-semibold shadow-sm min-w-[100px] ${
-          isPending 
-            ? 'bg-gray-100 text-gray-600' 
-            : 'bg-gradient-to-r from-blue-500 to-indigo-500 text-white'
-        }`}>
-          {!isPending && <CheckCircle className="w-4 h-4" />}
-          {isPending && <Clock className="w-4 h-4" />}
-          <span className="text-sm font-medium">
-            {awardStatus}
-                </span>
-          </div>
-        );
-      }
+      return (
+        <StatusBadge
+          variant={isPending ? 'pending' : 'awarded'}
+          icon={isPending ? Clock : CheckCircle}
+          text={awardStatus}
+        />
+      );
+    }
 
     // Regular training items with schedule/complete workflow
     const scheduleFieldKey = ScheduleFieldMapping[fieldKey];
@@ -474,69 +660,56 @@ export default function Training() {
     const status = fmt.scheduledOrDone(scheduledValue, value);
     
     if (value) {
-             return (
-        <div className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-3 py-2 rounded-full text-sm font-semibold shadow-sm min-w-[100px]">
-          <CheckCircle className="w-4 h-4" />
-          <span className="text-sm font-medium">
-            {fmt.date(value)}
-          </span>
-               </div>
-             );
-        }
+      return (
+        <StatusBadge
+          variant="completed"
+          icon={CheckCircle}
+          text={fmt.date(value)}
+        />
+      );
+    }
         
     if (scheduledValue) {
-           return (
-             <div className="flex flex-col items-center gap-1 w-full">
-               <button
+      return (
+        <div className="flex flex-col items-center gap-1 w-full">
+          <StatusBadge
+            variant="scheduled"
+            icon={Clock}
+            text="Scheduled"
             onClick={conferenceRejected ? undefined : (e) => {
-              const rect = e.currentTarget.getBoundingClientRect();
+              const rect = (e.target as HTMLElement).getBoundingClientRect();
               setPopupPosition({ x: rect.left + rect.width / 2, y: rect.bottom + 8 });
               setCurrentPopupEmployee(employee);
               setCurrentPopupFieldKey(fieldKey);
               setOpenDatePicker(key);
             }}
             disabled={conferenceRejected}
-            className={`inline-flex items-center justify-center gap-2 px-2 py-1 rounded-full text-sm font-semibold shadow-sm min-w-[100px] transition-colors ${
-              conferenceRejected 
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
-                : 'bg-gradient-to-r from-yellow-500 to-orange-500 text-white hover:from-yellow-600 hover:to-orange-600 cursor-pointer'
-            }`}
-               >
-                 <Clock className="w-4 h-4" />
-                 <span className="text-sm">Scheduled</span>
-               </button>
-          <div className="inline-flex items-center justify-center gap-1 bg-yellow-50 border border-yellow-200 rounded px-2 py-1 min-w-[100px]">
-                 <span className="text-sm text-yellow-700 font-medium">
+          />
+          <div className="inline-flex items-center justify-center gap-1 bg-yellow-50 border border-yellow-200 rounded px-3 py-1 min-w-[120px] h-6">
+            <span className="text-xs text-yellow-700 font-medium">
               {fmt.date(scheduledValue)}
-                 </span>
-               </div>
-            </div>
-          );
-        }
+            </span>
+          </div>
+        </div>
+      );
+    }
          
-         return (
-           <div>
-             <button
-          onClick={conferenceRejected ? undefined : (e) => {
-            const rect = e.currentTarget.getBoundingClientRect();
-            setPopupPosition({ x: rect.left + rect.width / 2, y: rect.bottom + 8 });
-            setCurrentPopupEmployee(employee);
-            setCurrentPopupFieldKey(fieldKey);
-            setOpenDatePicker(key);
-          }}
-               disabled={isScheduling || conferenceRejected}
-          className={`inline-flex items-center justify-center gap-2 px-2 py-1 rounded-full text-sm font-semibold shadow-sm min-w-[100px] transition-colors ${
-            conferenceRejected 
-              ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed'
-          }`}
-             >
-               <Clock className="w-4 h-4" />
-               <span className="text-sm">{isScheduling ? 'Scheduling...' : 'Pending'}</span>
-             </button>
-           </div>
-         );
-       };
+    return (
+      <StatusBadge
+        variant="pending"
+        icon={Clock}
+        text={isScheduling ? 'Scheduling...' : 'Pending'}
+        onClick={conferenceRejected ? undefined : (e) => {
+          const rect = (e.target as HTMLElement).getBoundingClientRect();
+          setPopupPosition({ x: rect.left + rect.width / 2, y: rect.bottom + 8 });
+          setCurrentPopupEmployee(employee);
+          setCurrentPopupFieldKey(fieldKey);
+          setOpenDatePicker(key);
+        }}
+        disabled={isScheduling || conferenceRejected}
+      />
+    );
+  };
 
   const levelConfigMap = {
     "level-1": { title: "Level 1", icon: Users, color: "text-blue-600" },
@@ -601,56 +774,132 @@ export default function Training() {
         {/* Sticky Table Header */}
           <div className="sticky top-0 z-20 bg-purple-100 border-b border-purple-200 shadow-md">
            <div className="px-3 sm:px-4 md:px-6 py-2 flex items-center justify-between gap-2 sm:gap-3">
-             <div className="flex-1 max-w-[200px] sm:max-w-[300px] md:max-w-sm pt-5">
+             {/* Left side - Search Field */}
+             <div className="flex items-center pt-5">
                <div className="relative">
-                 <div className="relative">
-                   <Input
-                     ref={searchInputRef}
-                     value={query}
-                     onChange={handleSearchChange}
-                     onKeyDown={handleSearchKeyDown}
-                     placeholder="Search employee by name or ID (Press Enter to search)"
-                     className="h-8 sm:h-9 text-sm sm:text-base pr-8 bg-white/90 border-gray-300 shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                   />
-                   {query && (
-                     <button
-                       onClick={() => {
-                         setQuery('');
-                         setSearchQuery('');
-                       }}
-                       className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                     >
-                       <X className="w-4 h-4" />
-                     </button>
-                   )}
+                 <ShineBorder
+                   borderWidth={1}
+                   duration={20}
+                   shineColor={["#8b5cf6", "#a855f7", "#c084fc"]}
+                   className="rounded-lg"
+                 />
+                 <div className="flex items-center gap-3 p-3 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-lg border border-purple-200">
+                   <div className="flex items-center gap-2">
+                     <Filter className="w-4 h-4 text-purple-600" />
+                     <span className="text-sm font-medium text-purple-900">Search:</span>
+                   </div>
+                   <div className="relative w-[200px]">
+                     <Input
+                       ref={searchInputRef}
+                       value={query}
+                       onChange={handleSearchChange}
+                       onKeyDown={handleSearchKeyDown}
+                       placeholder="Employee name or ID"
+                       className="h-8 text-sm pr-8 bg-white border-purple-200 shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                     />
+                     {query && (
+                       <button
+                         onClick={() => {
+                           setQuery('');
+                           setSearchQuery('');
+                         }}
+                         className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                       >
+                         <X className="w-4 h-4" />
+                       </button>
+                     )}
+                   </div>
                  </div>
                </div>
              </div>
-            {isAnyFilterActive && (
-              <Button
-                variant="default"
-                size="sm"
-                onClick={clearFilters}
-                className="h-7 sm:h-8 px-2 sm:px-3 rounded-full bg-purple-600 hover:bg-purple-700 text-white shadow-sm text-xs sm:text-sm"
-              >
-                <X className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
-                <span className="hidden sm:inline">Clear filters</span>
-                <span className="sm:hidden">Clear</span>
-                <span className="ml-1 sm:ml-2 inline-flex items-center justify-center rounded-full bg-white/20 px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-[10px] font-medium">
-                  {activeFilterCount}
-                </span>
-              </Button>
-            )}
+             
+             {/* Right side - Show Columns with Clear Filters overlay */}
+             <div className="relative flex items-end pt-5">
+               {/* Enhanced Column Visibility Controls (only for levels 2-5) */}
+               {currentLevel !== 'Level 1' && (
+                 <div className="relative">
+                   <ShineBorder
+                     borderWidth={1}
+                     duration={20}
+                     shineColor={["#8b5cf6", "#a855f7", "#c084fc"]}
+                     className="rounded-lg"
+                   />
+                   <div className="flex items-center gap-4 p-3 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-lg border border-purple-200">
+                     <div className="flex items-center gap-2">
+                       <Filter className="w-4 h-4 text-purple-600" />
+                       <span className="text-sm font-medium text-purple-900">Show Columns:</span>
+                     </div>
+                     <div className="flex items-center gap-4">
+                       <motion.div
+                         whileHover={{ scale: 1.05 }}
+                         whileTap={{ scale: 0.95 }}
+                         className="flex items-center gap-2"
+                       >
+                         <input
+                           type="checkbox"
+                           id="show-notes"
+                           checked={showNotesColumn}
+                           onChange={(e) => setShowNotesColumn(e.target.checked)}
+                           className="w-4 h-4 text-cyan-600 bg-white border-cyan-300 rounded focus:ring-cyan-500 focus:ring-2"
+                         />
+                         <label htmlFor="show-notes" className="flex items-center gap-1 text-sm font-medium text-cyan-700 cursor-pointer">
+                           <MessageSquare className="w-3 h-3" />
+                           Notes
+                         </label>
+                       </motion.div>
+                       <motion.div
+                         whileHover={{ scale: 1.05 }}
+                         whileTap={{ scale: 0.95 }}
+                         className="flex items-center gap-2"
+                       >
+                         <input
+                           type="checkbox"
+                           id="show-advisor"
+                           checked={showAdvisorColumn}
+                           onChange={(e) => setShowAdvisorColumn(e.target.checked)}
+                           className="w-4 h-4 text-purple-600 bg-white border-purple-300 rounded focus:ring-purple-500 focus:ring-2"
+                         />
+                         <label htmlFor="show-advisor" className="flex items-center gap-1 text-sm font-medium text-purple-700 cursor-pointer">
+                           <UserCheck className="w-3 h-3" />
+                           Advisor
+                         </label>
+                       </motion.div>
+                     </div>
+                   </div>
+                 </div>
+               )}
+
+               {/* Clear filters button - positioned absolutely over the show columns */}
+               {isAnyFilterActive && (
+                 <div className="absolute -top-4 -right-2 z-10">
+                   <Button
+                     variant="default"
+                     size="sm"
+                     onClick={clearFilters}
+                     className="h-7 sm:h-8 px-2 sm:px-3 rounded-full bg-purple-600 hover:bg-purple-700 text-white shadow-lg text-xs sm:text-sm"
+                   >
+                     <X className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" />
+                     <span className="hidden sm:inline">Clear filters</span>
+                     <span className="sm:hidden">Clear</span>
+                     <span className="ml-1 sm:ml-2 inline-flex items-center justify-center rounded-full bg-white/20 px-1.5 sm:px-2 py-0.5 text-[8px] sm:text-[10px] font-medium">
+                       {activeFilterCount}
+                     </span>
+                   </Button>
+                 </div>
+               )}
+             </div>
           </div>
           <div className="px-6">
                      <Table className="table-fixed w-full">
                        <TableHeader>
                          <TableRow className="bg-purple-100 border-b border-purple-200">
-                  {currentColumns.map((column, index) => (
+                  {filteredColumns.map((column, index) => (
                     <TableHead 
                       key={index} 
                       className={`font-bold text-purple-900 py-4 px-4 bg-purple-100 text-base whitespace-pre-line text-center align-middle ${
                         index === 0 ? "w-[12%]" : 
+                        index === 1 ? "w-[8%]" : // Facility column - reduced width
+                        index === 2 ? "w-[6%]" : // Area column - reduced width
                         column.includes("Awarded") ? "w-[12%]" : "w-[10%]"
                       }`}
                     >
@@ -756,12 +1005,12 @@ export default function Training() {
                 <Card className="border-0 shadow-lg flex-1 flex flex-col min-h-0">
                   <CardContent className="p-0 flex-1 flex flex-col min-h-0">
                    {/* Scrollable Table Body */}
-                   <div className="flex-1 overflow-auto min-h-0">
+                   <div className="flex-1 overflow-visible min-h-0">
                      <Table>
                        <TableBody>
                           {filteredEmployees.map((employee, index) => (
                              <TableRow key={employee.employeeId} className={`${index % 2 === 0 ? 'bg-white' : 'bg-purple-50/30'} hover:bg-purple-50/60 transition-all duration-200 border-b border-purple-100`}>
-                              {currentColumns.map((column, colIndex) => {
+                              {filteredColumns.map((column, colIndex) => {
                                 const fieldKey = currentFieldMapping[column];
                                 
                                                                  if (colIndex === 0) { // Employee column
@@ -782,7 +1031,7 @@ export default function Training() {
                                    );
                                 } else if (colIndex === 1) { // Facility column
                                    return (
-                                     <TableCell key={colIndex} className="py-4 px-4 w-[10%] text-center">
+                                     <TableCell key={colIndex} className="py-4 px-4 w-[8%] text-center">
                                   <div className="flex justify-center">
                                     <div className="bg-purple-100 rounded-lg px-2 py-1 inline-block">
                                          <span className="text-sm font-medium text-purple-700">{employee.facility || employee.Facility}</span>
@@ -792,13 +1041,129 @@ export default function Training() {
                                    );
                                 } else if (colIndex === 2) { // Area column
                                    return (
-                                     <TableCell key={colIndex} className="py-4 px-4 w-[10%] text-center">
+                                     <TableCell key={colIndex} className="py-4 px-4 w-[6%] text-center">
                                   <div className="flex justify-center">
                                     <div className="bg-lavender-100 rounded-lg px-2 py-1 inline-block">
                                          <span className="text-sm font-medium text-lavender-700">{employee.area || employee.Area}</span>
                                     </div>
                                   </div>
                                 </TableCell>
+                                   );
+                                } else if (column === 'Notes') { // Enhanced Notes column with click-to-edit
+                                   const isEditingNotes = editingNotes === employee.employeeId.toString();
+                                   const currentNotes = employee.notes || '';
+                                   const selectedNoteOption = NOTES_OPTIONS.find(option => option.value === currentNotes);
+                                   
+                                   return (
+                                     <TableCell key={colIndex} className="py-4 px-4 w-[12%] text-center overflow-visible">
+                                       <div className="flex justify-center">
+                                         {isEditingNotes ? (
+                                           <div className="relative w-[140px]">
+                                             <ShineBorder
+                                               borderWidth={1}
+                                               duration={20}
+                                               shineColor={["#06b6d4", "#0891b2", "#0e7490"]}
+                                               className="rounded-lg"
+                                             />
+                                             <div className="p-1 bg-white rounded-lg border border-cyan-200 shadow-sm">
+                                               <EnhancedSelect
+                                                 value={tempNotes}
+                                                 onValueChange={setTempNotes}
+                                                 options={NOTES_OPTIONS}
+                                                 placeholder="Select..."
+                                                 className="w-full"
+                                               />
+                                               <div className="flex gap-1 mt-2">
+                                                 <Button
+                                                   size="sm"
+                                                   onClick={() => handleSaveNotes(employee.employeeId.toString())}
+                                                   className="h-6 px-2 text-xs bg-cyan-600 hover:bg-cyan-700"
+                                                 >
+                                                   <Save className="w-3 h-3" />
+                                                 </Button>
+                                                 <Button
+                                                   size="sm"
+                                                   variant="outline"
+                                                   onClick={handleCancelNotes}
+                                                   className="h-6 px-2 text-xs"
+                                                 >
+                                                   <X className="w-3 h-3" />
+                                                 </Button>
+                                               </div>
+                                             </div>
+                                           </div>
+                                         ) : (
+                                           <StatusBadge
+                                             variant="notes"
+                                             icon={MessageSquare}
+                                             text={selectedNoteOption?.label || 'Add Notes'}
+                                             onClick={() => handleEditNotes(employee.employeeId.toString(), currentNotes)}
+                                           />
+                                         )}
+                                       </div>
+                                     </TableCell>
+                                   );
+                                } else if (column === 'Advisor') { // Enhanced Advisor column
+                                   const isEditing = editingAdvisor === employee.employeeId.toString();
+                                   const currentAdvisor = advisors.find(a => a.advisorId === employee.advisorId);
+                                   return (
+                                     <TableCell key={colIndex} className="py-4 px-4 w-[12%] text-center">
+                                       <div className="flex justify-center">
+                                         {isEditing ? (
+                                           <div className="relative w-full max-w-[220px]">
+                                             <ShineBorder
+                                               borderWidth={1}
+                                               duration={15}
+                                               shineColor={["#8b5cf6", "#a855f7", "#c084fc"]}
+                                               className="rounded-lg"
+                                             />
+                                             <div className="p-2 bg-white rounded-lg border border-purple-200">
+                                               <Select
+                                                 value={tempAdvisor}
+                                                 onValueChange={setTempAdvisor}
+                                                 disabled={isLoadingAdvisors}
+                                               >
+                                                 <SelectTrigger className="h-10 text-sm">
+                                                   <SelectValue placeholder="Select advisor..." />
+                                                 </SelectTrigger>
+                                                 <SelectContent>
+                                                   <SelectItem value="none">No advisor assigned</SelectItem>
+                                                   {advisors.map((advisor) => (
+                                                     <SelectItem key={advisor.advisorId} value={advisor.advisorId.toString()}>
+                                                       {advisor.fullName}
+                                                     </SelectItem>
+                                                   ))}
+                                                 </SelectContent>
+                                               </Select>
+                                               <div className="flex gap-1 mt-2">
+                                                 <Button
+                                                   size="sm"
+                                                   onClick={() => handleSaveAdvisor(employee.employeeId.toString())}
+                                                   className="h-6 px-2 text-xs bg-purple-600 hover:bg-purple-700"
+                                                 >
+                                                   <Save className="w-3 h-3" />
+                                                 </Button>
+                                                 <Button
+                                                   size="sm"
+                                                   variant="outline"
+                                                   onClick={handleCancelAdvisor}
+                                                   className="h-6 px-2 text-xs"
+                                                 >
+                                                   <X className="w-3 h-3" />
+                                                 </Button>
+                                               </div>
+                                             </div>
+                                           </div>
+                                         ) : (
+                                           <StatusBadge
+                                             variant="advisor"
+                                             icon={UserCheck}
+                                             text={employee.advisorName || currentAdvisor?.fullName || 'Assign Advisor'}
+                                             onClick={() => handleEditAdvisor(employee.employeeId.toString(), employee.advisorId?.toString() || '')}
+                                           />
+                                         )}
+                                       </div>
+                                     </TableCell>
                                    );
                                 } else { // Training requirement columns
                                    return (
@@ -857,10 +1222,13 @@ export default function Training() {
            <div className="flex flex-col gap-2">
              <button
                onClick={() => {
-                 approveConference({ employeeId: currentPopupEmployee.employeeId });
+                 // Close the popup immediately for smooth UX
                  setOpenDatePicker(null);
                  setPopupPosition(null);
                  setCurrentPopupEmployee(null);
+                 
+                 // Approve the conference
+                 approveConference({ employeeId: currentPopupEmployee.employeeId });
                }}
                disabled={isApprovingConference}
                className="inline-flex items-center justify-center gap-2 bg-green-500 text-white px-3 py-2 rounded-lg text-sm font-semibold hover:bg-green-600 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
@@ -870,10 +1238,13 @@ export default function Training() {
              </button>
              <button
                onClick={() => {
-                 rejectConference({ employeeId: currentPopupEmployee.employeeId });
+                 // Close the popup immediately for smooth UX
                  setOpenDatePicker(null);
                  setPopupPosition(null);
                  setCurrentPopupEmployee(null);
+                 
+                 // Reject the conference
+                 rejectConference({ employeeId: currentPopupEmployee.employeeId });
                }}
                disabled={isRejectingConference}
                className="inline-flex items-center justify-center gap-2 bg-red-500 text-white px-3 py-2 rounded-lg text-sm font-semibold hover:bg-red-600 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
@@ -903,11 +1274,14 @@ export default function Training() {
            <div className="flex flex-col gap-2">
              <button
                onClick={() => {
-                 completeTraining({ employeeId: currentPopupEmployee.employeeId, requirementKey: currentPopupFieldKey });
+                 // Close the popup immediately for smooth UX
                  setOpenDatePicker(null);
                  setPopupPosition(null);
                  setCurrentPopupEmployee(null);
                  setCurrentPopupFieldKey(null);
+                 
+                 // Complete the training
+                 completeTraining({ employeeId: currentPopupEmployee.employeeId, requirementKey: currentPopupFieldKey });
                }}
                disabled={isCompleting}
                className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-3 py-2 rounded-lg text-sm font-semibold hover:from-blue-600 hover:to-indigo-600 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
@@ -945,11 +1319,14 @@ export default function Training() {
              date={parseDate(currentPopupEmployee[ScheduleFieldMapping[currentPopupFieldKey]]) || undefined}
              onDateChange={(date) => {
                if (date) {
-                 rescheduleTraining({ employeeId: currentPopupEmployee.employeeId, requirementKey: currentPopupFieldKey, date });
+                 // Close the popup immediately for smooth UX
                  setOpenDatePicker(null);
                  setPopupPosition(null);
                  setCurrentPopupEmployee(null);
                  setCurrentPopupFieldKey(null);
+                 
+                 // Reschedule the training
+                 rescheduleTraining({ employeeId: currentPopupEmployee.employeeId, requirementKey: currentPopupFieldKey, date });
                }
              }}
              placeholder="Reschedule date"
@@ -976,11 +1353,14 @@ export default function Training() {
              date={undefined}
              onDateChange={(date) => {
                if (date) {
-                 scheduleTraining({ employeeId: currentPopupEmployee.employeeId, requirementKey: currentPopupFieldKey, date });
+                 // Close the popup immediately for smooth UX
                  setOpenDatePicker(null);
                  setPopupPosition(null);
                  setCurrentPopupEmployee(null);
                  setCurrentPopupFieldKey(null);
+                 
+                 // Schedule the training
+                 scheduleTraining({ employeeId: currentPopupEmployee.employeeId, requirementKey: currentPopupFieldKey, date });
                }
              }}
              placeholder="Schedule date"

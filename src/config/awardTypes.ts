@@ -13,7 +13,9 @@ export const LevelColumns: Record<AwardType, string[]> = {
     'Standing\nVideo',
     'Sleeping/Sitting\nVideo',
     'Feeding\nVideo',
-    'Level 2 Awarded'
+    'Level 2 Awarded',
+    'Notes',
+    'Advisor'
   ],
   'Level 3': [
     'Employee','Facility','Area',
@@ -21,19 +23,25 @@ export const LevelColumns: Record<AwardType, string[]> = {
     'Sitting/Standing/\nApproaching',
     'No Hand/No\nSpeak',
     'Challenge\nSleeping',
-    'Level 3 Awarded'
+    'Level 3 Awarded',
+    'Notes',
+    'Advisor'
   ],
   'Consultant': [
     'Employee','Facility','Area',
     'Conference\nCompleted',
     'Coaching\nSession 1','Coaching\nSession 2','Coaching\nSession 3',
-    'Consultant Awarded'
+    'Consultant Awarded',
+    'Notes',
+    'Advisor'
   ],
   'Coach': [
     'Employee','Facility','Area',
     'Conference\nCompleted',
     'Coaching\nSession 1','Coaching\nSession 2','Coaching\nSession 3',
-    'Coach Awarded'
+    'Coach Awarded',
+    'Notes',
+    'Advisor'
   ]
 };
 
@@ -55,7 +63,9 @@ export const LevelFieldMapping: Record<AwardType, Record<string, string>> = {
     'Standing\nVideo': 'standingVideo',
     'Sleeping/Sitting\nVideo': 'sleepingVideo',
     'Feeding\nVideo': 'feedGradVideo',
-    'Level 2 Awarded': 'secureCareAwarded'
+    'Level 2 Awarded': 'secureCareAwarded',
+    'Notes': 'notes',
+    'Advisor': 'advisorName'
   },
   'Level 3': {
     'Employee': 'name',
@@ -65,7 +75,9 @@ export const LevelFieldMapping: Record<AwardType, Record<string, string>> = {
     'Sitting/Standing/\nApproaching': 'standingVideo',
     'No Hand/No\nSpeak': 'noHandnoSpeak',
     'Challenge\nSleeping': 'sleepingVideo',
-    'Level 3 Awarded': 'secureCareAwarded'
+    'Level 3 Awarded': 'secureCareAwarded',
+    'Notes': 'notes',
+    'Advisor': 'advisorName'
   },
   'Consultant': {
     'Employee': 'name',
@@ -75,7 +87,9 @@ export const LevelFieldMapping: Record<AwardType, Record<string, string>> = {
     'Coaching\nSession 1': 'session1',
     'Coaching\nSession 2': 'session2',
     'Coaching\nSession 3': 'session3',
-    'Consultant Awarded': 'secureCareAwarded'
+    'Consultant Awarded': 'secureCareAwarded',
+    'Notes': 'notes',
+    'Advisor': 'advisorName'
   },
   'Coach': {
     'Employee': 'name',
@@ -85,7 +99,9 @@ export const LevelFieldMapping: Record<AwardType, Record<string, string>> = {
     'Coaching\nSession 1': 'session1',
     'Coaching\nSession 2': 'session2',
     'Coaching\nSession 3': 'session3',
-    'Coach Awarded': 'secureCareAwarded'
+    'Coach Awarded': 'secureCareAwarded',
+    'Notes': 'notes',
+    'Advisor': 'advisorName'
   }
 };
 
@@ -211,3 +227,12 @@ export const getTabKeyFromLevel = (level: AwardType): string => {
   };
   return mapping[level] || 'level-1';
 };
+
+// Notes options for dropdown
+export const NOTES_OPTIONS = [
+  { value: '', label: 'Select...' },
+  { value: 'PRN', label: 'PRN' },
+  { value: 'FMLA', label: 'FMLA' },
+  { value: 'Spanish', label: 'Spanish' },
+  { value: 'Exempt ADA', label: 'Exempt ADA' }
+];

@@ -11,6 +11,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Textarea } from "@/components/ui/textarea";
+import { ShineBorder } from "@/components/magicui/shine-border";
 import { 
   Users, 
   UserCheck, 
@@ -702,23 +704,54 @@ export default function AdvisorManagement() {
 
       {/* Notes Modal */}
       <Dialog open={isNotesOpen} onOpenChange={setIsNotesOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Edit Notes</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <MessageSquare className="w-5 h-5 text-cyan-600" />
+              Edit Notes
+            </DialogTitle>
             <DialogDescription>
               Add or update notes for this assignment.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <Label>Notes</Label>
-            <textarea
-              className="w-full border rounded-md p-2 h-40"
-              value={notesText}
-              onChange={(e) => setNotesText(e.target.value)}
-            />
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setIsNotesOpen(false)}>Cancel</Button>
-              <Button onClick={saveNotes}>Save</Button>
+          <div className="space-y-6">
+            <div className="relative">
+              <ShineBorder
+                borderWidth={1}
+                duration={20}
+                shineColor={["#06b6d4", "#0891b2", "#0e7490"]}
+                className="rounded-lg"
+              />
+              <div className="p-4 bg-white rounded-lg">
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="assignment-notes" className="text-sm font-medium">
+                      Assignment Notes
+                    </Label>
+                    <Textarea
+                      id="assignment-notes"
+                      value={notesText}
+                      onChange={(e) => setNotesText(e.target.value)}
+                      placeholder="Add notes about this assignment..."
+                      className="min-h-[120px] resize-none"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs text-muted-foreground">
+                      {notesText.length} characters
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="outline" onClick={() => setIsNotesOpen(false)}>
+                        Cancel
+                      </Button>
+                      <Button onClick={saveNotes} className="bg-cyan-600 hover:bg-cyan-700">
+                        <MessageSquare className="w-4 h-4 mr-2" />
+                        Save Notes
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </DialogContent>
@@ -726,23 +759,47 @@ export default function AdvisorManagement() {
 
       {/* Edit Advisor Modal */}
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Edit Advisor</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <UserCheck className="w-5 h-5 text-purple-600" />
+              Edit Advisor
+            </DialogTitle>
             <DialogDescription>Rename advisor across assignments</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>Advisor Name</Label>
-              <input
-                className="w-full border rounded-md p-2"
-                value={editAdvisorNewName}
-                onChange={(e) => setEditAdvisorNewName(e.target.value)}
+          <div className="space-y-6">
+            <div className="relative">
+              <ShineBorder
+                borderWidth={1}
+                duration={20}
+                shineColor={["#8b5cf6", "#a855f7", "#c084fc"]}
+                className="rounded-lg"
               />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setIsEditOpen(false)}>Cancel</Button>
-              <Button onClick={saveEditAdvisor}>Save</Button>
+              <div className="p-4 bg-white rounded-lg">
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="advisor-name" className="text-sm font-medium">
+                      Advisor Name
+                    </Label>
+                    <Input
+                      id="advisor-name"
+                      value={editAdvisorNewName}
+                      onChange={(e) => setEditAdvisorNewName(e.target.value)}
+                      placeholder="Enter advisor name..."
+                      className="w-full"
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" onClick={() => setIsEditOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button onClick={saveEditAdvisor} className="bg-purple-600 hover:bg-purple-700">
+                      <UserCheck className="w-4 h-4 mr-2" />
+                      Save Changes
+                    </Button>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </DialogContent>

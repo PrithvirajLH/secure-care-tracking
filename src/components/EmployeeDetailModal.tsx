@@ -7,10 +7,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { fmt, parseDate } from "@/config/awardTypes";
 import { motion, AnimatePresence } from "framer-motion";
+import { ShineBorder } from "@/components/magicui/shine-border";
 import { 
   Calendar, 
   Clock, 
@@ -26,11 +30,15 @@ import {
   GraduationCap,
   Star,
   TrendingUp,
-  Users
+  Users,
+  UserCheck,
+  MessageSquare,
+  Save
 } from "lucide-react";
 import { Employee } from "@/context/AppContext";
 import { format } from "date-fns";
 import { useTrainingData } from "@/hooks/useTrainingData";
+import { trainingAPI } from "@/services/api";
 
 interface EmployeeDetailModalProps {
   employee: Employee;
@@ -40,6 +48,11 @@ interface EmployeeDetailModalProps {
 
 export default function EmployeeDetailModal({ employee, children, onModalOpenChange }: EmployeeDetailModalProps) {
   const [open, setOpen] = useState(false);
+  const [notes, setNotes] = useState(employee.notes || "");
+  const [selectedAdvisorId, setSelectedAdvisorId] = useState<string>(employee.advisorId?.toString() || "");
+  const [advisors, setAdvisors] = useState<any[]>([]);
+  const [isUpdatingNotes, setIsUpdatingNotes] = useState(false);
+  const [isUpdatingAdvisor, setIsUpdatingAdvisor] = useState(false);
 
   // Notify parent component when modal opens/closes
   useEffect(() => {
@@ -47,6 +60,60 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
       onModalOpenChange(open);
     }
   }, [open, onModalOpenChange]);
+
+  // Load advisors when modal opens
+  useEffect(() => {
+    if (open) {
+      loadAdvisors();
+    }
+  }, [open]);
+
+  // Load advisors from API
+  const loadAdvisors = async () => {
+    try {
+      const advisorList = await trainingAPI.getAdvisors();
+      setAdvisors(advisorList);
+    } catch (error) {
+      console.error('Failed to load advisors:', error);
+      toast.error('Failed to load advisors');
+    }
+  };
+
+  // Handle notes update
+  const handleNotesUpdate = async () => {
+    if (notes === (employee.notes || "")) return; // No changes
+    
+    setIsUpdatingNotes(true);
+    try {
+      await trainingAPI.updateEmployeeNotes(employee.employeeId.toString(), notes);
+      toast.success('Notes updated successfully');
+    } catch (error) {
+      console.error('Failed to update notes:', error);
+      toast.error('Failed to update notes');
+      setNotes(employee.notes || ""); // Revert on error
+    } finally {
+      setIsUpdatingNotes(false);
+    }
+  };
+
+  // Handle advisor update
+  const handleAdvisorUpdate = async (advisorId: string) => {
+    const newAdvisorId = advisorId === "" ? null : parseInt(advisorId);
+    if (newAdvisorId === employee.advisorId) return; // No changes
+    
+    setIsUpdatingAdvisor(true);
+    try {
+      await trainingAPI.updateEmployeeAdvisor(employee.employeeId.toString(), newAdvisorId);
+      setSelectedAdvisorId(advisorId);
+      toast.success('Advisor updated successfully');
+    } catch (error) {
+      console.error('Failed to update advisor:', error);
+      toast.error('Failed to update advisor');
+      setSelectedAdvisorId(employee.advisorId?.toString() || ""); // Revert on error
+    } finally {
+      setIsUpdatingAdvisor(false);
+    }
+  };
   // Use the training data hook for API operations
   const {
     scheduleTraining,
@@ -515,6 +582,109 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
               </div>
             </CardContent>
           </Card>
+
+          {/* Advisor and Notes Section */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Advisor Assignment */}
+            <Card className="relative">
+              <ShineBorder
+                borderWidth={1}
+                duration={20}
+                shineColor={["#8b5cf6", "#a855f7", "#c084fc"]}
+                className="rounded-lg"
+              />
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <UserCheck className="w-5 h-5 text-purple-600" />
+                  Advisor Assignment
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="advisor-select" className="text-sm font-medium">
+                    Assigned Advisor
+                  </Label>
+                  <Select
+                    value={selectedAdvisorId}
+                    onValueChange={handleAdvisorUpdate}
+                    disabled={isUpdatingAdvisor}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select an advisor" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">No advisor assigned</SelectItem>
+                      {advisors.map((advisor) => (
+                        <SelectItem key={advisor.advisorId} value={advisor.advisorId.toString()}>
+                          {advisor.fullName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {isUpdatingAdvisor && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <div className="w-4 h-4 border-2 border-purple-600 border-t-transparent rounded-full animate-spin" />
+                    Updating advisor...
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Notes Section */}
+            <Card className="relative">
+              <ShineBorder
+                borderWidth={1}
+                duration={20}
+                shineColor={["#06b6d4", "#0891b2", "#0e7490"]}
+                className="rounded-lg"
+              />
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <MessageSquare className="w-5 h-5 text-cyan-600" />
+                  Notes
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="notes-textarea" className="text-sm font-medium">
+                    Employee Notes
+                  </Label>
+                  <Textarea
+                    id="notes-textarea"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Add notes about this employee..."
+                    className="min-h-[100px] resize-none"
+                    disabled={isUpdatingNotes}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="text-xs text-muted-foreground">
+                    {notes.length} characters
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={handleNotesUpdate}
+                    disabled={isUpdatingNotes || notes === (employee.notes || "")}
+                    className="bg-cyan-600 hover:bg-cyan-700"
+                  >
+                    {isUpdatingNotes ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-4 h-4 mr-2" />
+                        Save Notes
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
 
           {/* Training Progress */}
           <Card>

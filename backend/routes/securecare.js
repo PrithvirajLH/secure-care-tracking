@@ -128,4 +128,46 @@ router.get('/advisors', async (req, res) => {
   }
 });
 
+// Update employee notes
+router.post('/update-notes', async (req, res) => {
+  try {
+    const { employeeId, notes } = req.body;
+    
+    if (!employeeId) {
+      return res.status(400).json({ error: 'employeeId is required' });
+    }
+    
+    const result = await secureCareService.updateEmployeeNotes(employeeId, notes);
+    res.json(result);
+    
+  } catch (error) {
+    console.error('Update notes error:', error);
+    res.status(500).json({ 
+      error: 'Failed to update notes',
+      message: error.message 
+    });
+  }
+});
+
+// Update employee advisor
+router.post('/update-advisor', async (req, res) => {
+  try {
+    const { employeeId, advisorId } = req.body;
+    
+    if (!employeeId) {
+      return res.status(400).json({ error: 'employeeId is required' });
+    }
+    
+    const result = await secureCareService.updateEmployeeAdvisor(employeeId, advisorId);
+    res.json(result);
+    
+  } catch (error) {
+    console.error('Update advisor error:', error);
+    res.status(500).json({ 
+      error: 'Failed to update advisor',
+      message: error.message 
+    });
+  }
+});
+
 module.exports = router;
