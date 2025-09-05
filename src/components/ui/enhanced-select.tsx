@@ -12,6 +12,7 @@ interface EnhancedSelectProps {
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  triggerClassName?: string;
 }
 
 export function EnhancedSelect({
@@ -21,6 +22,7 @@ export function EnhancedSelect({
   placeholder = "Select...",
   disabled = false,
   className,
+  triggerClassName,
 }: EnhancedSelectProps) {
   const [isOpen, setIsOpen] = React.useState(false);
   const [focusedIndex, setFocusedIndex] = React.useState(-1);
@@ -103,7 +105,8 @@ export function EnhancedSelect({
           "flex h-10 w-full items-center justify-between rounded-lg border border-gray-200 bg-gradient-to-r from-white to-cyan-50/30 px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-all duration-200",
           "hover:border-cyan-300 hover:shadow-md hover:from-cyan-50 hover:to-cyan-100/50 focus:border-cyan-500 focus:outline-none focus:ring-2 focus:ring-cyan-500/20",
           "disabled:cursor-not-allowed disabled:opacity-50",
-          isOpen && "border-cyan-500 ring-2 ring-cyan-500/20 bg-gradient-to-r from-cyan-50 to-cyan-100/50"
+          isOpen && "border-cyan-500 ring-2 ring-cyan-500/20 bg-gradient-to-r from-cyan-50 to-cyan-100/50",
+          triggerClassName
         )}
         whileHover={{ scale: disabled ? 1 : 1.02 }}
         whileTap={{ scale: disabled ? 1 : 0.98 }}

@@ -96,6 +96,27 @@ export default function Training() {
   const [editingAdvisor, setEditingAdvisor] = useState<string | null>(null);
   const [tempNotes, setTempNotes] = useState<string>("");
   const [tempAdvisor, setTempAdvisor] = useState<string>("");
+  const [notesDropdownOpen, setNotesDropdownOpen] = useState<string | null>(null);
+  const [advisorDropdownOpen, setAdvisorDropdownOpen] = useState<string | null>(null);
+  const [notesPopupPosition, setNotesPopupPosition] = useState<{x: number, y: number, positionAbove?: boolean} | null>(null);
+  const [advisorPopupPosition, setAdvisorPopupPosition] = useState<{x: number, y: number, positionAbove?: boolean} | null>(null);
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (!target.closest('[data-dropdown]')) {
+        setNotesDropdownOpen(null);
+        setAdvisorDropdownOpen(null);
+        setNotesPopupPosition(null);
+        setAdvisorPopupPosition(null);
+        setPopupPosition(null); // Keep for date picker compatibility
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
   const [scheduledDates, setScheduledDates] = useState<{[key: string]: Date}>({});
   const [completedDates, setCompletedDates] = useState<{[key: string]: Date}>({});
   const [openDatePicker, setOpenDatePicker] = useState<string | null>(null);
@@ -103,7 +124,7 @@ export default function Training() {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [isApproving, setIsApproving] = useState<boolean>(false);
   const [isRejecting, setIsRejecting] = useState<boolean>(false);
-  const [popupPosition, setPopupPosition] = useState<{x: number, y: number} | null>(null);
+  const [popupPosition, setPopupPosition] = useState<{x: number, y: number, positionAbove?: boolean} | null>(null);
   const [currentPopupEmployee, setCurrentPopupEmployee] = useState<any>(null);
   const [currentPopupFieldKey, setCurrentPopupFieldKey] = useState<string | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -192,9 +213,10 @@ export default function Training() {
     setTempNotes(currentNotes || '');
   };
 
-  const handleSaveNotes = async (employeeId: string) => {
+  const handleSaveNotes = async (employeeId: string, notesValue?: string) => {
     try {
-      await trainingAPI.updateEmployeeNotes(employeeId, tempNotes);
+      const valueToSave = notesValue !== undefined ? notesValue : tempNotes;
+      await trainingAPI.updateEmployeeNotes(employeeId, valueToSave);
       toast.success('Notes updated successfully');
       setEditingNotes(null);
       setTempNotes('');
@@ -217,9 +239,10 @@ export default function Training() {
     setTempAdvisor(currentAdvisorId || 'none');
   };
 
-  const handleSaveAdvisor = async (employeeId: string) => {
+  const handleSaveAdvisor = async (employeeId: string, advisorValue?: string) => {
     try {
-      const advisorId = (tempAdvisor === '' || tempAdvisor === 'none') ? null : parseInt(tempAdvisor);
+      const valueToUse = advisorValue !== undefined ? advisorValue : tempAdvisor;
+      const advisorId = (valueToUse === '' || valueToUse === 'none') ? null : parseInt(valueToUse);
       await trainingAPI.updateEmployeeAdvisor(employeeId, advisorId);
       toast.success('Advisor updated successfully');
       setEditingAdvisor(null);
@@ -1049,120 +1072,139 @@ export default function Training() {
                                   </div>
                                 </TableCell>
                                    );
-                                } else if (column === 'Notes') { // Enhanced Notes column with click-to-edit
-                                   const isEditingNotes = editingNotes === employee.employeeId.toString();
+                                } else if (column === 'Notes') { // Enhanced Notes column with badge UI and floating dropdown
                                    const currentNotes = employee.notes || '';
                                    const selectedNoteOption = NOTES_OPTIONS.find(option => option.value === currentNotes);
+                                   const isNotesDropdownOpen = notesDropdownOpen === employee.employeeId.toString();
                                    
                                    return (
-                                     <TableCell key={colIndex} className="py-4 px-4 w-[12%] text-center overflow-visible">
+                                     <TableCell key={colIndex} className="py-4 px-4 w-[12%] text-center">
                                        <div className="flex justify-center">
-                                         {isEditingNotes ? (
-                                           <div className="relative w-[140px]">
-                                             <ShineBorder
-                                               borderWidth={1}
-                                               duration={20}
-                                               shineColor={["#06b6d4", "#0891b2", "#0e7490"]}
-                                               className="rounded-lg"
-                                             />
-                                             <div className="p-1 bg-white rounded-lg border border-cyan-200 shadow-sm">
-                                               <EnhancedSelect
-                                                 value={tempNotes}
-                                                 onValueChange={setTempNotes}
-                                                 options={NOTES_OPTIONS}
-                                                 placeholder="Select..."
-                                                 className="w-full"
-                                               />
-                                               <div className="flex gap-1 mt-2">
-                                                 <Button
-                                                   size="sm"
-                                                   onClick={() => handleSaveNotes(employee.employeeId.toString())}
-                                                   className="h-6 px-2 text-xs bg-cyan-600 hover:bg-cyan-700"
-                                                 >
-                                                   <Save className="w-3 h-3" />
-                                                 </Button>
-                                                 <Button
-                                                   size="sm"
-                                                   variant="outline"
-                                                   onClick={handleCancelNotes}
-                                                   className="h-6 px-2 text-xs"
-                                                 >
-                                                   <X className="w-3 h-3" />
-                                                 </Button>
-                                               </div>
-                                             </div>
-                                           </div>
-                                         ) : (
+                                         <div className="relative" data-dropdown>
                                            <StatusBadge
                                              variant="notes"
                                              icon={MessageSquare}
                                              text={selectedNoteOption?.label || 'Add Notes'}
-                                             onClick={() => handleEditNotes(employee.employeeId.toString(), currentNotes)}
+                                             onClick={(e) => {
+                                               const rect = e.currentTarget.getBoundingClientRect();
+                                               const viewportHeight = window.innerHeight;
+                                               const dropdownHeight = 200; // Approximate dropdown height
+                                               const spaceBelow = viewportHeight - rect.bottom;
+                                               const spaceAbove = rect.top;
+                                               
+                                               // Position above if not enough space below, otherwise below
+                                               const shouldPositionAbove = spaceBelow < dropdownHeight && spaceAbove > dropdownHeight;
+                                               
+                                               setNotesPopupPosition({
+                                                 x: rect.left + rect.width / 2,
+                                                 y: shouldPositionAbove ? rect.top - 8 : rect.bottom + 8,
+                                                 positionAbove: shouldPositionAbove
+                                               });
+                                               setNotesDropdownOpen(isNotesDropdownOpen ? null : employee.employeeId.toString());
+                                             }}
                                            />
-                                         )}
+                                         </div>
                                        </div>
+                                       
+                                       {/* Floating Notes Dropdown */}
+                                       {isNotesDropdownOpen && notesPopupPosition && createPortal(
+                                         <div 
+                                           className="fixed z-[9999] bg-white border border-cyan-200 rounded-lg shadow-xl p-1 min-w-[180px] max-h-[200px] overflow-y-auto"
+                                           style={{
+                                             left: notesPopupPosition.x - 90, // Center the dropdown
+                                             top: notesPopupPosition.positionAbove ? notesPopupPosition.y - 200 : notesPopupPosition.y,
+                                             transform: notesPopupPosition.positionAbove ? 'translateY(-100%)' : 'none'
+                                           }}
+                                           data-dropdown
+                                         >
+                                           {NOTES_OPTIONS.map((option) => (
+                                             <div
+                                               key={option.value}
+                                               className="px-3 py-2 text-sm cursor-pointer hover:bg-cyan-50 rounded transition-colors"
+                                               onClick={() => {
+                                                 handleSaveNotes(employee.employeeId.toString(), option.value);
+                                                 setNotesDropdownOpen(null);
+                                                 setNotesPopupPosition(null);
+                                               }}
+                                             >
+                                               {option.label}
+                                             </div>
+                                           ))}
+                                         </div>,
+                                         document.body
+                                       )}
                                      </TableCell>
                                    );
-                                } else if (column === 'Advisor') { // Enhanced Advisor column
-                                   const isEditing = editingAdvisor === employee.employeeId.toString();
+                                } else if (column === 'Advisor') { // Enhanced Advisor column with badge UI and floating dropdown
                                    const currentAdvisor = advisors.find(a => a.advisorId === employee.advisorId);
+                                   const isAdvisorDropdownOpen = advisorDropdownOpen === employee.employeeId.toString();
+                                   
                                    return (
                                      <TableCell key={colIndex} className="py-4 px-4 w-[12%] text-center">
                                        <div className="flex justify-center">
-                                         {isEditing ? (
-                                           <div className="relative w-full max-w-[220px]">
-                                             <ShineBorder
-                                               borderWidth={1}
-                                               duration={15}
-                                               shineColor={["#8b5cf6", "#a855f7", "#c084fc"]}
-                                               className="rounded-lg"
-                                             />
-                                             <div className="p-2 bg-white rounded-lg border border-purple-200">
-                                               <Select
-                                                 value={tempAdvisor}
-                                                 onValueChange={setTempAdvisor}
-                                                 disabled={isLoadingAdvisors}
-                                               >
-                                                 <SelectTrigger className="h-10 text-sm">
-                                                   <SelectValue placeholder="Select advisor..." />
-                                                 </SelectTrigger>
-                                                 <SelectContent>
-                                                   <SelectItem value="none">No advisor assigned</SelectItem>
-                                                   {advisors.map((advisor) => (
-                                                     <SelectItem key={advisor.advisorId} value={advisor.advisorId.toString()}>
-                                                       {advisor.fullName}
-                                                     </SelectItem>
-                                                   ))}
-                                                 </SelectContent>
-                                               </Select>
-                                               <div className="flex gap-1 mt-2">
-                                                 <Button
-                                                   size="sm"
-                                                   onClick={() => handleSaveAdvisor(employee.employeeId.toString())}
-                                                   className="h-6 px-2 text-xs bg-purple-600 hover:bg-purple-700"
-                                                 >
-                                                   <Save className="w-3 h-3" />
-                                                 </Button>
-                                                 <Button
-                                                   size="sm"
-                                                   variant="outline"
-                                                   onClick={handleCancelAdvisor}
-                                                   className="h-6 px-2 text-xs"
-                                                 >
-                                                   <X className="w-3 h-3" />
-                                                 </Button>
-                                               </div>
-                                             </div>
-                                           </div>
-                                         ) : (
+                                         <div className="relative" data-dropdown>
                                            <StatusBadge
                                              variant="advisor"
                                              icon={UserCheck}
                                              text={employee.advisorName || currentAdvisor?.fullName || 'Assign Advisor'}
-                                             onClick={() => handleEditAdvisor(employee.employeeId.toString(), employee.advisorId?.toString() || '')}
+                                             onClick={(e) => {
+                                               const rect = e.currentTarget.getBoundingClientRect();
+                                               const viewportHeight = window.innerHeight;
+                                               const dropdownHeight = 250; // Approximate dropdown height (larger for advisor list)
+                                               const spaceBelow = viewportHeight - rect.bottom;
+                                               const spaceAbove = rect.top;
+                                               
+                                               // Position above if not enough space below, otherwise below
+                                               const shouldPositionAbove = spaceBelow < dropdownHeight && spaceAbove > dropdownHeight;
+                                               
+                                               setAdvisorPopupPosition({
+                                                 x: rect.left + rect.width / 2,
+                                                 y: shouldPositionAbove ? rect.top - 8 : rect.bottom + 8,
+                                                 positionAbove: shouldPositionAbove
+                                               });
+                                               setAdvisorDropdownOpen(isAdvisorDropdownOpen ? null : employee.employeeId.toString());
+                                             }}
                                            />
-                                         )}
+                                         </div>
                                        </div>
+                                       
+                                       {/* Floating Advisor Dropdown */}
+                                       {isAdvisorDropdownOpen && advisorPopupPosition && createPortal(
+                                         <div 
+                                           className="fixed z-[9999] bg-white border border-purple-200 rounded-lg shadow-xl p-1 min-w-[200px] max-h-[250px] overflow-y-auto"
+                                           style={{
+                                             left: advisorPopupPosition.x - 100, // Center the dropdown
+                                             top: advisorPopupPosition.positionAbove ? advisorPopupPosition.y - 250 : advisorPopupPosition.y,
+                                             transform: advisorPopupPosition.positionAbove ? 'translateY(-100%)' : 'none'
+                                           }}
+                                           data-dropdown
+                                         >
+                                           <div
+                                             className="px-3 py-2 text-sm cursor-pointer hover:bg-purple-50 rounded transition-colors"
+                                             onClick={() => {
+                                               handleSaveAdvisor(employee.employeeId.toString(), 'none');
+                                               setAdvisorDropdownOpen(null);
+                                               setAdvisorPopupPosition(null);
+                                             }}
+                                           >
+                                             No advisor assigned
+                                           </div>
+                                           {advisors.map((advisor) => (
+                                             <div
+                                               key={advisor.advisorId}
+                                               className="px-3 py-2 text-sm cursor-pointer hover:bg-purple-50 rounded transition-colors"
+                                               onClick={() => {
+                                                 handleSaveAdvisor(employee.employeeId.toString(), advisor.advisorId.toString());
+                                                 setAdvisorDropdownOpen(null);
+                                                 setAdvisorPopupPosition(null);
+                                               }}
+                                             >
+                                               {advisor.fullName}
+                                             </div>
+                                           ))}
+                                         </div>,
+                                         document.body
+                                       )}
                                      </TableCell>
                                    );
                                 } else { // Training requirement columns
