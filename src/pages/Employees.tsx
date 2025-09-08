@@ -12,12 +12,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { CheckCircle, Clock, Award, Star, Trophy, Medal, Crown, Eye, ChevronUp, ChevronDown, Users2 } from "lucide-react";
+import { CheckCircle, Clock, Award, Star, Trophy, Medal, Crown, Eye, ChevronUp, ChevronDown, Users2, AlertCircle } from "lucide-react";
 import EmployeeDetailModal from "@/components/EmployeeDetailModal";
 import { CompactPagination } from "@/components/ui/compact-pagination";
 import { useEmployees } from "@/hooks/useEmployees";
 import PageHeader from "@/components/PageHeader";
 import EmployeeFilters from "@/components/EmployeeFilters";
+import { trainingAPI } from "@/services/api";
+import { useQuery } from '@tanstack/react-query';
 
 export default function Employees() {
   const { state, dispatch } = useApp();
@@ -31,6 +33,13 @@ export default function Employees() {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [itemsPerPage] = useState<number>(10); // Changed from 100 to test pagination
   const [selectedJobTitle, setSelectedJobTitle] = useState<string>("all");
+
+  // Fetch filter options from API
+  const { data: filterOptions } = useQuery({
+    queryKey: ['filter-options'],
+    queryFn: () => trainingAPI.getFilterOptions(),
+    staleTime: 10 * 60 * 1000, // 10 minutes
+  });
 
   // Use the same data source as Training page for consistency
   const filters = useMemo(() => ({
@@ -143,9 +152,9 @@ export default function Employees() {
       filtered = filtered.filter(employee => {
         switch (selectedStatus) {
           case "Awaiting Approval":
-            return employee.awaiting === false; // awaiting = 0 means waiting for approval
+            return employee.awaiting === true; // awaiting = 1 means waiting for approval
           case "Conference Rejected":
-            return employee.conferenceRejected === true;
+            return employee.awaiting === null;
           case "Not Started":
             return !employee.awardType && !employee.assignedDate;
           case "Level 1 In Progress":
@@ -153,19 +162,19 @@ export default function Employees() {
           case "Level 1":
             return employee.awardType === "Level 1" && employee.secureCareAwarded === true;
           case "Level 2 In Progress":
-            return employee.awardType === "Level 2" && employee.assignedDate && !employee.secureCareAwarded;
+            return employee.awardType === "Level 2" && !employee.secureCareAwarded && employee.awaiting !== 1 && employee.awaiting !== true;
           case "Level 2":
             return employee.awardType === "Level 2" && employee.secureCareAwarded === true;
           case "Level 3 In Progress":
-            return employee.awardType === "Level 3" && employee.assignedDate && !employee.secureCareAwarded;
+            return employee.awardType === "Level 3" && !employee.secureCareAwarded && employee.awaiting !== 1 && employee.awaiting !== true;
           case "Level 3":
             return employee.awardType === "Level 3" && employee.secureCareAwarded === true;
           case "Consultant In Progress":
-            return employee.awardType === "Consultant" && employee.assignedDate && !employee.secureCareAwarded;
+            return employee.awardType === "Consultant" && !employee.secureCareAwarded && employee.awaiting !== 1 && employee.awaiting !== true;
           case "Consultant":
             return employee.awardType === "Consultant" && employee.secureCareAwarded === true;
           case "Coach In Progress":
-            return employee.awardType === "Coach" && employee.assignedDate && !employee.secureCareAwarded;
+            return employee.awardType === "Coach" && !employee.secureCareAwarded && employee.awaiting !== 1 && employee.awaiting !== true;
           case "Coach":
             return employee.awardType === "Coach" && employee.secureCareAwarded === true;
           default:
@@ -231,67 +240,242 @@ export default function Employees() {
     // Handle both boolean and string values for secureCareAwarded
     const isAwarded = employee.secureCareAwarded === true || employee.secureCareAwarded === 1 || employee.secureCareAwarded === '1';
     
-    // Determine status based on award type and completion status
+    // Determine status based on award type, completion status, and awaiting status
     switch (employee.awardType) {
       case 'Coach':
-        return { 
-          level: isAwarded ? "Coach" : "Coach In Progress", 
-          variant: "outline", 
-          icon: Crown,
-          iconColor: isAwarded ? "text-yellow-500" : "text-yellow-600",
-          bgColor: "bg-gradient-to-r from-yellow-50 to-amber-50",
-          borderColor: "border-yellow-200",
-          textColor: "text-yellow-700",
-          className: "shadow-sm hover:shadow-md transition-all duration-200"
-        };
+        if (isAwarded) {
+          return { 
+            level: "Coach", 
+            variant: "outline", 
+            icon: Crown,
+            iconColor: "text-yellow-500",
+            bgColor: "bg-gradient-to-r from-yellow-50 to-amber-50",
+            borderColor: "border-yellow-200",
+            textColor: "text-yellow-700",
+            className: "shadow-sm hover:shadow-md transition-all duration-200"
+          };
+        } else if (employee.awaiting === 1 || employee.awaiting === true) {
+          return { 
+            level: "Awaiting Approval", 
+            variant: "outline", 
+            icon: Clock,
+            iconColor: "text-amber-600",
+            bgColor: "bg-gradient-to-r from-amber-50 to-orange-50",
+            borderColor: "border-amber-200",
+            textColor: "text-amber-700",
+            className: "shadow-sm hover:shadow-md transition-all duration-200"
+          };
+        } else if (employee.awaiting === null) {
+          return { 
+            level: "Conference Rejected", 
+            variant: "outline", 
+            icon: AlertCircle,
+            iconColor: "text-red-600",
+            bgColor: "bg-gradient-to-r from-red-50 to-pink-50",
+            borderColor: "border-red-200",
+            textColor: "text-red-700",
+            className: "shadow-sm hover:shadow-md transition-all duration-200"
+          };
+        } else {
+          return { 
+            level: "Coach In Progress", 
+            variant: "outline", 
+            icon: Crown,
+            iconColor: "text-yellow-600",
+            bgColor: "bg-gradient-to-r from-yellow-50 to-amber-50",
+            borderColor: "border-yellow-200",
+            textColor: "text-yellow-700",
+            className: "shadow-sm hover:shadow-md transition-all duration-200"
+          };
+        }
         
       case 'Consultant':
-        return { 
-          level: isAwarded ? "Consultant" : "Consultant In Progress", 
-          variant: "outline", 
-          icon: Trophy,
-          iconColor: isAwarded ? "text-purple-500" : "text-purple-600",
-          bgColor: "bg-gradient-to-r from-purple-50 to-indigo-50",
-          borderColor: "border-purple-200",
-          textColor: "text-purple-700",
-          className: "shadow-sm hover:shadow-md transition-all duration-200"
-        };
+        if (isAwarded) {
+          return { 
+            level: "Consultant", 
+            variant: "outline", 
+            icon: Trophy,
+            iconColor: "text-purple-500",
+            bgColor: "bg-gradient-to-r from-purple-50 to-indigo-50",
+            borderColor: "border-purple-200",
+            textColor: "text-purple-700",
+            className: "shadow-sm hover:shadow-md transition-all duration-200"
+          };
+        } else if (employee.awaiting === 1 || employee.awaiting === true) {
+          return { 
+            level: "Awaiting Approval", 
+            variant: "outline", 
+            icon: Clock,
+            iconColor: "text-amber-600",
+            bgColor: "bg-gradient-to-r from-amber-50 to-orange-50",
+            borderColor: "border-amber-200",
+            textColor: "text-amber-700",
+            className: "shadow-sm hover:shadow-md transition-all duration-200"
+          };
+        } else if (employee.awaiting === null) {
+          return { 
+            level: "Conference Rejected", 
+            variant: "outline", 
+            icon: AlertCircle,
+            iconColor: "text-red-600",
+            bgColor: "bg-gradient-to-r from-red-50 to-pink-50",
+            borderColor: "border-red-200",
+            textColor: "text-red-700",
+            className: "shadow-sm hover:shadow-md transition-all duration-200"
+          };
+        } else {
+          return { 
+            level: "Consultant In Progress", 
+            variant: "outline", 
+            icon: Trophy,
+            iconColor: "text-purple-600",
+            bgColor: "bg-gradient-to-r from-purple-50 to-indigo-50",
+            borderColor: "border-purple-200",
+            textColor: "text-purple-700",
+            className: "shadow-sm hover:shadow-md transition-all duration-200"
+          };
+        }
         
       case 'Level 3':
-        return { 
-          level: isAwarded ? "Level 3" : "Level 3 In Progress", 
-          variant: "outline", 
-          icon: Medal,
-          iconColor: isAwarded ? "text-blue-500" : "text-blue-600",
-          bgColor: "bg-gradient-to-r from-blue-50 to-cyan-50",
-          borderColor: "border-blue-200",
-          textColor: "text-blue-700",
-          className: "shadow-sm hover:shadow-md transition-all duration-200"
-        };
+        if (isAwarded) {
+          return { 
+            level: "Level 3", 
+            variant: "outline", 
+            icon: Medal,
+            iconColor: "text-blue-500",
+            bgColor: "bg-gradient-to-r from-blue-50 to-cyan-50",
+            borderColor: "border-blue-200",
+            textColor: "text-blue-700",
+            className: "shadow-sm hover:shadow-md transition-all duration-200"
+          };
+        } else if (employee.awaiting === 1 || employee.awaiting === true) {
+          return { 
+            level: "Awaiting Approval", 
+            variant: "outline", 
+            icon: Clock,
+            iconColor: "text-amber-600",
+            bgColor: "bg-gradient-to-r from-amber-50 to-orange-50",
+            borderColor: "border-amber-200",
+            textColor: "text-amber-700",
+            className: "shadow-sm hover:shadow-md transition-all duration-200"
+          };
+        } else if (employee.awaiting === null) {
+          return { 
+            level: "Conference Rejected", 
+            variant: "outline", 
+            icon: AlertCircle,
+            iconColor: "text-red-600",
+            bgColor: "bg-gradient-to-r from-red-50 to-pink-50",
+            borderColor: "border-red-200",
+            textColor: "text-red-700",
+            className: "shadow-sm hover:shadow-md transition-all duration-200"
+          };
+        } else {
+          return { 
+            level: "Level 3 In Progress", 
+            variant: "outline", 
+            icon: Medal,
+            iconColor: "text-blue-600",
+            bgColor: "bg-gradient-to-r from-blue-50 to-cyan-50",
+            borderColor: "border-blue-200",
+            textColor: "text-blue-700",
+            className: "shadow-sm hover:shadow-md transition-all duration-200"
+          };
+        }
         
       case 'Level 2':
-        return { 
-          level: isAwarded ? "Level 2" : "Level 2 In Progress", 
-          variant: "outline", 
-          icon: Star,
-          iconColor: isAwarded ? "text-orange-500" : "text-orange-600",
-          bgColor: "bg-gradient-to-r from-orange-50 to-red-50",
-          borderColor: "border-orange-200",
-          textColor: "text-orange-700",
-          className: "shadow-sm hover:shadow-md transition-all duration-200"
-        };
+        if (isAwarded) {
+          return { 
+            level: "Level 2", 
+            variant: "outline", 
+            icon: Star,
+            iconColor: "text-orange-500",
+            bgColor: "bg-gradient-to-r from-orange-50 to-red-50",
+            borderColor: "border-orange-200",
+            textColor: "text-orange-700",
+            className: "shadow-sm hover:shadow-md transition-all duration-200"
+          };
+        } else if (employee.awaiting === 1 || employee.awaiting === true) {
+          return { 
+            level: "Awaiting Approval", 
+            variant: "outline", 
+            icon: Clock,
+            iconColor: "text-amber-600",
+            bgColor: "bg-gradient-to-r from-amber-50 to-orange-50",
+            borderColor: "border-amber-200",
+            textColor: "text-amber-700",
+            className: "shadow-sm hover:shadow-md transition-all duration-200"
+          };
+        } else if (employee.awaiting === null) {
+          return { 
+            level: "Conference Rejected", 
+            variant: "outline", 
+            icon: AlertCircle,
+            iconColor: "text-red-600",
+            bgColor: "bg-gradient-to-r from-red-50 to-pink-50",
+            borderColor: "border-red-200",
+            textColor: "text-red-700",
+            className: "shadow-sm hover:shadow-md transition-all duration-200"
+          };
+        } else {
+          return { 
+            level: "Level 2 In Progress", 
+            variant: "outline", 
+            icon: Star,
+            iconColor: "text-orange-600",
+            bgColor: "bg-gradient-to-r from-orange-50 to-red-50",
+            borderColor: "border-orange-200",
+            textColor: "text-orange-700",
+            className: "shadow-sm hover:shadow-md transition-all duration-200"
+          };
+        }
         
       case 'Level 1':
-        return { 
-          level: isAwarded ? "Level 1" : "Level 1 In Progress", 
-          variant: "outline", 
-          icon: isAwarded ? Award : Clock,
-          iconColor: isAwarded ? "text-green-500" : "text-yellow-600",
-          bgColor: isAwarded ? "bg-gradient-to-r from-green-50 to-emerald-50" : "bg-gradient-to-r from-yellow-50 to-orange-50",
-          borderColor: isAwarded ? "border-green-200" : "border-yellow-200",
-          textColor: isAwarded ? "text-green-700" : "text-yellow-700",
-          className: "shadow-sm hover:shadow-md transition-all duration-200"
-        };
+        if (isAwarded) {
+          return { 
+            level: "Level 1", 
+            variant: "outline", 
+            icon: Award,
+            iconColor: "text-green-500",
+            bgColor: "bg-gradient-to-r from-green-50 to-emerald-50",
+            borderColor: "border-green-200",
+            textColor: "text-green-700",
+            className: "shadow-sm hover:shadow-md transition-all duration-200"
+          };
+        } else if (employee.awaiting === 1 || employee.awaiting === true) {
+          return { 
+            level: "Awaiting Approval", 
+            variant: "outline", 
+            icon: Clock,
+            iconColor: "text-amber-600",
+            bgColor: "bg-gradient-to-r from-amber-50 to-orange-50",
+            borderColor: "border-amber-200",
+            textColor: "text-amber-700",
+            className: "shadow-sm hover:shadow-md transition-all duration-200"
+          };
+        } else if (employee.awaiting === null) {
+          return { 
+            level: "Conference Rejected", 
+            variant: "outline", 
+            icon: AlertCircle,
+            iconColor: "text-red-600",
+            bgColor: "bg-gradient-to-r from-red-50 to-pink-50",
+            borderColor: "border-red-200",
+            textColor: "text-red-700",
+            className: "shadow-sm hover:shadow-md transition-all duration-200"
+          };
+        } else {
+          return { 
+            level: "Level 1 In Progress", 
+            variant: "outline", 
+            icon: Award,
+            iconColor: "text-green-600",
+            bgColor: "bg-gradient-to-r from-green-50 to-emerald-50",
+            borderColor: "border-green-200",
+            textColor: "text-green-700",
+            className: "shadow-sm hover:shadow-md transition-all duration-200"
+          };
+        }
     }
     
     // Debug logging for fallback case
@@ -328,61 +512,24 @@ export default function Employees() {
     setApiCurrentPage(1);
   }, [state.filters.query, selectedFacility, selectedArea, selectedStatus, selectedJobTitle, sortField, sortDirection]);
 
-               // Get unique facilities and areas for filter options
-      // IMPORTANT: Use static lists for filter options to ensure they're always available
-      const facilities = useMemo(() => [
-        'Afton Oaks Nursing and Rehabilitation Center', 'Alvarado Meadows Nursing and Rehab', 'Amarillo Skilled Care', 'Amistad', 'Arboretum of Winnie',
-        'Arlington Heights', 'Atrium of Bellmead', 'Avalon Place Kirbyville', 'Ballinger Healthcare', 'Beaumont Nursing',
-        'Beltline Healthcare Center', 'Bertram Nursing', 'Big Spring', 'Birchwood Nursing', 'Bluebonnet Nursing',
-        'Bluebonnet Point Wellness', 'Brentwood Terrace', 'Brownwood', 'Buena Vida Odessa', 'Buena Vida San Antonio',
-        'Caprock', 'Care Nursing', 'Castle Pines', 'Cedar Creek', 'Cedar Manor', 'Central Texas',
-        'Chatfield', 'Cherokee Rose', 'Chisolm Trail Nursing and Rehabilitation Center', 'Concho Health and Rehab', 'Copperas Hollow Assisted Living',
-        'Copperas Hollow Nursing and Rehab', 'Cottonwood', 'Country View Nursing', 'Crossroads', 'Deerings', 'Deleon',
-        'Desoto Nursing and Rehabilitation Center', 'Devine', 'Dogwood', 'Downtown', 'Eagle Pass', 'El Paso Health and Rehab',
-        'Estates Healthcare', 'Fair Park Health & Rehabilitation Center', 'Fairfield', 'Five Points Amarillo', 'Five Points Desoto',
-        'Five Points of College Station', 'Five Points of Lake Highlands', 'Five Points of Pflugerville', 'Fortress', 'Fountains of Tyler',
-        'Franklin', 'Franklin Heights', 'Ganado', 'Georgia Manor', 'Gilmer Nursing', 'Grace Pointe Wellness Center',
-        'Graham Oaks', 'Granbury Care', 'Great Plains', 'Greenbrier of Tyler', 'Greenbrier Palestine',
-        'Greenhill Villas', 'Heritage House', 'Heritage House of Marshall', 'Heritage Place of Decatur', 'Hillcrest Manor Nursing and Rehabilitation',
-        'Hills Nursing', 'Honey Grove Nursing Center', 'Huebner Creek', 'Interlochen', 'Kemp Care Center',
-        'Kenedy', 'Kerens Care Center', 'La Bahia Nursing', 'La Hacienda', 'La Vida Serena',
-        'Lake Lodge', 'Lampasas Nursing and Rehabilitation Center', 'Lampstand', 'Lancaster Nursing and Rehabilitation', 'Landmark of Amarillo Rehab and Nursing',
-        'Landmark of Plano Rehab and Nursing', 'Legacy at Corsicana Rehabilitation and Healthcare', 'Legacy at Jacksonville', 'Longmeadow', 'Longview',
-        'Lubbock Health', 'Madisonville', 'Madisonville Assisted Living', 'Marine Creek Nursing', 'Matagorda',
-        'McLean Care', 'Memphis Convalescent', 'Mesa Vista', 'Mexia Skilled Care', 'Mineral Wells',
-        'Mission Ridge Nursing', 'Mount Pleasant ALF', 'Mountain View', 'Mullican Care Center', 'Navasota Nursing',
-        'Normandy Terrace', 'North Park', 'North Pointe', 'Oak Ridge Manor', 'Oakmont of Humble',
-        'Oakmont of Katy', 'Oaks at Granbury', 'Oasis', 'Park Highlands', 'Park Place Care Center',
-        'Park Plaza', 'Parkview Manor Nursing and Rehab', 'Peach Tree', 'Pebble Creek', 'Pecan Tree Rehab and Health Care Center',
-        'Pine Tree Lodge', 'Pleasant Springs', 'Premier Memory Care of Alice', 'Premier SNF of Alice', 'River City Care Center',
-        'River Oaks Nursing and Rehabilitation Center', 'Rock Creek', 'Rockwall Nursing Care Center', 'San Saba', 'Seven Oaks Nursing',
-        'Shady Oak', 'Shiner', 'Sienna', 'Silver Tree', 'Slaton Care Center', 'Songbird',
-        'Southern Specialty', 'St Giles', 'St Teresa Nursing and Rehab', 'Sunflower Park', 'Texoma',
-        'The Arbors', 'The Homestead Assisted Living', 'The Park', 'The Plaza at Richardson', 'The Rio at Mission Trails',
-        'The Village at Heritage Oaks', 'The Village at Heritage Oaks - Alf', 'Treemont Healthcare', 'Turner Park', 'Twilight',
-        'Twin Oaks', 'Twin Pines', 'Twin Pines North', 'University Park Nursing', 'University Rehabilitation Center',
-        'Vidor', 'Villa of Toscana', 'Villa of Wolfforth', 'Vintage Assisted Living of Denton', 'Vintage Health Care Center',
-        'Vista Hills', 'Wellington Care', 'Westward Trails', 'Whispering Pines Lodge', 'Whisperwood',
-        'Whitesboro Health & Rehabilitation Center', 'Winnie L Nursing And Rehab', 'Yorktown Nursing & Rehabilitation Center'
-      ].sort(), []);
+      // Get filter options from API or use fallback
+      const facilities = useMemo(() => {
+        return filterOptions?.facilities?.sort() || [];
+      }, [filterOptions]);
 
       const areas = useMemo(() => {
-        const areaList = [
-          'Area 1', 'Area 2', 'Area 3', 'Area 4', 'Area 5', 'Area 6', 'Area 7', 'Area 8', 'Area 9', 'Area 10', 
-          'Area 11', 'Area 12', 'Area 13', 'Area 14', 'Area 15', 'Area 16'
-        ];
-        return areaList.sort((a, b) => {
+        if (!filterOptions?.areas) return [];
+        return filterOptions.areas.sort((a, b) => {
           // Extract numeric part and sort numerically
           const aNum = parseInt(a.replace(/\D/g, '')) || 0;
           const bNum = parseInt(b.replace(/\D/g, '')) || 0;
           return aNum - bNum;
         });
-      }, []);
+      }, [filterOptions]);
 
-      // Get unique job titles for filter options
-      const jobTitles = useMemo(() => [
-        'Nurse', 'Doctor', 'Technician', 'Therapist', 'Administrator'
-      ].sort(), []);
+      const jobTitles = useMemo(() => {
+        return filterOptions?.jobTitles?.sort() || [];
+      }, [filterOptions]);
 
       // Get unique statuses for filter options
       const statuses = useMemo(() => [

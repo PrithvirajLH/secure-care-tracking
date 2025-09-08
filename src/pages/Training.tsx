@@ -123,7 +123,6 @@ export default function Training() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [openDatePicker]);
-  const [query, setQuery] = useState<string>("");
   const [isApproving, setIsApproving] = useState<boolean>(false);
   const [isRejecting, setIsRejecting] = useState<boolean>(false);
   const [popupPosition, setPopupPosition] = useState<{x: number, y: number, positionAbove?: boolean} | null>(null);
@@ -131,7 +130,10 @@ export default function Training() {
   const [currentPopupFieldKey, setCurrentPopupFieldKey] = useState<string | null>(null);
   const [isButtonClicking, setIsButtonClicking] = useState<boolean>(false);
   const [isMouseDownInProgress, setIsMouseDownInProgress] = useState<boolean>(false);
-  const searchInputRef = useRef<HTMLInputElement>(null);
+  
+  // New simple search state
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  
   
   // Column visibility controls with localStorage persistence
   const [showNotesColumn, setShowNotesColumn] = useState<boolean>(() => {
@@ -189,22 +191,7 @@ export default function Training() {
   } = useTrainingData();
 
 
-  // Handle search input changes (dynamic filter)
-  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setQuery(e.target.value);
-  }, []);
 
-  // Keep focus and caret position during re-renders while typing
-  useEffect(() => {
-    if (searchInputRef.current) {
-      const el = searchInputRef.current;
-      const caret = el.selectionStart ?? el.value.length;
-      el.focus({ preventScroll: true });
-      try {
-        el.setSelectionRange(caret, caret);
-      } catch {}
-    }
-  }, [query]);
 
   // Load advisors when component mounts or when needed
   const loadAdvisors = useCallback(async () => {
@@ -280,9 +267,8 @@ export default function Training() {
     level: activeTab,
     status: 'active',
     facility: facilityFilter !== 'all' ? facilityFilter : undefined,
-    area: areaFilter !== 'all' ? areaFilter : undefined,
-    search: query.trim() || undefined
-  }), [activeTab, facilityFilter, areaFilter, query]);
+    area: areaFilter !== 'all' ? areaFilter : undefined
+  }), [activeTab, facilityFilter, areaFilter]);
 
   const {
     employees: currentEmployees,
@@ -332,7 +318,7 @@ export default function Training() {
     setCurrentPage(1);
     setFacilityFilter('all');
     setAreaFilter('all');
-    setQuery('');
+    
     const next: Record<string, string> = {};
     filteredColumns.forEach(col => {
       const fieldKey = currentFieldMapping[col];
@@ -453,10 +439,22 @@ export default function Training() {
     });
   }, []);
 
-  // Apply requirement status filters locally
+  // Apply requirement status filters and search filter locally
   const filteredEmployees = useMemo(() => {
-    const filtered = currentEmployees.filter(emp => {
-      // Apply per-requirement filters
+    let filtered = currentEmployees;
+    
+    // Apply search filter first
+    if (searchQuery.trim()) {
+      const searchTerm = searchQuery.toLowerCase().trim();
+      filtered = filtered.filter(emp => {
+        const name = (emp.name || emp.Employee || '').toLowerCase();
+        const employeeNumber = (emp.employeeNumber || emp.employeeId || '').toLowerCase();
+        return name.includes(searchTerm) || employeeNumber.includes(searchTerm);
+      });
+    }
+    
+    // Apply per-requirement filters
+    filtered = filtered.filter(emp => {
       for (const column of filteredColumns) {
         const fieldKey = currentFieldMapping[column];
         if (!fieldKey) continue;
@@ -497,31 +495,33 @@ export default function Training() {
     });
     
     return filtered;
-  }, [currentEmployees, reqStatusFilters, filteredColumns, currentFieldMapping, scheduledDates, completedDates]);
+  }, [currentEmployees, searchQuery, reqStatusFilters, filteredColumns, currentFieldMapping, scheduledDates, completedDates]);
 
   const isAnyFilterActive = useMemo(() => {
-    if (facilityFilter !== 'all' || areaFilter !== 'all') return true;
+    if (facilityFilter !== 'all' || areaFilter !== 'all' || searchQuery.trim()) return true;
     return filteredColumns.some(col => {
       const fieldKey = currentFieldMapping[col];
       return fieldKey && (reqStatusFilters[fieldKey] || 'all') !== 'all';
     });
-  }, [facilityFilter, areaFilter, reqStatusFilters, filteredColumns, currentFieldMapping]);
+  }, [facilityFilter, areaFilter, searchQuery, reqStatusFilters, filteredColumns, currentFieldMapping]);
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (facilityFilter !== 'all') count++;
     if (areaFilter !== 'all') count++;
+    if (searchQuery.trim()) count++;
     count += filteredColumns.reduce((acc, col) => {
       const fieldKey = currentFieldMapping[col];
       return acc + (fieldKey && ((reqStatusFilters[fieldKey] || 'all') !== 'all') ? 1 : 0);
     }, 0);
     return count;
-  }, [facilityFilter, areaFilter, reqStatusFilters, filteredColumns, currentFieldMapping]);
+  }, [facilityFilter, areaFilter, searchQuery, reqStatusFilters, filteredColumns, currentFieldMapping]);
 
   const clearFilters = () => {
     setFacilityFilter('all');
     setAreaFilter('all');
-    setQuery('');
+    setSearchQuery('');
+    
     const reset: Record<string, string> = {};
     filteredColumns.forEach(col => {
       const fieldKey = currentFieldMapping[col];
@@ -877,18 +877,15 @@ export default function Training() {
                    </div>
                    <div className="relative w-[200px]">
                      <Input
-                       ref={searchInputRef}
-                       value={query}
-                       onChange={handleSearchChange}
+                       value={searchQuery}
+                       onChange={(e) => setSearchQuery(e.target.value)}
                        onFocus={(e) => e.currentTarget.select()}
                        placeholder="Employee name or ID"
                        className="h-8 text-sm pr-8 bg-white border-purple-200 shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                      />
-                     {query && (
+                     {searchQuery && (
                        <button
-                         onClick={() => {
-                           setQuery('');
-                         }}
+                         onClick={() => setSearchQuery('')}
                          className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
                        >
                          <X className="w-4 h-4" />

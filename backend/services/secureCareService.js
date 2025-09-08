@@ -63,12 +63,66 @@ class SecureCareService {
       request.input('area', sql.VarChar, filters.area);
     }
     
-    if (filters.search) {
-      query += ` ${query.includes('WHERE') ? 'AND' : 'WHERE'} (e.name LIKE @search OR e.employeeNumber LIKE @search)`;
-      request.input('search', sql.VarChar, `%${filters.search}%`);
-    }
-    
-    // Add pagination
+      if (filters.search) {
+        query += ` ${query.includes('WHERE') ? 'AND' : 'WHERE'} (e.name LIKE @search OR e.employeeNumber LIKE @search)`;
+        request.input('search', sql.VarChar, `%${filters.search}%`);
+      }
+      
+      if (filters.jobTitle && filters.jobTitle !== 'all') {
+        query += ` ${query.includes('WHERE') ? 'AND' : 'WHERE'} e.staffRoll = @jobTitle`;
+        request.input('jobTitle', sql.VarChar, filters.jobTitle);
+      }
+      
+      // Status filter - this is complex as it depends on awardType and completion status
+      if (filters.status && filters.status !== 'all') {
+        let statusCondition = '';
+        switch (filters.status) {
+          case 'Not Started':
+            statusCondition = `(e.awardType IS NULL OR e.assignedDate IS NULL)`;
+            break;
+          case 'Level 1 In Progress':
+            statusCondition = `(e.awardType = 'Level 1' AND e.secureCareAwarded = 0 AND (e.awaiting IS NULL OR e.awaiting = 0))`;
+            break;
+          case 'Level 1':
+            statusCondition = `(e.awardType = 'Level 1' AND e.secureCareAwarded = 1)`;
+            break;
+          case 'Level 2 In Progress':
+            statusCondition = `(e.awardType = 'Level 2' AND e.secureCareAwarded = 0 AND (e.awaiting IS NULL OR e.awaiting = 0))`;
+            break;
+          case 'Level 2':
+            statusCondition = `(e.awardType = 'Level 2' AND e.secureCareAwarded = 1)`;
+            break;
+          case 'Level 3 In Progress':
+            statusCondition = `(e.awardType = 'Level 3' AND e.secureCareAwarded = 0 AND (e.awaiting IS NULL OR e.awaiting = 0))`;
+            break;
+          case 'Level 3':
+            statusCondition = `(e.awardType = 'Level 3' AND e.secureCareAwarded = 1)`;
+            break;
+          case 'Consultant In Progress':
+            statusCondition = `(e.awardType = 'Consultant' AND e.secureCareAwarded = 0 AND (e.awaiting IS NULL OR e.awaiting = 0))`;
+            break;
+          case 'Consultant':
+            statusCondition = `(e.awardType = 'Consultant' AND e.secureCareAwarded = 1)`;
+            break;
+          case 'Coach In Progress':
+            statusCondition = `(e.awardType = 'Coach' AND e.secureCareAwarded = 0 AND (e.awaiting IS NULL OR e.awaiting = 0))`;
+            break;
+          case 'Coach':
+            statusCondition = `(e.awardType = 'Coach' AND e.secureCareAwarded = 1)`;
+            break;
+          case 'Awaiting Approval':
+            statusCondition = `(e.awaiting = 1)`;
+            break;
+          case 'Conference Rejected':
+            statusCondition = `(e.awaiting IS NULL)`;
+            break;
+        }
+        if (statusCondition) {
+          query += ` ${query.includes('WHERE') ? 'AND' : 'WHERE'} ${statusCondition}`;
+        }
+      }
+      
+      // Add pagination
     const page = parseInt(filters.page) || 1;
     const limit = parseInt(filters.limit) || 50;
     const offset = (page - 1) * limit;
@@ -99,12 +153,66 @@ class SecureCareService {
       countRequest.input('area', sql.VarChar, filters.area);
     }
     
-    if (filters.search) {
-      countQuery += ` ${countQuery.includes('WHERE') ? 'AND' : 'WHERE'} (e.name LIKE @search OR e.employeeNumber LIKE @search)`;
-      countRequest.input('search', sql.VarChar, `%${filters.search}%`);
-    }
-    
-    const countResult = await countRequest.query(countQuery);
+      if (filters.search) {
+        countQuery += ` ${countQuery.includes('WHERE') ? 'AND' : 'WHERE'} (e.name LIKE @search OR e.employeeNumber LIKE @search)`;
+        countRequest.input('search', sql.VarChar, `%${filters.search}%`);
+      }
+      
+      if (filters.jobTitle && filters.jobTitle !== 'all') {
+        countQuery += ` ${countQuery.includes('WHERE') ? 'AND' : 'WHERE'} e.staffRoll = @jobTitle`;
+        countRequest.input('jobTitle', sql.VarChar, filters.jobTitle);
+      }
+      
+      // Status filter for count query
+      if (filters.status && filters.status !== 'all') {
+        let statusCondition = '';
+        switch (filters.status) {
+          case 'Not Started':
+            statusCondition = `(e.awardType IS NULL OR e.assignedDate IS NULL)`;
+            break;
+          case 'Level 1 In Progress':
+            statusCondition = `(e.awardType = 'Level 1' AND e.secureCareAwarded = 0 AND (e.awaiting IS NULL OR e.awaiting = 0))`;
+            break;
+          case 'Level 1':
+            statusCondition = `(e.awardType = 'Level 1' AND e.secureCareAwarded = 1)`;
+            break;
+          case 'Level 2 In Progress':
+            statusCondition = `(e.awardType = 'Level 2' AND e.secureCareAwarded = 0 AND (e.awaiting IS NULL OR e.awaiting = 0))`;
+            break;
+          case 'Level 2':
+            statusCondition = `(e.awardType = 'Level 2' AND e.secureCareAwarded = 1)`;
+            break;
+          case 'Level 3 In Progress':
+            statusCondition = `(e.awardType = 'Level 3' AND e.secureCareAwarded = 0 AND (e.awaiting IS NULL OR e.awaiting = 0))`;
+            break;
+          case 'Level 3':
+            statusCondition = `(e.awardType = 'Level 3' AND e.secureCareAwarded = 1)`;
+            break;
+          case 'Consultant In Progress':
+            statusCondition = `(e.awardType = 'Consultant' AND e.secureCareAwarded = 0 AND (e.awaiting IS NULL OR e.awaiting = 0))`;
+            break;
+          case 'Consultant':
+            statusCondition = `(e.awardType = 'Consultant' AND e.secureCareAwarded = 1)`;
+            break;
+          case 'Coach In Progress':
+            statusCondition = `(e.awardType = 'Coach' AND e.secureCareAwarded = 0 AND (e.awaiting IS NULL OR e.awaiting = 0))`;
+            break;
+          case 'Coach':
+            statusCondition = `(e.awardType = 'Coach' AND e.secureCareAwarded = 1)`;
+            break;
+          case 'Awaiting Approval':
+            statusCondition = `(e.awaiting = 1)`;
+            break;
+          case 'Conference Rejected':
+            statusCondition = `(e.awaiting IS NULL)`;
+            break;
+        }
+        if (statusCondition) {
+          countQuery += ` ${countQuery.includes('WHERE') ? 'AND' : 'WHERE'} ${statusCondition}`;
+        }
+      }
+      
+      const countResult = await countRequest.query(countQuery);
     const total = countResult.recordset[0].total;
     
     return {
@@ -439,12 +547,66 @@ class SecureCareService {
       request.input('area', sql.VarChar, filters.area);
     }
     
-    if (filters.search) {
-      query += ` AND (e.name LIKE @search OR e.employeeNumber LIKE @search)`;
-      request.input('search', sql.VarChar, `%${filters.search}%`);
-    }
-    
-    // Add pagination
+      if (filters.search) {
+        query += ` AND (e.name LIKE @search OR e.employeeNumber LIKE @search)`;
+        request.input('search', sql.VarChar, `%${filters.search}%`);
+      }
+      
+      if (filters.jobTitle && filters.jobTitle !== 'all') {
+        query += ` AND e.staffRoll = @jobTitle`;
+        request.input('jobTitle', sql.VarChar, filters.jobTitle);
+      }
+      
+      // Status filter - this is complex as it depends on awardType and completion status
+      if (filters.status && filters.status !== 'all') {
+        let statusCondition = '';
+        switch (filters.status) {
+          case 'Not Started':
+            statusCondition = `(e.awardType IS NULL OR e.assignedDate IS NULL)`;
+            break;
+          case 'Level 1 In Progress':
+            statusCondition = `(e.awardType = 'Level 1' AND e.secureCareAwarded = 0 AND (e.awaiting IS NULL OR e.awaiting = 0))`;
+            break;
+          case 'Level 1':
+            statusCondition = `(e.awardType = 'Level 1' AND e.secureCareAwarded = 1)`;
+            break;
+          case 'Level 2 In Progress':
+            statusCondition = `(e.awardType = 'Level 2' AND e.secureCareAwarded = 0 AND (e.awaiting IS NULL OR e.awaiting = 0))`;
+            break;
+          case 'Level 2':
+            statusCondition = `(e.awardType = 'Level 2' AND e.secureCareAwarded = 1)`;
+            break;
+          case 'Level 3 In Progress':
+            statusCondition = `(e.awardType = 'Level 3' AND e.secureCareAwarded = 0 AND (e.awaiting IS NULL OR e.awaiting = 0))`;
+            break;
+          case 'Level 3':
+            statusCondition = `(e.awardType = 'Level 3' AND e.secureCareAwarded = 1)`;
+            break;
+          case 'Consultant In Progress':
+            statusCondition = `(e.awardType = 'Consultant' AND e.secureCareAwarded = 0 AND (e.awaiting IS NULL OR e.awaiting = 0))`;
+            break;
+          case 'Consultant':
+            statusCondition = `(e.awardType = 'Consultant' AND e.secureCareAwarded = 1)`;
+            break;
+          case 'Coach In Progress':
+            statusCondition = `(e.awardType = 'Coach' AND e.secureCareAwarded = 0 AND (e.awaiting IS NULL OR e.awaiting = 0))`;
+            break;
+          case 'Coach':
+            statusCondition = `(e.awardType = 'Coach' AND e.secureCareAwarded = 1)`;
+            break;
+          case 'Awaiting Approval':
+            statusCondition = `(e.awaiting = 1)`;
+            break;
+          case 'Conference Rejected':
+            statusCondition = `(e.awaiting IS NULL)`;
+            break;
+        }
+        if (statusCondition) {
+          query += ` AND ${statusCondition}`;
+        }
+      }
+      
+      // Add pagination
     const page = parseInt(filters.page) || 1;
     const limit = parseInt(filters.limit) || 50;
     const offset = (page - 1) * limit;
@@ -492,12 +654,66 @@ class SecureCareService {
       countRequest.input('area', sql.VarChar, filters.area);
     }
     
-    if (filters.search) {
-      countQuery += ` AND (e.name LIKE @search OR e.employeeNumber LIKE @search)`;
-      countRequest.input('search', sql.VarChar, `%${filters.search}%`);
-    }
-    
-    const countResult = await countRequest.query(countQuery);
+      if (filters.search) {
+        countQuery += ` AND (e.name LIKE @search OR e.employeeNumber LIKE @search)`;
+        countRequest.input('search', sql.VarChar, `%${filters.search}%`);
+      }
+      
+      if (filters.jobTitle && filters.jobTitle !== 'all') {
+        countQuery += ` AND e.staffRoll = @jobTitle`;
+        countRequest.input('jobTitle', sql.VarChar, filters.jobTitle);
+      }
+      
+      // Status filter for count query
+      if (filters.status && filters.status !== 'all') {
+        let statusCondition = '';
+        switch (filters.status) {
+          case 'Not Started':
+            statusCondition = `(e.awardType IS NULL OR e.assignedDate IS NULL)`;
+            break;
+          case 'Level 1 In Progress':
+            statusCondition = `(e.awardType = 'Level 1' AND e.secureCareAwarded = 0 AND (e.awaiting IS NULL OR e.awaiting = 0))`;
+            break;
+          case 'Level 1':
+            statusCondition = `(e.awardType = 'Level 1' AND e.secureCareAwarded = 1)`;
+            break;
+          case 'Level 2 In Progress':
+            statusCondition = `(e.awardType = 'Level 2' AND e.secureCareAwarded = 0 AND (e.awaiting IS NULL OR e.awaiting = 0))`;
+            break;
+          case 'Level 2':
+            statusCondition = `(e.awardType = 'Level 2' AND e.secureCareAwarded = 1)`;
+            break;
+          case 'Level 3 In Progress':
+            statusCondition = `(e.awardType = 'Level 3' AND e.secureCareAwarded = 0 AND (e.awaiting IS NULL OR e.awaiting = 0))`;
+            break;
+          case 'Level 3':
+            statusCondition = `(e.awardType = 'Level 3' AND e.secureCareAwarded = 1)`;
+            break;
+          case 'Consultant In Progress':
+            statusCondition = `(e.awardType = 'Consultant' AND e.secureCareAwarded = 0 AND (e.awaiting IS NULL OR e.awaiting = 0))`;
+            break;
+          case 'Consultant':
+            statusCondition = `(e.awardType = 'Consultant' AND e.secureCareAwarded = 1)`;
+            break;
+          case 'Coach In Progress':
+            statusCondition = `(e.awardType = 'Coach' AND e.secureCareAwarded = 0 AND (e.awaiting IS NULL OR e.awaiting = 0))`;
+            break;
+          case 'Coach':
+            statusCondition = `(e.awardType = 'Coach' AND e.secureCareAwarded = 1)`;
+            break;
+          case 'Awaiting Approval':
+            statusCondition = `(e.awaiting = 1)`;
+            break;
+          case 'Conference Rejected':
+            statusCondition = `(e.awaiting IS NULL)`;
+            break;
+        }
+        if (statusCondition) {
+          countQuery += ` AND ${statusCondition}`;
+        }
+      }
+      
+      const countResult = await countRequest.query(countQuery);
     const total = countResult.recordset[0].total;
     
     // Debug logging for Sophia Allen
@@ -597,6 +813,47 @@ class SecureCareService {
     console.log('getEmployeeLevelsByEmployeeId: Records:', levelsResult.recordset.map(r => ({ employeeId: r.employeeId, awardType: r.awardType, name: r.name })));
 
     return levelsResult.recordset;
+  }
+
+  // Get filter options for dropdowns
+  async getFilterOptions() {
+    const pool = await getPool();
+    
+    // Get unique facilities
+    const facilitiesQuery = `
+      SELECT DISTINCT facility 
+      FROM dbo.SecureCareEmployee 
+      WHERE facility IS NOT NULL AND facility != ''
+      ORDER BY facility
+    `;
+    
+    // Get unique areas
+    const areasQuery = `
+      SELECT DISTINCT area 
+      FROM dbo.SecureCareEmployee 
+      WHERE area IS NOT NULL AND area != ''
+      ORDER BY area
+    `;
+    
+    // Get unique job titles (staffRoll)
+    const jobTitlesQuery = `
+      SELECT DISTINCT staffRoll 
+      FROM dbo.SecureCareEmployee 
+      WHERE staffRoll IS NOT NULL AND staffRoll != ''
+      ORDER BY staffRoll
+    `;
+    
+    const [facilitiesResult, areasResult, jobTitlesResult] = await Promise.all([
+      pool.request().query(facilitiesQuery),
+      pool.request().query(areasQuery),
+      pool.request().query(jobTitlesQuery)
+    ]);
+    
+    return {
+      facilities: facilitiesResult.recordset.map(row => row.facility),
+      areas: areasResult.recordset.map(row => row.area),
+      jobTitles: jobTitlesResult.recordset.map(row => row.staffRoll)
+    };
   }
 }
 

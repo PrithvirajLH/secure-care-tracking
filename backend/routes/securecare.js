@@ -10,6 +10,8 @@ router.get('/employees/:level', async (req, res) => {
       facility: req.query.facility,
       area: req.query.area,
       search: req.query.search,
+      status: req.query.status,
+      jobTitle: req.query.jobTitle,
       page: req.query.page || 1,
       limit: req.query.limit || 50
     };
@@ -34,6 +36,8 @@ router.get('/employees-unique/:level', async (req, res) => {
       facility: req.query.facility,
       area: req.query.area,
       search: req.query.search,
+      status: req.query.status,
+      jobTitle: req.query.jobTitle,
       page: req.query.page || 1,
       limit: req.query.limit || 50
     };
@@ -184,6 +188,21 @@ router.get('/advisors', async (req, res) => {
     console.error('Get advisors error:', error);
     res.status(500).json({ 
       error: 'Failed to get advisors',
+      message: error.message 
+    });
+  }
+});
+
+// Get filter options (facilities, areas, job titles)
+router.get('/filter-options', async (req, res) => {
+  try {
+    const options = await secureCareService.getFilterOptions();
+    res.json(options);
+    
+  } catch (error) {
+    console.error('Get filter options error:', error);
+    res.status(500).json({ 
+      error: 'Failed to get filter options',
       message: error.message 
     });
   }

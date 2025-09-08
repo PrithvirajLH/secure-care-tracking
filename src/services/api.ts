@@ -53,6 +53,14 @@ class SecureCareAPI {
       params.append('search', filters.search);
     }
     
+    if (filters.status && filters.status !== 'all') {
+      params.append('status', filters.status);
+    }
+    
+    if (filters.jobTitle && filters.jobTitle !== 'all') {
+      params.append('jobTitle', filters.jobTitle);
+    }
+    
     const response = await fetch(`${this.baseURL}/securecare/employees/${encodeURIComponent(level)}?${params}`);
     
     if (!response.ok) {
@@ -79,6 +87,14 @@ class SecureCareAPI {
     
     if (filters.search) {
       params.append('search', filters.search);
+    }
+    
+    if (filters.status && filters.status !== 'all') {
+      params.append('status', filters.status);
+    }
+    
+    if (filters.jobTitle && filters.jobTitle !== 'all') {
+      params.append('jobTitle', filters.jobTitle);
     }
     
     const response = await fetch(`${this.baseURL}/securecare/employees-unique/${encodeURIComponent(level)}?${params}`);
@@ -196,6 +212,17 @@ class SecureCareAPI {
       throw new Error(`Failed to fetch advisors: ${response.statusText}`);
     }
 
+    return response.json();
+  }
+
+  // Get filter options
+  async getFilterOptions(): Promise<{ facilities: string[]; areas: string[]; jobTitles: string[] }> {
+    const response = await fetch(`${this.baseURL}/securecare/filter-options`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch filter options: ${response.statusText}`);
+    }
+    
     return response.json();
   }
 
