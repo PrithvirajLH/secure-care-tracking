@@ -46,6 +46,25 @@ router.get('/employee/:id', async (req, res) => {
   }
 });
 
+// Get all awardType records for an employee (by employeeId -> employeeNumber)
+router.get('/employee/:id/levels', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const records = await secureCareService.getEmployeeLevelsByEmployeeId(parseInt(id));
+    res.json(records);
+  } catch (error) {
+    console.error('Get employee levels error:', error);
+    if (error.message === 'Employee not found') {
+      res.status(404).json({ error: 'Employee not found' });
+    } else {
+      res.status(500).json({ 
+        error: 'Internal server error',
+        message: error.message 
+      });
+    }
+  }
+});
+
 // Approve conference
 router.post('/approve', async (req, res) => {
   try {

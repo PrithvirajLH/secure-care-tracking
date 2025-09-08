@@ -361,6 +361,80 @@ class SecureCareService {
     
     return result.recordset[0];
   }
+
+  // Get all awardType records for a given employee based on their employeeNumber
+  async getEmployeeLevelsByEmployeeId(employeeId) {
+    const pool = await getPool();
+    const request = pool.request();
+    request.input('employeeId', sql.Int, employeeId);
+
+    // First, find the employeeNumber for the provided employeeId
+    const currentResult = await request.query(`
+      SELECT employeeNumber FROM dbo.SecureCareEmployee WHERE employeeId = @employeeId
+    `);
+
+    if (currentResult.recordset.length === 0) {
+      throw new Error('Employee not found');
+    }
+
+    const employeeNumber = currentResult.recordset[0].employeeNumber;
+    console.log('getEmployeeLevelsByEmployeeId: Found employeeNumber:', employeeNumber, 'for employeeId:', employeeId);
+
+    // Now fetch all records with the same employeeNumber (all award types/levels)
+    const levelsRequest = pool.request();
+    levelsRequest.input('employeeNumber', sql.VarChar(50), employeeNumber);
+
+    const levelsResult = await levelsRequest.query(`
+      SELECT 
+        e.employeeId,
+        e.employeeNumber,
+        e.name,
+        e.facility,
+        e.area,
+        e.staffRoll,
+        e.awardType,
+        FORMAT(e.assignedDate, 'yyyy-MM-dd') AS assignedDate,
+        FORMAT(e.completedDate, 'yyyy-MM-dd') AS completedDate,
+        FORMAT(e.conferenceCompleted, 'yyyy-MM-dd') AS conferenceCompleted,
+        FORMAT(e.scheduleStandingVideo, 'yyyy-MM-dd') AS scheduleStandingVideo,
+        FORMAT(e.standingVideo, 'yyyy-MM-dd') AS standingVideo,
+        FORMAT(e.scheduleSleepingVideo, 'yyyy-MM-dd') AS scheduleSleepingVideo,
+        FORMAT(e.sleepingVideo, 'yyyy-MM-dd') AS sleepingVideo,
+        FORMAT(e.scheduleFeedGradVideo, 'yyyy-MM-dd') AS scheduleFeedGradVideo,
+        FORMAT(e.feedGradVideo, 'yyyy-MM-dd') AS feedGradVideo,
+        FORMAT(e.schedulenoHandnoSpeak, 'yyyy-MM-dd') AS schedulenoHandnoSpeak,
+        FORMAT(e.noHandnoSpeak, 'yyyy-MM-dd') AS noHandnoSpeak,
+        FORMAT(e.[scheduleSession#1], 'yyyy-MM-dd') AS scheduleSession1,
+        FORMAT(e.[session#1], 'yyyy-MM-dd') AS session1,
+        FORMAT(e.[scheduleSession#2], 'yyyy-MM-dd') AS scheduleSession2,
+        FORMAT(e.[session#2], 'yyyy-MM-dd') AS session2,
+        FORMAT(e.[scheduleSession#3], 'yyyy-MM-dd') AS scheduleSession3,
+        FORMAT(e.[session#3], 'yyyy-MM-dd') AS session3,
+        e.secureCareAwarded,
+        FORMAT(e.secureCareAwardedDate, 'yyyy-MM-dd') AS secureCareAwardedDate,
+        e.awaiting,
+        e.notes,
+        e.advisorId,
+        a.firstName + ' ' + ISNULL(a.lastName, '') as advisorName
+      FROM dbo.SecureCareEmployee e
+      LEFT JOIN dbo.Advisor a ON e.advisorId = a.advisorId
+      WHERE e.employeeNumber = @employeeNumber
+      ORDER BY 
+        CASE 
+          WHEN e.awardType = 'Level 1' THEN 1
+          WHEN e.awardType = 'Level 2' THEN 2
+          WHEN e.awardType = 'Level 3' THEN 3
+          WHEN e.awardType = 'Consultant' THEN 4
+          WHEN e.awardType = 'Coach' THEN 5
+          ELSE 99
+        END
+    `);
+
+    console.log('getEmployeeLevelsByEmployeeId: Found records:', levelsResult.recordset.length, 'for employeeNumber:', employeeNumber);
+    console.log('getEmployeeLevelsByEmployeeId: Records:', levelsResult.recordset.map(r => ({ employeeId: r.employeeId, awardType: r.awardType, name: r.name })));
+
+    return levelsResult.recordset;
+  }
 }
 
 module.exports = new SecureCareService();

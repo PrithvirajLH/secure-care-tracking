@@ -73,6 +73,17 @@ class SecureCareAPI {
     return response.json();
   }
 
+  // Get all SecureCareEmployee records for an employee across award types
+  async getEmployeeLevels(employeeId: string): Promise<any[]> {
+    const response = await fetch(`${this.baseURL}/securecare/employee/${employeeId}/levels`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch employee levels: ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+
   // Schedule a training requirement
   async scheduleTraining(employeeId: string, columnName: string, date: Date): Promise<TrainingData> {
     console.log('API: Scheduling training for employee:', employeeId, 'column:', columnName, 'date:', date);
