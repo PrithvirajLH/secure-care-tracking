@@ -48,7 +48,7 @@ import {
   Target
 } from "lucide-react";
 import { useTrainingData } from "@/hooks/useTrainingData";
-import { useEmployees } from "@/hooks/useEmployees";
+import { useTrainingEmployees } from "@/hooks/useEmployees";
 import { toast } from "sonner";
 import PageHeader from "@/components/PageHeader";
 
@@ -67,14 +67,14 @@ export default function Analytics() {
   const filters = useMemo(() => ({
     facility: selectedFacility !== "all" ? selectedFacility : undefined,
     area: undefined, // Include all areas for analytics
-    status: 'active' // Only active employees
+    // No status filter - include all employees for comprehensive analytics
   }), [selectedFacility]);
 
   const {
     employees: currentEmployees,
     isLoading: isLoadingEmployees,
     error: employeesError
-  } = useEmployees(filters); // Get employees for analytics (default 10)
+  } = useTrainingEmployees(filters, 100); // Get all employee records for analytics
 
   // Use currentEmployees from API instead of state.employees for consistency
   const employees = currentEmployees || [];
@@ -247,7 +247,7 @@ export default function Analytics() {
     
     // Apply facility filter
     if (selectedFacility !== "all") {
-      employees = employees.filter(e => e.facility === selectedFacility);
+      employees = employees.filter(e => (e.facility || e.Facility) === selectedFacility);
     }
 
     // Apply time range filter with enhanced options including custom date range
@@ -309,12 +309,29 @@ export default function Analytics() {
     const inProgress = filteredEmployees.filter(e => e.assignedDate && !e.secureCareAwarded).length;
     const notStarted = totalEmployees - completedCertifications - inProgress;
 
-    // Level-wise breakdown
+    // Level-wise breakdown - using exact same logic as Dashboard
     const level1Completed = filteredEmployees.filter(e => e.awardType === 'Level 1' && e.secureCareAwarded).length;
     const level2Completed = filteredEmployees.filter(e => e.awardType === 'Level 2' && e.secureCareAwarded).length;
     const level3Completed = filteredEmployees.filter(e => e.awardType === 'Level 3' && e.secureCareAwarded).length;
     const consultantCompleted = filteredEmployees.filter(e => e.awardType === 'Consultant' && e.secureCareAwarded).length;
     const coachCompleted = filteredEmployees.filter(e => e.awardType === 'Coach' && e.secureCareAwarded).length;
+
+    // Calculate in-progress counts using exact same logic as Dashboard
+    const level1InProgress = filteredEmployees.filter(e => 
+      e.awardType === 'Level 1' && e.assignedDate && !e.secureCareAwarded
+    ).length;
+    const level2InProgress = filteredEmployees.filter(e => 
+      e.awardType === 'Level 2' && !e.secureCareAwarded && e.awaiting !== 1 && e.awaiting !== true
+    ).length;
+    const level3InProgress = filteredEmployees.filter(e => 
+      e.awardType === 'Level 3' && !e.secureCareAwarded && e.awaiting !== 1 && e.awaiting !== true
+    ).length;
+    const consultantInProgress = filteredEmployees.filter(e => 
+      e.awardType === 'Consultant' && !e.secureCareAwarded && e.awaiting !== 1 && e.awaiting !== true
+    ).length;
+    const coachInProgress = filteredEmployees.filter(e => 
+      e.awardType === 'Coach' && !e.secureCareAwarded && e.awaiting !== 1 && e.awaiting !== true
+    ).length;
 
     // Advanced metrics
     const averageCompletionTime = calculateAverageCompletionTime(filteredEmployees);
@@ -324,8 +341,9 @@ export default function Analytics() {
 
     // Facility performance with advanced metrics
     const facilityStats = filteredEmployees.reduce((acc, emp) => {
-      if (!acc[emp.facility]) {
-        acc[emp.facility] = { 
+      const facilityName = emp.facility || emp.Facility;
+      if (!acc[facilityName]) {
+        acc[facilityName] = { 
           total: 0, 
           completed: 0, 
           inProgress: 0, 
@@ -333,11 +351,11 @@ export default function Analytics() {
           efficiency: 0
         };
       }
-      acc[emp.facility].total++;
+      acc[facilityName].total++;
       if (emp.secureCareAwarded) {
-        acc[emp.facility].completed++;
+        acc[facilityName].completed++;
       } else if (emp.assignedDate && !emp.secureCareAwarded) {
-        acc[emp.facility].inProgress++;
+        acc[facilityName].inProgress++;
       }
       return acc;
     }, {} as Record<string, { total: number; completed: number; inProgress: number; avgTime: number; efficiency: number }>);
@@ -346,7 +364,7 @@ export default function Analytics() {
     Object.keys(facilityStats).forEach(facility => {
       const stats = facilityStats[facility];
       stats.efficiency = (stats.completed / stats.total) * 100;
-      stats.avgTime = calculateFacilityAvgTime(filteredEmployees.filter(e => e.facility === facility));
+      stats.avgTime = calculateFacilityAvgTime(filteredEmployees.filter(e => (e.facility || e.Facility) === facility));
     });
 
     // Area performance with trends
@@ -384,7 +402,7 @@ export default function Analytics() {
       { 
         level: "Level 1", 
         completed: level1Completed, 
-        inProgress: filteredEmployees.filter(e => e.awardType === 'Level 1' && e.assignedDate && !e.secureCareAwarded).length, 
+        inProgress: level1InProgress, 
         target: totalEmployees * 0.8,
         efficiency: (level1Completed / totalEmployees) * 100,
         avgTime: calculateLevelAvgTime(filteredEmployees, 'level1')
@@ -392,7 +410,7 @@ export default function Analytics() {
       { 
         level: "Level 2", 
         completed: level2Completed, 
-        inProgress: filteredEmployees.filter(e => e.awardType === 'Level 2' && e.assignedDate && !e.secureCareAwarded).length, 
+        inProgress: level2InProgress, 
         target: totalEmployees * 0.6,
         efficiency: (level2Completed / totalEmployees) * 100,
         avgTime: calculateLevelAvgTime(filteredEmployees, 'level2')
@@ -400,7 +418,7 @@ export default function Analytics() {
       { 
         level: "Level 3", 
         completed: level3Completed, 
-        inProgress: filteredEmployees.filter(e => e.awardType === 'Level 3' && e.assignedDate && !e.secureCareAwarded).length, 
+        inProgress: level3InProgress, 
         target: totalEmployees * 0.4,
         efficiency: (level3Completed / totalEmployees) * 100,
         avgTime: calculateLevelAvgTime(filteredEmployees, 'level3')
@@ -408,7 +426,7 @@ export default function Analytics() {
       { 
         level: "Consultant", 
         completed: consultantCompleted, 
-        inProgress: filteredEmployees.filter(e => e.awardType === 'Consultant' && e.assignedDate && !e.secureCareAwarded).length, 
+        inProgress: consultantInProgress, 
         target: totalEmployees * 0.2,
         efficiency: (consultantCompleted / totalEmployees) * 100,
         avgTime: calculateLevelAvgTime(filteredEmployees, 'consultant')
@@ -416,7 +434,7 @@ export default function Analytics() {
       { 
         level: "Coach", 
         completed: coachCompleted, 
-        inProgress: filteredEmployees.filter(e => e.awardType === 'Coach' && e.assignedDate && !e.secureCareAwarded).length, 
+        inProgress: coachInProgress, 
         target: totalEmployees * 0.1,
         efficiency: (coachCompleted / totalEmployees) * 100,
         avgTime: calculateLevelAvgTime(filteredEmployees, 'coach')
@@ -425,8 +443,9 @@ export default function Analytics() {
 
                // Top performing facilities with efficiency metrics (always use all data, not filtered)
       const allFacilityStats = currentEmployees.reduce((acc, emp) => {
-       if (!acc[emp.facility]) {
-         acc[emp.facility] = { 
+       const facilityName = emp.facility || emp.Facility;
+       if (!acc[facilityName]) {
+         acc[facilityName] = { 
            total: 0, 
            completed: 0, 
            inProgress: 0, 
@@ -434,11 +453,11 @@ export default function Analytics() {
            efficiency: 0
          };
        }
-       acc[emp.facility].total++;
+       acc[facilityName].total++;
        if (emp.secureCareAwarded) {
-         acc[emp.facility].completed++;
+         acc[facilityName].completed++;
        } else if (emp.assignedDate && !emp.secureCareAwarded) {
-         acc[emp.facility].inProgress++;
+         acc[facilityName].inProgress++;
        }
        return acc;
      }, {} as Record<string, { total: number; completed: number; inProgress: number; avgTime: number; efficiency: number }>);
@@ -517,7 +536,7 @@ export default function Analytics() {
       activeTrainingSessions: currentEmployees.filter(e => e.assignedDate && !e.secureCareAwarded).length,
       overdueTraining: currentEmployees.filter(e => 
         e.assignedDate && !e.secureCareAwarded && 
-        new Date(e.assignedDate.getTime() + 30 * 24 * 60 * 60 * 1000) < new Date()
+        new Date(new Date(e.assignedDate).getTime() + 30 * 24 * 60 * 60 * 1000) < new Date()
       ).length,
       recentCompletions: currentEmployees.filter(e => 
         e.secureCareAwardedDate && 
@@ -727,7 +746,8 @@ export default function Analytics() {
                 <SelectContent>
                   <SelectItem value="all">All Facilities</SelectItem>
                   {Object.keys(currentEmployees.reduce((acc, emp) => {
-                    acc[emp.facility] = true;
+                    const facilityName = emp.facility || emp.Facility;
+                    acc[facilityName] = true;
                     return acc;
                   }, {} as Record<string, boolean>)).map(facility => (
                     <SelectItem key={facility} value={facility}>{facility}</SelectItem>
