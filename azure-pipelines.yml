@@ -1,0 +1,62 @@
+# Azure DevOps Pipeline for SecureCare Application
+trigger:
+- main
+- develop
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  nodeVersion: '18.x'
+  azureServiceConnection: 'SecureCare-ServiceConnection'
+  azureWebAppName: 'securecare-app'
+  azureResourceGroup: 'SecureCare-RG'
+
+stages:
+- stage: Build
+  displayName: 'Build and Test'
+  jobs:
+  - job: BuildJob
+    displayName: 'Build Application'
+    steps:
+    - task: NodeTool@0
+      displayName: 'Install Node.js'
+      inputs:
+        versionSpec: $(nodeVersion)
+    
+    - script: |
+        npm ci
+      displayName: 'Install Dependencies'
+    
+    - script: |
+        npm run build:prod
+      displayName: 'Build Application'
+    
+    - task: PublishBuildArtifacts@1
+      displayName: 'Publish Build Artifacts'
+      inputs:
+        pathToPublish: 'backend'
+        artifactName: 'securecare-app'
+
+- stage: Deploy
+  displayName: 'Deploy to Azure'
+  dependsOn: Build
+  condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+  jobs:
+  - deployment: DeployJob
+    displayName: 'Deploy to Azure App Service'
+    environment: 'production'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - task: AzureWebApp@1
+            displayName: 'Deploy to Azure App Service'
+            inputs:
+              azureSubscription: $(azureServiceConnection)
+              appName: $(azureWebAppName)
+              resourceGroupName: $(azureResourceGroup)
+              package: $(Pipeline.Workspace)/securecare-app
+              appSettings: |
+                -NODE_ENV "production"
+                -PORT "8080"

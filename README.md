@@ -104,16 +104,28 @@ NODE_ENV=development
 
 ## 🚀 Deployment
 
-### Build for Production
+### Production Build
 ```bash
-npm run build
+# Build integrated frontend + backend application
+npm run build:prod
+
+# Start the production application
+npm start
 ```
 
-### Deploy to Vercel/Netlify
-1. Connect your repository
-2. Set build command: `npm run build`
-3. Set output directory: `dist`
-4. Configure environment variables
+### Azure Deployment
+For detailed Azure deployment instructions, see [AZURE-DEPLOYMENT.md](./AZURE-DEPLOYMENT.md)
+
+**Quick Azure Deployment:**
+```bash
+# Automated deployment script
+./deploy-azure.sh "SecureCare-RG" "securecare-app" "East US"
+```
+
+### Other Deployment Options
+- **Docker**: Use the included `Dockerfile` and `docker-compose.yml`
+- **Azure DevOps**: Use the `azure-pipelines.yml` for CI/CD
+- **Manual**: Follow the build process and deploy the `backend` directory
 
 ## 📊 Database Schema
 

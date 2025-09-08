@@ -1,7 +1,7 @@
 {
   "name": "securecare-backend",
   "version": "1.0.0",
-  "description": "Backend API for SecureCare training management system",
+  "description": "SecureCare Training Management System - Production Build",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -26,5 +26,8 @@
     "sqlserver"
   ],
   "author": "SecureCare Team",
-  "license": "MIT"
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
 }
