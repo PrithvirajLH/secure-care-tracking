@@ -21,8 +21,8 @@ This is a production-ready build of the SecureCare Training Management System wi
    ```
 
 4. **Access the Application**
-   - Frontend: http://localhost:3001
-   - API: http://localhost:3001/api
+   - Frontend: http://localhost:8080
+   - API: http://localhost:8080/api
 
 ## Features
 
@@ -43,7 +43,7 @@ Ensure your SQL Server database is running and accessible with the credentials i
 - `DB_DATABASE`: Database name
 - `DB_USER`: Database username
 - `DB_PASSWORD`: Database password
-- `PORT`: Server port (default: 3001)
+- `PORT`: Server port (default: 8080)
 
 ## Project Structure
 

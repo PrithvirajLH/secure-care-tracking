@@ -20,6 +20,7 @@ export default defineConfig(({ mode }) => ({
     },
   },
   build: {
+    outDir: 'backend/dist',
     target: 'esnext',
     minify: 'terser',
     rollupOptions: {

@@ -29,39 +29,17 @@ const __dirname = path.dirname(__filename);
 
 console.log('🚀 Building SecureCare Application...\n');
 
-// Step 1: Build Frontend
+// Step 1: Build Frontend (now outputs directly to backend/dist)
 console.log('📦 Building Frontend...');
 try {
   execSync('npm run build', { stdio: 'inherit', cwd: __dirname });
-  console.log('✅ Frontend build completed\n');
+  console.log('✅ Frontend build completed (output to backend/dist)\n');
 } catch (error) {
   console.error('❌ Frontend build failed:', error.message);
   process.exit(1);
 }
 
-// Step 2: Copy Frontend Dist to Backend
-console.log('📁 Copying Frontend to Backend...');
-const frontendDistDir = path.join(__dirname, 'dist');
-const backendDir = path.join(__dirname, 'backend');
-const backendDistDir = path.join(backendDir, 'dist');
-
-// Create dist directory in backend
-if (!fs.existsSync(backendDistDir)) {
-  fs.mkdirSync(backendDistDir, { recursive: true });
-}
-
-// Copy frontend dist files to backend/dist
-const frontendFiles = fs.readdirSync(frontendDistDir);
-frontendFiles.forEach(file => {
-  const srcPath = path.join(frontendDistDir, file);
-  const destPath = path.join(backendDistDir, file);
-  copyFile(srcPath, destPath);
-  console.log(`  ✅ Copied frontend file: ${file}`);
-});
-
-console.log('✅ Frontend copied to backend/dist\n');
-
-// Step 3: Install Backend Dependencies
+// Step 2: Install Backend Dependencies
 console.log('📦 Installing Backend Dependencies...');
 try {
   execSync('npm install --production', { stdio: 'inherit', cwd: backendDir });
@@ -71,7 +49,7 @@ try {
   process.exit(1);
 }
 
-// Step 4: Update Backend Server to Serve Frontend
+// Step 3: Update Backend Server to Serve Frontend
 console.log('🔧 Updating Backend Server...');
 const updatedServerContent = `const express = require('express');
 const cors = require('cors');
@@ -177,7 +155,7 @@ module.exports = app;
 fs.writeFileSync(path.join(backendDir, 'server.js'), updatedServerContent);
 console.log('✅ Backend server updated to serve frontend');
 
-// Step 5: Update Backend Package.json
+// Step 4: Update Backend Package.json
 console.log('📄 Updating Backend Package.json...');
 const backendPackagePath = path.join(backendDir, 'package.json');
 const backendPackage = JSON.parse(fs.readFileSync(backendPackagePath, 'utf8'));
@@ -201,7 +179,7 @@ fs.writeFileSync(
 );
 console.log('✅ Backend package.json updated');
 
-// Step 6: Create Environment Template
+// Step 5: Create Environment Template
 console.log('🔐 Creating Environment Template...');
 const envTemplate = `# SecureCare Production Environment
 # Copy this file to .env and update with your actual values
@@ -225,7 +203,7 @@ CORS_ORIGINS=http://localhost:8080,https://your-app-name.azurewebsites.net
 fs.writeFileSync(path.join(backendDir, '.env.example'), envTemplate);
 console.log('✅ Environment template created');
 
-// Step 7: Create README for Production
+// Step 6: Create README for Production
 console.log('📖 Creating Production README...');
 const productionReadme = `# SecureCare Application - Production Build
 

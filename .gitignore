@@ -12,6 +12,9 @@ node_modules
 dist
 dist-ssr
 
+# Build outputs (root level should be ignored)
+/dist
+
 # Environment variables
 *.local
 .env
