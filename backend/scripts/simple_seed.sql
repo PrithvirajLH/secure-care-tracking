@@ -1,47 +1,134 @@
--- Simple seed data without explicit IDs
+-- Level 2 entries for the 10 Level 1–Awarded employees (all awaiting approval)
+-- awaiting: 0 = Awaiting, 1 = Approved, NULL = Rejected
 
--- Advisors (let identity auto-increment)
-INSERT INTO dbo.Advisor (firstName, lastName) VALUES
-('Miguel', 'Li'),
-('Taylor', 'Gupta'),
-('Nina', 'Lopez'),
-('Avery', 'Wilson'),
-('Morgan', 'Li'),
-('Sam', 'Gupta'),
-('Miguel', 'Lopez'),
-('Taylor', 'Wilson'),
-('Nina', 'Li'),
-('Avery', 'Gupta');
-
--- Get advisor IDs for reference
-DECLARE @advisor1 INT = (SELECT advisorId FROM dbo.Advisor WHERE firstName = 'Miguel' AND lastName = 'Li');
-DECLARE @advisor2 INT = (SELECT advisorId FROM dbo.Advisor WHERE firstName = 'Taylor' AND lastName = 'Gupta');
-DECLARE @advisor3 INT = (SELECT advisorId FROM dbo.Advisor WHERE firstName = 'Nina' AND lastName = 'Lopez');
-
--- Sample employees (let identity auto-increment)
 INSERT INTO dbo.SecureCareEmployee (
-  area, facility, staffRoll, name, employeeNumber, awardType, 
-  assignedDate, completedDate, conferenceCompleted, secureCareAwardedDate, 
-  secureCareAwarded, notes, advisorId, awaiting
+    area, facility, staffRoll, [name], employeeNumber,
+    awardType, assignedDate, completedDate, conferenceCompleted,
+    scheduleStandingVideo, standingVideo,
+    scheduleSleepingVideo, sleepingVideo,
+    scheduleFeedGradVideo, feedGradVideo,
+    schedulenoHandnoSpeak, noHandnoSpeak,
+    [scheduleSession#1], [session#1],
+    [scheduleSession#2], [session#2],
+    [scheduleSession#3], [session#3],
+    secureCareAwardedDate, secureCareAwarded, notes, advisorId, awaiting
 ) VALUES
--- Level 1 employees (read-only)
-('A2', 'Elm Grove', 'CNA', 'Chen Hassan', 'E1001', 'Level 1', '2025-08-02', '2025-08-09', NULL, NULL, 0, 'Test Level 1', @advisor2, 0),
-('A2', 'Northview', 'CNA', 'Nina Nguyen', 'E1002', 'Level 1', '2025-08-03', '2025-08-10', NULL, '2025-08-13', 1, 'Test Level 1 Awarded', @advisor3, 0),
-('A1', 'Southridge', 'CNA', 'Riley Li', 'E1003', 'Level 1', '2025-08-04', NULL, NULL, NULL, 0, 'Test Level 1 Incomplete', @advisor1, 0),
+-- 1) Amelia Baker
+('C1','Lakeside','LVN','Amelia Baker','E2019',
+ 'Level 2', NULL,NULL,'2025-08-20',
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,0,'Level 2 - Awaiting approval',86,0),
 
--- Level 2 employees (interactive)
-('A2', 'Elm Grove', 'CNA', 'Alex Johnson', 'E1011', 'Level 2', NULL, NULL, '2025-08-16', NULL, 0, 'Test Level 2 - Awaiting Approval', @advisor2, 0),
-('A1', 'Southridge', 'CNA', 'Maria Garcia', 'E1012', 'Level 2', NULL, NULL, '2025-08-18', '2025-08-28', 1, 'Test Level 2 - Approved & Awarded', @advisor1, 1),
-('E2', 'Lakeside', 'Med Aide', 'Sam Carter', 'E1004', 'Level 2', NULL, NULL, '2025-08-20', NULL, 0, 'Test Level 2 - Approved, Not Awarded', @advisor1, 1),
+-- 2) Ava White
+('D1','Hillview','CNA','Ava White','E2010',
+ 'Level 2', NULL,NULL,'2025-08-20',
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,0,'Level 2 - Awaiting approval',86,0),
 
--- Level 3 employees (interactive)
-('A2', 'Elm Grove', 'CNA', 'David Brown', 'E1021', 'Level 3', NULL, NULL, '2025-08-17', NULL, 0, 'Test Level 3 - Awaiting Approval', @advisor2, 0),
-('A1', 'Eastwood', 'Therapist', 'Nina Gupta', 'E1006', 'Level 3', NULL, NULL, '2025-08-22', '2025-09-02', 1, 'Test Level 3 - Complete', @advisor3, 1),
+-- 3) Charlotte Perez
+('D1','Hillview','CNA','Charlotte Perez','E2020',
+ 'Level 2', NULL,NULL,'2025-08-20',
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,0,'Level 2 - Awaiting approval',87,0),
 
--- Consultant employees (interactive)
-('A2', 'Southridge', 'Housekeeping', 'Riley Patel', 'E1007', 'Consultant', NULL, NULL, '2025-08-23', NULL, 0, 'Test Consultant - Awaiting', @advisor1, 0),
-('B1', 'Southridge', 'CNA', 'Chen Rao', 'E1031', 'Consultant', NULL, NULL, '2025-09-03', NULL, 0, 'Test Consultant - Approved', @advisor3, 1),
+-- 4) Daniel Young
+('C1','Westlake','CNA','Daniel Young','E2014',
+ 'Level 2', NULL,NULL,'2025-08-20',
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,0,'Level 2 - Awaiting approval',88,0),
 
--- Coach employees (interactive)
-('D2', 'Westlake', 'Housekeeping', 'Sam Wilson', 'E1041', 'Coach', NULL, NULL, '2025-09-10', NULL, 0, 'Test Coach - Awaiting', @advisor1, 0),
-('B2', 'Central Park', 'RN', 'Lisa Martinez', 'E1051', 'Coach', NULL, NULL, '2025-09-14', '2025-09-28', 1, 'Test Coach - Complete', @advisor2, 1);
+-- 5) Ethan Martin
+('A2','Southridge','RN','Ethan Martin','E2012',
+ 'Level 2', NULL,NULL,'2025-08-20',
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,0,'Level 2 - Awaiting approval',89,0),
+
+-- 6) Isabella Scott
+('A2','Central Park','CNA','Isabella Scott','E2017',
+ 'Level 2', NULL,NULL,'2025-08-20',
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,0,'Level 2 - Awaiting approval',90,0),
+
+-- 7) Matthew Lee
+('B1','Eastwood','LVN','Matthew Lee','E2013',
+ 'Level 2', NULL,NULL,'2025-08-20',
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,0,'Level 2 - Awaiting approval',91,0),
+
+-- 8) Mia Adams
+('B1','Hillcrest','RN','Mia Adams','E2018',
+ 'Level 2', NULL,NULL,'2025-08-20',
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,0,'Level 2 - Awaiting approval',92,0),
+
+-- 9) Michael Hall
+('D1','Pinecrest','Therapist','Michael Hall','E2015',
+ 'Level 2', NULL,NULL,'2025-08-20',
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,0,'Level 2 - Awaiting approval',93,0),
+
+-- 10) Sophia Allen
+('A1','Northview','Housekeeping','Sophia Allen','E2016',
+ 'Level 2', NULL,NULL,'2025-08-20',
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,NULL,
+ NULL,0,'Level 2 - Awaiting approval',94,0);

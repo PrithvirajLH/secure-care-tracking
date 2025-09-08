@@ -67,6 +67,24 @@ router.post('/approve', async (req, res) => {
   }
 });
 
+// Reject conference
+router.post('/reject', async (req, res) => {
+  try {
+    const { employeeId } = req.body;
+    if (!employeeId) {
+      return res.status(400).json({ error: 'employeeId is required' });
+    }
+    const result = await secureCareService.rejectConference(employeeId);
+    res.json(result);
+  } catch (error) {
+    console.error('Reject conference error:', error);
+    res.status(500).json({ 
+      error: 'Failed to reject conference',
+      message: error.message 
+    });
+  }
+});
+
 // Schedule training
 router.post('/schedule', async (req, res) => {
   try {

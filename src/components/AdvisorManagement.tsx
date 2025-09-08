@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useApp } from "@/context/AppContext";
 import { useEmployees } from "@/hooks/useEmployees";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,10 +29,11 @@ import {
   AlertCircle
 } from "lucide-react";
 import { toast } from "sonner";
+import { trainingAPI } from "@/services/api";
 
 interface Advisor {
-  id: string;
-  name: string;
+  id: string; // advisorId as string
+  name: string; // fullName
   email: string;
   specializations: string[];
   totalAssignments: number;
@@ -57,6 +58,8 @@ export default function AdvisorManagement() {
   const { state, dispatch } = useApp();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedAdvisor, setSelectedAdvisor] = useState<string>("all");
+  const [apiAdvisors, setApiAdvisors] = useState<any[]>([]);
+  const [loadingAdvisors, setLoadingAdvisors] = useState<boolean>(false);
   const [isAddAdvisorOpen, setIsAddAdvisorOpen] = useState(false);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [isNotesOpen, setIsNotesOpen] = useState(false);
@@ -73,92 +76,78 @@ export default function AdvisorManagement() {
   // Use currentEmployees if available, otherwise fall back to state.employees
   const employees = currentEmployees && currentEmployees.length > 0 ? currentEmployees : state.employees;
 
-  // Extract unique advisors from employee data
+  // Load advisors from the backend to ensure we show all advisors
+  useEffect(() => {
+    const load = async () => {
+      setLoadingAdvisors(true);
+      try {
+        const list = await trainingAPI.getAdvisors();
+        setApiAdvisors(list);
+      } catch (e) {
+        console.error('Failed to load advisors', e);
+        toast.error('Failed to load advisors');
+      } finally {
+        setLoadingAdvisors(false);
+      }
+    };
+    load();
+  }, []);
+
+  // Merge advisors from API with employee stats
   const advisors = useMemo(() => {
-    const advisorMap = new Map<string, Advisor>();
-    
-    employees.forEach(employee => {
-      const levels = [
-        { name: 'Level 1', advisor: employee.level1Advisor, awarded: employee.level1Awarded, assignedDate: employee.level1ReliasAssigned },
-        { name: 'Level 2', advisor: employee.level2Advisor, awarded: employee.level2Awarded, assignedDate: employee.level2ReliasAssigned },
-        { name: 'Level 3', advisor: employee.level3Advisor, awarded: employee.level3Awarded, assignedDate: employee.level3ReliasAssigned },
-        { name: 'Consultant', advisor: employee.consultantAdvisor, awarded: employee.consultantAwarded, assignedDate: employee.consultantReliasAssigned },
-        { name: 'Coach', advisor: employee.coachAdvisor, awarded: employee.coachAwarded, assignedDate: employee.coachReliasAssigned }
-      ];
+    const result: Advisor[] = apiAdvisors.map((a: any) => ({
+      id: String(a.advisorId),
+      name: a.fullName || `${a.firstName} ${a.lastName || ''}`.trim(),
+      email: `${(a.fullName || `${a.firstName} ${a.lastName || ''}`).toLowerCase().replace(/\s+/g, '.')}@securecare.com`,
+      specializations: [],
+      totalAssignments: 0,
+      activeAssignments: 0,
+      completedAssignments: 0,
+      successRate: 0,
+      status: 'active'
+    }));
 
-      levels.forEach(level => {
-        if (level.advisor && level.advisor.trim() !== '') {
-          if (!advisorMap.has(level.advisor)) {
-            advisorMap.set(level.advisor, {
-              id: level.advisor.toLowerCase().replace(/\s+/g, '-'),
-              name: level.advisor,
-              email: `${level.advisor.toLowerCase().replace(/\s+/g, '.')}@securecare.com`,
-              specializations: [],
-              totalAssignments: 0,
-              activeAssignments: 0,
-              completedAssignments: 0,
-              successRate: 0,
-              status: 'active'
-            });
-          }
-          
-          const advisor = advisorMap.get(level.advisor)!;
-          advisor.totalAssignments++;
-          
-          if (level.assignedDate) {
-            if (level.awarded) {
-              advisor.completedAssignments++;
-            } else {
-              advisor.activeAssignments++;
-            }
-          }
-          
-          if (!advisor.specializations.includes(level.name)) {
-            advisor.specializations.push(level.name);
-          }
-        }
-      });
+    const idToAdvisor = new Map(result.map(r => [r.id, r] as const));
+
+    employees.forEach((employee: any) => {
+      const id = employee.advisorId != null ? String(employee.advisorId) : undefined;
+      if (!id) return;
+      const adv = idToAdvisor.get(id);
+      if (!adv) return; // advisor exists even if not present in assignments
+      adv.totalAssignments++;
+      if (employee.assignedDate) {
+        if (employee.secureCareAwarded) adv.completedAssignments++; else adv.activeAssignments++;
+      }
+      const spec = employee.awardType || 'Level 1';
+      if (!adv.specializations.includes(spec)) adv.specializations.push(spec);
     });
 
-    // Calculate success rates
-    advisorMap.forEach(advisor => {
-      advisor.successRate = advisor.totalAssignments > 0 
-        ? Math.round((advisor.completedAssignments / advisor.totalAssignments) * 100)
-        : 0;
+    result.forEach(adv => {
+      adv.successRate = adv.totalAssignments > 0 ? Math.round((adv.completedAssignments / adv.totalAssignments) * 100) : 0;
     });
 
-    return Array.from(advisorMap.values()).sort((a, b) => a.name.localeCompare(b.name));
-  }, [employees]);
+    return result.sort((a, b) => a.name.localeCompare(b.name));
+  }, [apiAdvisors, employees]);
 
   // Get advisor assignments
-  const getAdvisorAssignments = (advisorName: string): AdvisorAssignment[] => {
+  const getAdvisorAssignments = (advisorId: string): AdvisorAssignment[] => {
     const assignments: AdvisorAssignment[] = [];
     
     employees.forEach(employee => {
-      const levels = [
-        { name: 'Level 1', advisor: employee.level1Advisor, awarded: employee.level1Awarded, assignedDate: employee.level1ReliasAssigned, notes: employee.level1Notes },
-        { name: 'Level 2', advisor: employee.level2Advisor, awarded: employee.level2Awarded, assignedDate: employee.level2ReliasAssigned, notes: employee.level2Notes },
-        { name: 'Level 3', advisor: employee.level3Advisor, awarded: employee.level3Awarded, assignedDate: employee.level3ReliasAssigned, notes: employee.level3Notes },
-        { name: 'Consultant', advisor: employee.consultantAdvisor, awarded: employee.consultantAwarded, assignedDate: employee.consultantReliasAssigned, notes: employee.consultantNotes },
-        { name: 'Coach', advisor: employee.coachAdvisor, awarded: employee.coachAwarded, assignedDate: employee.coachReliasAssigned, notes: employee.coachNotes }
-      ];
-
-      levels.forEach(level => {
-        if (level.advisor === advisorName && level.assignedDate) {
-          const daysSinceAssigned = Math.floor((new Date().getTime() - level.assignedDate.getTime()) / (1000 * 60 * 60 * 24));
-          
-          assignments.push({
-            employeeId: employee.employeeId,
-            employeeName: employee.name,
-            level: level.name,
-            assignedDate: level.assignedDate,
-            status: level.awarded ? 'completed' : (daysSinceAssigned > 60 ? 'overdue' : 'in_progress'),
-            notes: level.notes || '',
-            facility: employee.facility,
-            area: employee.area
-          });
-        }
-      });
+      if (String((employee as any).advisorId ?? '') === advisorId) {
+        const assignedDate = (employee as any).assignedDate ? new Date((employee as any).assignedDate) : new Date();
+        const daysSinceAssigned = Math.floor((Date.now() - assignedDate.getTime()) / (1000 * 60 * 60 * 24));
+        assignments.push({
+          employeeId: (employee as any).employeeId,
+          employeeName: (employee as any).name || (employee as any).Employee,
+          level: (employee as any).awardType || 'Level 1',
+          assignedDate,
+          status: (employee as any).secureCareAwarded ? 'completed' : (daysSinceAssigned > 60 ? 'overdue' : 'in_progress'),
+          notes: (employee as any).notes || '',
+          facility: (employee as any).facility || (employee as any).Facility,
+          area: (employee as any).area || (employee as any).Area
+        });
+      }
     });
 
     return assignments.sort((a, b) => b.assignedDate.getTime() - a.assignedDate.getTime());
@@ -524,7 +513,7 @@ export default function AdvisorManagement() {
                 <SelectContent>
                   <SelectItem value="all">All Advisors</SelectItem>
                   {advisors.map(advisor => (
-                    <SelectItem key={advisor.id} value={advisor.name}>
+                    <SelectItem key={advisor.id} value={advisor.id}>
                       {advisor.name}
                     </SelectItem>
                   ))}
@@ -554,8 +543,8 @@ export default function AdvisorManagement() {
                 </TableHeader>
                 <TableBody>
                   {advisors
-                    .filter(advisor => selectedAdvisor === "all" || advisor.name === selectedAdvisor)
-                    .flatMap(advisor => getAdvisorAssignments(advisor.name))
+                    .filter(advisor => selectedAdvisor === "all" || advisor.id === selectedAdvisor)
+                    .flatMap(advisor => getAdvisorAssignments(advisor.id))
                     .slice(0, 20)
                     .map((assignment, index) => (
                     <TableRow key={`${assignment.employeeId}-${assignment.level}-${index}`}>

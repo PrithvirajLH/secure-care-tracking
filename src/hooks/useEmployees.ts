@@ -25,7 +25,7 @@ export const useEmployees = (filters: EmployeeFilters, pageSize: number = 10) =>
   const { data, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ['employees', filters.level, currentPage, JSON.stringify(filters)],
     queryFn: async () => {
-      const level = filters.level ? getLevelFromTabKey(filters.level) : 'Level 1';
+      const level = filters.level ? getLevelFromTabKey(filters.level) : 'all';
       return trainingAPI.getEmployeesByLevel(level, {
         ...filters,
         page: currentPage,

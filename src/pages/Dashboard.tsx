@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Award, FileText, Plus, UsersRound, Clock, CheckCircle, AlertCircle, TrendingUp, RefreshCw, Home } from "lucide-react";
+import { Award, FileText, UsersRound, Clock, CheckCircle, AlertCircle, TrendingUp, Home } from "lucide-react";
 import { Pie, PieChart, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from "recharts";
 import { motion } from "framer-motion";
 import { useApp } from "@/context/AppContext";
@@ -123,6 +123,12 @@ export default function Dashboard() {
       return overdueDate < new Date();
     }).length;
 
+    // Awaiting approvals (L2+ conference completed but awaiting approval or simply flagged awaiting=0)
+    const awaitingApprovals = employees.filter(e => {
+      if (e.awardType === 'Level 1') return false;
+        return e.awaiting === 1 || e.awaiting === true; // 1 or true => awaiting approval
+    }).length;
+
     // Calculate completion percentages
     const level1Percentage = Math.round((level1Completed / Math.max(total, 1)) * 100);
     const level2Percentage = Math.round((level2Completed / Math.max(level1Completed, 1)) * 100);
@@ -136,6 +142,7 @@ export default function Dashboard() {
       totalInProgress: level1InProgress + level2InProgress + level3InProgress + consultantInProgress + coachInProgress,
       totalPending: level1Pending + level2Pending + level3Pending + consultantPending + coachPending,
       totalOverdue: level1Overdue + level2Overdue + level3Overdue,
+      awaitingApprovals,
       completion: { 
         level1: level1Percentage, 
         level2: level2Percentage, 
@@ -285,18 +292,14 @@ export default function Dashboard() {
           </Card>
         </motion.div>
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45 }}>
-          <Card className="shadow-sm bg-gradient-to-br from-red-50 to-red-100 border-red-200">
+          <Card className="shadow-sm bg-gradient-to-br from-amber-50 to-amber-100 border-amber-200">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-red-700">Overdue Training</CardTitle>
-              <AlertCircle className="h-4 w-4 text-red-700" />
+              <CardTitle className="text-sm font-medium text-amber-700">Awaiting Approvals</CardTitle>
+              <AlertCircle className="h-4 w-4 text-amber-700" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-red-700">
-                {enhancedStats.totalOverdue}
-              </div>
-              <p className="text-xs text-red-600 mt-1">
-                Training overdue
-              </p>
+              <div className="text-3xl font-bold text-amber-700">{enhancedStats.awaitingApprovals}</div>
+              <p className="text-xs text-amber-600 mt-1">Conference approvals pending</p>
             </CardContent>
           </Card>
         </motion.div>
@@ -339,76 +342,46 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* Overdue Training Details - Actionable Information */}
-      {enhancedStats.overdueTraining > 0 && (
-        <Card className="shadow-sm border-red-200 bg-red-50">
+      {/* Awaiting approvals details */}
+      {enhancedStats.awaitingApprovals > 0 && (
+        <Card className="shadow-sm border-amber-200 bg-amber-50">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-red-700">
+            <CardTitle className="flex items-center gap-2 text-amber-700">
               <AlertCircle className="w-5 h-5" />
-              Overdue Training Sessions
+              Awaiting Conference Approvals
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-red-700">
-                  {enhancedStats.overdueTraining} training sessions are overdue
+                <span className="text-sm font-medium text-amber-700">
+                  {enhancedStats.awaitingApprovals} items awaiting approval
                 </span>
-                <span className="text-xs text-red-600">
-                  Scheduled dates have passed
+                <span className="text-xs text-amber-600">
+                  Approve to progress awarding
                 </span>
               </div>
               
-              {/* Action Cards */}
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                <div className="p-3 bg-white rounded-lg border border-red-200">
-                  <div className="text-sm font-medium text-red-700">Action Required</div>
-                  <div className="text-xs text-red-600 mt-1">
-                    Reschedule or mark as complete
-                  </div>
-                </div>
-                <div className="p-3 bg-white rounded-lg border border-red-200">
-                  <div className="text-sm font-medium text-red-700">Contact Needed</div>
-                  <div className="text-xs text-red-600 mt-1">
-                    Reach out to employees
-                  </div>
-                </div>
-                <div className="p-3 bg-white rounded-lg border border-red-200">
-                  <div className="text-sm font-medium text-red-700">Update Status</div>
-                  <div className="text-xs text-red-600 mt-1">
-                    Mark completed if done
-                  </div>
-                </div>
-              </div>
-
-              {/* Overdue Training List */}
+              {/* Awaiting list */}
               <div className="mt-4">
-                <div className="text-sm font-medium text-red-700 mb-2">Overdue Employees:</div>
+                <div className="text-sm font-medium text-amber-700 mb-2">Awaiting employees:</div>
                 <div className="space-y-2 max-h-40 overflow-y-auto">
                   {employees
-                    .filter(e => {
-                      if (!e.assignedDate || e.secureCareAwarded) return false;
-                      const assignedDate = new Date(e.assignedDate);
-                      const overdueDate = new Date(assignedDate.getTime() + 30 * 24 * 60 * 60 * 1000);
-                      return overdueDate < new Date();
-                    })
+                    .filter(e => e.awaiting === 0)
                     .slice(0, 5) // Show top 5 overdue
                     .map((employee, index) => {
-                      const assignedDate = new Date(employee.assignedDate);
-                      const daysOverdue = Math.ceil((new Date().getTime() - assignedDate.getTime()) / (1000 * 60 * 60 * 24));
-                      
                       return (
-                        <div key={index} className="flex items-center justify-between p-2 bg-white rounded border border-red-200">
+                        <div key={index} className="flex items-center justify-between p-2 bg-white rounded border border-amber-200">
                           <div className="flex-1">
                             <div className="text-sm font-medium text-gray-700">
                               {employee.name}
                             </div>
                             <div className="text-xs text-gray-500">
-                              {employee.awardType || 'Training'} - {daysOverdue} day{daysOverdue !== 1 ? 's' : ''} overdue
+                              {employee.awardType || 'Training'} - Awaiting approval
                             </div>
                           </div>
-                          <div className="text-xs text-red-600 font-medium">
-                            {new Date(employee.assignedDate).toLocaleDateString()}
+                          <div className="text-xs text-amber-600 font-medium">
+                            {employee.conferenceCompleted ? new Date(employee.conferenceCompleted).toLocaleDateString() : '—'}
                           </div>
                         </div>
                       );
@@ -504,7 +477,7 @@ export default function Dashboard() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-2">
         <Card className="shadow-sm lg:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -542,16 +515,6 @@ export default function Dashboard() {
                 </li>
               )}
             </ul>
-          </CardContent>
-        </Card>
-        <Card className="shadow-sm">
-          <CardHeader>
-            <CardTitle>Quick Actions</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-2">
-            <Button variant="default" className="hover-scale"><Plus className="mr-2" /> Assign Training</Button>
-            <Button variant="secondary" className="hover-scale"><FileText className="mr-2" /> Run Report</Button>
-            <Button variant="outline" className="hover-scale"><Award className="mr-2" /> Manage Certifications</Button>
           </CardContent>
         </Card>
       </div>

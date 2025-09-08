@@ -37,8 +37,9 @@ import {
 } from "lucide-react";
 import { Employee } from "@/context/AppContext";
 import { format } from "date-fns";
-import { useTrainingData } from "@/hooks/useTrainingData";
+import { useTrainingData, trainingKeys } from "@/hooks/useTrainingData";
 import { trainingAPI } from "@/services/api";
+import { useQuery } from '@tanstack/react-query';
 
 interface EmployeeDetailModalProps {
   employee: Employee;
@@ -48,11 +49,30 @@ interface EmployeeDetailModalProps {
 
 export default function EmployeeDetailModal({ employee, children, onModalOpenChange }: EmployeeDetailModalProps) {
   const [open, setOpen] = useState(false);
-  const [notes, setNotes] = useState(employee.notes || "");
-  const [selectedAdvisorId, setSelectedAdvisorId] = useState<string>(employee.advisorId?.toString() || "");
   const [advisors, setAdvisors] = useState<any[]>([]);
   const [isUpdatingNotes, setIsUpdatingNotes] = useState(false);
   const [isUpdatingAdvisor, setIsUpdatingAdvisor] = useState(false);
+
+  // Fetch fresh employee data from API to ensure we have the latest data
+  const { data: freshEmployeeData, isLoading: isLoadingEmployee } = useQuery({
+    queryKey: trainingKeys.employee(employee.employeeId.toString()),
+    queryFn: () => trainingAPI.getEmployeeById(employee.employeeId.toString()),
+    enabled: open, // Only fetch when modal is open
+    staleTime: 0, // Always fetch fresh data
+  });
+
+  // Use fresh data if available, otherwise fall back to prop data
+  const currentEmployee = freshEmployeeData || employee;
+  
+  const [notes, setNotes] = useState(employee.notes || "");
+  const [selectedAdvisorId, setSelectedAdvisorId] = useState<string>(employee.advisorId?.toString() || "none");
+
+  // Update notes and level when currentEmployee changes
+  useEffect(() => {
+    setNotes(currentEmployee.notes || "");
+    setSelectedAdvisorId(currentEmployee.advisorId?.toString() || "none");
+    setCurrentLevel(getEmployeeLevel(currentEmployee));
+  }, [currentEmployee]);
 
   // Notify parent component when modal opens/closes
   useEffect(() => {
@@ -81,16 +101,16 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
 
   // Handle notes update
   const handleNotesUpdate = async () => {
-    if (notes === (employee.notes || "")) return; // No changes
+    if (notes === (currentEmployee.notes || "")) return; // No changes
     
     setIsUpdatingNotes(true);
     try {
-      await trainingAPI.updateEmployeeNotes(employee.employeeId.toString(), notes);
+      await trainingAPI.updateEmployeeNotes(currentEmployee.employeeId.toString(), notes);
       toast.success('Notes updated successfully');
     } catch (error) {
       console.error('Failed to update notes:', error);
       toast.error('Failed to update notes');
-      setNotes(employee.notes || ""); // Revert on error
+      setNotes(currentEmployee.notes || ""); // Revert on error
     } finally {
       setIsUpdatingNotes(false);
     }
@@ -98,18 +118,18 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
 
   // Handle advisor update
   const handleAdvisorUpdate = async (advisorId: string) => {
-    const newAdvisorId = advisorId === "" ? null : parseInt(advisorId);
-    if (newAdvisorId === employee.advisorId) return; // No changes
+    const newAdvisorId = advisorId === "none" ? null : parseInt(advisorId);
+    if (newAdvisorId === currentEmployee.advisorId) return; // No changes
     
     setIsUpdatingAdvisor(true);
     try {
-      await trainingAPI.updateEmployeeAdvisor(employee.employeeId.toString(), newAdvisorId);
+      await trainingAPI.updateEmployeeAdvisor(currentEmployee.employeeId.toString(), newAdvisorId);
       setSelectedAdvisorId(advisorId);
       toast.success('Advisor updated successfully');
     } catch (error) {
       console.error('Failed to update advisor:', error);
       toast.error('Failed to update advisor');
-      setSelectedAdvisorId(employee.advisorId?.toString() || ""); // Revert on error
+      setSelectedAdvisorId(currentEmployee.advisorId?.toString() || "none"); // Revert on error
     } finally {
       setIsUpdatingAdvisor(false);
     }
@@ -131,79 +151,96 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
   } = useTrainingData();
   
   const [inlineDatePicker, setInlineDatePicker] = useState<string | null>(null);
-  const [currentLevel, setCurrentLevel] = useState("care-partner");
+  // Determine the correct level based on employee's award type
+  const getEmployeeLevel = (employee: any) => {
+    if (employee.awardType === 'Level 1') return 'care-partner';
+    if (employee.awardType === 'Level 2') return 'associate';
+    if (employee.awardType === 'Level 3') return 'champion';
+    return 'care-partner'; // default
+  };
+  
+  const [currentLevel, setCurrentLevel] = useState(() => getEmployeeLevel(employee));
+
+  // Award gating per level to avoid showing awarded across other tabs
+  const isAwardedFor = (levelName: string) => {
+    return (currentEmployee as any).awardType === levelName && !!(currentEmployee as any).secureCareAwarded;
+  };
+
+  const getAwardedDateFor = (levelName: string) => {
+    return isAwardedFor(levelName) ? (currentEmployee as any).secureCareAwardedDate : null;
+  };
 
   const getLevelProgress = (level: string) => {
     switch (level) {
              case "care-partner":
-         return {
-           requirements: [
-             { name: "Relias Training Assigned", key: "assignedDate", completed: !!employee.assignedDate, date: employee.assignedDate },
-             { name: "Relias Training Completed", key: "completedDate", completed: !!employee.completedDate, date: employee.completedDate },
-             { name: "Level 1 Awarded", key: "secureCareAwarded", completed: employee.secureCareAwarded, date: employee.secureCareAwardedDate }
-           ],
-           total: 3,
-           completed: [!!employee.assignedDate, !!employee.completedDate, employee.secureCareAwarded].filter(Boolean).length,
+        return {
+          requirements: [
+            { name: "Relias Training Assigned", key: "assignedDate", completed: !!currentEmployee.assignedDate, date: currentEmployee.assignedDate },
+            { name: "Relias Training Completed", key: "completedDate", completed: !!currentEmployee.completedDate, date: currentEmployee.completedDate },
+            { name: "Level 1 Awarded", key: "secureCareAwarded", completed: isAwardedFor('Level 1'), date: getAwardedDateFor('Level 1') }
+          ],
+          total: 3,
+          completed: [!!currentEmployee.assignedDate, !!currentEmployee.completedDate, isAwardedFor('Level 1')].filter(Boolean).length,
           color: "text-blue-600",
           icon: Users
         };
       case "associate":
         return {
           requirements: [
-            { name: "Conference Completed", key: "conferenceCompleted", completed: !!employee.conferenceCompleted, date: employee.conferenceCompleted },
-            { name: "Standing Video", key: "standingVideo", completed: !!employee.standingVideo, date: employee.standingVideo },
-            { name: "Sleeping/Sitting Video", key: "sleepingVideo", completed: !!employee.sleepingVideo, date: employee.sleepingVideo },
-            { name: "Feeding Video", key: "feedGradVideo", completed: !!employee.feedGradVideo, date: employee.feedGradVideo },
-            { name: "Level 2 Awarded", key: "secureCareAwarded", completed: employee.secureCareAwarded, date: employee.secureCareAwardedDate }
+            { name: "Conference Completed", key: "conferenceCompleted", completed: !!currentEmployee.conferenceCompleted, date: currentEmployee.conferenceCompleted },
+            { name: "Standing Video", key: "standingVideo", completed: !!currentEmployee.standingVideo, date: currentEmployee.standingVideo },
+            { name: "Sleeping/Sitting Video", key: "sleepingVideo", completed: !!currentEmployee.sleepingVideo, date: currentEmployee.sleepingVideo },
+            { name: "Feeding Video", key: "feedGradVideo", completed: !!currentEmployee.feedGradVideo, date: currentEmployee.feedGradVideo },
+            { name: "Level 2 Awarded", key: "secureCareAwarded", completed: isAwardedFor('Level 2'), date: getAwardedDateFor('Level 2') }
           ],
           total: 5,
-          completed: [!!employee.conferenceCompleted, 
-                     !!employee.standingVideo, !!employee.sleepingVideo, !!employee.feedGradVideo, employee.secureCareAwarded].filter(Boolean).length,
+          completed: [!!currentEmployee.conferenceCompleted, 
+                     !!currentEmployee.standingVideo, !!currentEmployee.sleepingVideo, !!currentEmployee.feedGradVideo, isAwardedFor('Level 2')].filter(Boolean).length,
           color: "text-green-600",
           icon: Award
         };
       case "champion":
         return {
           requirements: [
-            { name: "Conference Completed", key: "conferenceCompleted", completed: !!employee.conferenceCompleted, date: employee.conferenceCompleted },
-            { name: "Sitting/Standing/Approaching", key: "standingVideo", completed: !!employee.standingVideo, date: employee.standingVideo },
-            { name: "No Hand/No Speak", key: "noHandnoSpeak", completed: !!employee.noHandnoSpeak, date: employee.noHandnoSpeak },
-            { name: "Challenge Sleeping", key: "sleepingVideo", completed: !!employee.sleepingVideo, date: employee.sleepingVideo },
-            { name: "Level 3 Awarded", key: "secureCareAwarded", completed: employee.secureCareAwarded, date: employee.secureCareAwardedDate }
+            { name: "Conference Completed", key: "conferenceCompleted", completed: !!currentEmployee.conferenceCompleted, date: currentEmployee.conferenceCompleted },
+            { name: "Sitting/Standing/Approaching", key: "standingVideo", completed: !!currentEmployee.standingVideo, date: currentEmployee.standingVideo },
+            { name: "No Hand/No Speak", key: "noHandnoSpeak", completed: !!currentEmployee.noHandnoSpeak, date: currentEmployee.noHandnoSpeak },
+            { name: "Challenge Sleeping", key: "sleepingVideo", completed: !!currentEmployee.sleepingVideo, date: currentEmployee.sleepingVideo },
+            { name: "Level 3 Awarded", key: "secureCareAwarded", completed: isAwardedFor('Level 3'), date: getAwardedDateFor('Level 3') }
           ],
           total: 5,
-          completed: [!!employee.conferenceCompleted,
-                     !!employee.standingVideo, !!employee.noHandnoSpeak, !!employee.sleepingVideo, employee.secureCareAwarded].filter(Boolean).length,
+          completed: [!!currentEmployee.conferenceCompleted,
+                     !!currentEmployee.standingVideo, !!currentEmployee.noHandnoSpeak, !!currentEmployee.sleepingVideo, isAwardedFor('Level 3')].filter(Boolean).length,
           color: "text-purple-600",
           icon: Star
         };
       case "consultant":
         return {
           requirements: [
-            { name: "Conference Completed", key: "conferenceCompleted", completed: !!employee.conferenceCompleted, date: employee.conferenceCompleted },
-            { name: "Coaching Session 1", key: "session1", completed: !!employee.session1, date: employee.session1 },
-            { name: "Coaching Session 2", key: "session2", completed: !!employee.session2, date: employee.session2 },
-            { name: "Coaching Session 3", key: "session3", completed: !!employee.session3, date: employee.session3 },
-            { name: "Consultant Awarded", key: "secureCareAwarded", completed: employee.secureCareAwarded, date: employee.secureCareAwardedDate }
+            { name: "Conference Completed", key: "conferenceCompleted", completed: !!currentEmployee.conferenceCompleted, date: currentEmployee.conferenceCompleted },
+            { name: "Coaching Session 1", key: "session1", completed: !!currentEmployee.session1, date: currentEmployee.session1 },
+            { name: "Coaching Session 2", key: "session2", completed: !!currentEmployee.session2, date: currentEmployee.session2 },
+            { name: "Coaching Session 3", key: "session3", completed: !!currentEmployee.session3, date: currentEmployee.session3 },
+            { name: "Consultant Awarded", key: "secureCareAwarded", completed: isAwardedFor('Consultant'), date: getAwardedDateFor('Consultant') }
           ],
           total: 5,
-          completed: [!!employee.conferenceCompleted,
-                     !!employee.session1, !!employee.session2, !!employee.session3, employee.secureCareAwarded].filter(Boolean).length,
+          completed: [!!currentEmployee.conferenceCompleted,
+                     !!currentEmployee.session1, !!currentEmployee.session2, !!currentEmployee.session3, isAwardedFor('Consultant')].filter(Boolean).length,
           color: "text-orange-600",
           icon: GraduationCap
         };
       case "coach":
         return {
           requirements: [
-            { name: "Conference Completed", key: "conferenceCompleted", completed: !!employee.conferenceCompleted, date: employee.conferenceCompleted },
-            { name: "Coaching Session 1", key: "session1", completed: !!employee.session1, date: employee.session1 },
-            { name: "Coaching Session 2", key: "session2", completed: !!employee.session2, date: employee.session2 },
-            { name: "Coaching Session 3", key: "session3", completed: !!employee.session3, date: employee.session3 },
-            { name: "Coach Awarded", key: "secureCareAwarded", completed: employee.secureCareAwarded, date: employee.secureCareAwardedDate }
+            { name: "Conference Completed", key: "conferenceCompleted", completed: !!currentEmployee.conferenceCompleted, date: currentEmployee.conferenceCompleted },
+            { name: "Coaching Session 1", key: "session1", completed: !!currentEmployee.session1, date: currentEmployee.session1 },
+            { name: "Coaching Session 2", key: "session2", completed: !!currentEmployee.session2, date: currentEmployee.session2 },
+            { name: "Coaching Session 3", key: "session3", completed: !!currentEmployee.session3, date: currentEmployee.session3 },
+            { name: "Coach Awarded", key: "secureCareAwarded", completed: isAwardedFor('Coach'), date: getAwardedDateFor('Coach') }
           ],
           total: 5,
-          completed: [!!employee.conferenceCompleted,
-                     !!employee.session1, !!employee.session2, !!employee.session3, employee.secureCareAwarded].filter(Boolean).length,
+          completed: [!!currentEmployee.conferenceCompleted,
+                     !!currentEmployee.session1, !!currentEmployee.session2, !!currentEmployee.session3, isAwardedFor('Coach')].filter(Boolean).length,
           color: "text-teal-600",
           icon: TrendingUp
         };
@@ -354,12 +391,11 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
   // Get status badge for requirements
   const getStatusBadge = (requirement: any) => {
     const value = employee[requirement.key];
-    const key = `${employee.employeeId}-${requirement.key}`;
+    const key = `${currentEmployee.employeeId}-${requirement.key}`;
     const isInlineDatePickerOpen = inlineDatePicker === key;
     const isConferenceRequirement = /ConferenceCompleted/i.test(requirement.key);
     const isLevel1 = currentLevel === 'care-partner';
-    const awaiting = (employee as any).awaiting;
-    const conferenceRejected = (employee as any).conferenceRejected;
+    
     const awardTypeFromLevel = (levelKey: string): string => {
       switch (levelKey) {
         case 'associate':
@@ -379,20 +415,21 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
     // For now, we'll use a simple approach - if it's not completed, it can be scheduled
     const canBeScheduled = !value && !requirement.key.includes("Awarded");
     
-    console.log('getStatusBadge:', { 
-      requirementKey: requirement.key, 
-      key, 
-      value, 
-      canBeScheduled,
-      isInlineDatePickerOpen 
-    });
+    // console.log('getStatusBadge:', { 
+    //   requirementKey: requirement.key, 
+    //   key, 
+    //   value, 
+    //   canBeScheduled,
+    //   isInlineDatePickerOpen 
+    // });
 
     if (requirement.key.includes("Awarded")) {
-      const awardDateKey = requirement.key.replace("Awarded", "AwardedDate");
-      const awardDate = employee[awardDateKey];
+      // Only show awarded for the active level tab
+      const levelName = awardTypeFromLevel(currentLevel);
+      const isAwardedThisLevel = (employee as any).awardType === levelName && !!(employee as any).secureCareAwarded;
+      const awardDate = isAwardedThisLevel ? (employee as any).secureCareAwardedDate : null;
       
-      // Check for existing awarded value first
-      if (value) {
+      if (isAwardedThisLevel) {
         return (
           <div className="flex flex-col gap-1">
             <div className="inline-flex items-center justify-center gap-1 bg-gradient-to-r from-green-500 to-emerald-500 text-white px-2 py-1 rounded-full text-sm font-semibold shadow-sm w-20">
@@ -419,7 +456,7 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
             {isInlineDatePickerOpen ? (
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => handleMarkAwarded(String(employee.employeeId), requirement.key)}
+                  onClick={() => handleMarkAwarded(String(currentEmployee.employeeId), requirement.key)}
                   disabled={isAwarding}
                   className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white px-3 py-1.5 rounded-lg text-sm font-semibold hover:from-green-600 hover:to-emerald-600 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -468,7 +505,12 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
     
     // Conference approval flow for all levels except Level 1
     if (isConferenceRequirement && !isLevel1) {
-      if (conferenceRejected) {
+      const levelName = awardTypeFromLevel(currentLevel);
+      const isAwaitingThisLevel = (currentEmployee as any).awardType === levelName && ((currentEmployee as any).awaiting === 1 || (currentEmployee as any).awaiting === true);
+      const isRejectedThisLevel = (currentEmployee as any).awardType === levelName && (currentEmployee as any).awaiting === null;
+      
+
+      if (isRejectedThisLevel) {
         return (
           <div className="inline-flex items-center gap-1 bg-red-100 text-red-700 px-2 py-1 rounded-full text-sm font-semibold border border-red-200">
             <AlertCircle className="w-3 h-3" />
@@ -476,7 +518,7 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
           </div>
         );
       }
-      if (awaiting) {
+      if (isAwaitingThisLevel) {
         return (
           <div className="flex items-center gap-2">
             <div className="inline-flex items-center gap-1 bg-amber-100 text-amber-800 px-2 py-1 rounded-full text-sm font-semibold border border-amber-200">
@@ -484,14 +526,18 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
               <span className="text-sm">Awaiting Approval</span>
             </div>
             <button
-              onClick={() => approveConference && approveConference({ employeeId: String(employee.employeeId) })}
+              onClick={() => {
+                if (approveConference) {
+                  approveConference({ employeeId: String(currentEmployee.employeeId) });
+                }
+              }}
               disabled={isApprovingConference}
               className="inline-flex items-center justify-center gap-1 bg-green-600 text-white px-2 py-1 rounded-md text-sm hover:bg-green-700 disabled:opacity-50"
             >
               {isApprovingConference ? 'Approving...' : 'Approve'}
             </button>
             <button
-              onClick={() => rejectConference && rejectConference({ employeeId: String(employee.employeeId) })}
+              onClick={() => rejectConference && rejectConference({ employeeId: String(currentEmployee.employeeId) })}
               disabled={isRejectingConference}
               className="inline-flex items-center justify-center gap-1 bg-red-600 text-white px-2 py-1 rounded-md text-sm hover:bg-red-700 disabled:opacity-50"
             >
@@ -525,7 +571,7 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
                  date={undefined}
                  onDateChange={(date) => {
                    console.log('DatePicker onDateChange called with:', date);
-                   handleScheduleDate(String(employee.employeeId), requirement.key, date);
+                   handleScheduleDate(String(currentEmployee.employeeId), requirement.key, date);
                  }}
                  placeholder="Select date"
                />
@@ -563,22 +609,22 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
-                <span>{employee.name}</span>
-                <Badge variant="outline">{employee.staffRoles}</Badge>
+                <span>{currentEmployee.name || (employee as any).Employee}</span>
+                <Badge variant="outline">{(employee as any).staffRoll || (employee as any).staffRoles || 'N/A'}</Badge>
               </CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="flex items-center gap-2">
                 <Building className="w-4 h-4 text-muted-foreground" />
-                <span className="text-sm">{employee.facility}</span>
+                <span className="text-sm">{currentEmployee.facility || (employee as any).Facility}</span>
               </div>
               <div className="flex items-center gap-2">
                 <MapPin className="w-4 h-4 text-muted-foreground" />
-                <span className="text-sm">{employee.area}</span>
+                <span className="text-sm">{currentEmployee.area || (employee as any).Area}</span>
               </div>
               <div className="flex items-center gap-2">
                 <User className="w-4 h-4 text-muted-foreground" />
-                <span className="text-sm">{employee.employeeId}</span>
+                <span className="text-sm">{(employee as any).employeeNumber || currentEmployee.employeeId}</span>
               </div>
             </CardContent>
           </Card>
@@ -613,7 +659,7 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
                       <SelectValue placeholder="Select an advisor" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">No advisor assigned</SelectItem>
+                      <SelectItem value="none">No advisor assigned</SelectItem>
                       {advisors.map((advisor) => (
                         <SelectItem key={advisor.advisorId} value={advisor.advisorId.toString()}>
                           {advisor.fullName}
@@ -654,7 +700,7 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
                     id="notes-textarea"
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
-                    placeholder="Add notes about this employee..."
+                    placeholder="Add notes about this currentEmployee..."
                     className="min-h-[100px] resize-none"
                     disabled={isUpdatingNotes}
                   />
@@ -666,7 +712,7 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
                   <Button
                     size="sm"
                     onClick={handleNotesUpdate}
-                    disabled={isUpdatingNotes || notes === (employee.notes || "")}
+                    disabled={isUpdatingNotes || notes === (currentEmployee.notes || "")}
                     className="bg-cyan-600 hover:bg-cyan-700"
                   >
                     {isUpdatingNotes ? (
@@ -808,10 +854,6 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
           <div className="flex gap-2 justify-end">
             <Button variant="outline" onClick={() => setOpen(false)}>
               Close
-            </Button>
-            <Button>
-              <PlayCircle className="w-4 h-4 mr-2" />
-              Assign Training
             </Button>
           </div>
         </div>

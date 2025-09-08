@@ -28,6 +28,8 @@ export const useTrainingData = () => {
   // Schedule training mutation
   const scheduleTrainingMutation = useMutation({
     mutationFn: ({ employeeId, requirementKey, date }: { employeeId: string; requirementKey: string; date: Date }) => {
+      console.log('useTrainingData: Scheduling training for employee:', employeeId, 'requirement:', requirementKey, 'date:', date);
+      
       // Map frontend requirement key to database column name
       let scheduleColumn = ScheduleFieldMapping[requirementKey] || `schedule${requirementKey}`;
       
@@ -36,6 +38,7 @@ export const useTrainingData = () => {
       if (scheduleColumn === 'scheduleSession2') scheduleColumn = 'scheduleSession#2';
       if (scheduleColumn === 'scheduleSession3') scheduleColumn = 'scheduleSession#3';
       
+      console.log('useTrainingData: Mapped to database column:', scheduleColumn);
       return trainingAPI.scheduleTraining(employeeId, scheduleColumn, date);
     },
     onSuccess: (data, variables) => {
@@ -135,11 +138,17 @@ export const useTrainingData = () => {
 
   // Conference approval (approve)
   const approveConferenceMutation = useMutation({
-    mutationFn: ({ employeeId, notes }: { employeeId: string; notes?: string }) =>
-      trainingAPI.approveConference(employeeId, notes),
+    mutationFn: ({ employeeId, notes }: { employeeId: string; notes?: string }) => {
+      console.log('useTrainingData: Approving conference for employee:', employeeId);
+      return trainingAPI.approveConference(employeeId, notes);
+    },
     onSuccess: (data, variables) => {
+      console.log('useTrainingData: Approve conference success, invalidating queries');
       queryClient.invalidateQueries({ queryKey: trainingKeys.employee(variables.employeeId) });
       queryClient.invalidateQueries({ queryKey: ['employees'] });
+      queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === 'employees' });
+      // Trigger a custom event to refresh the UI
+      window.dispatchEvent(new CustomEvent('refreshEmployees'));
       toast.success('Conference approved successfully!');
     },
     onError: (error) => {
@@ -151,11 +160,18 @@ export const useTrainingData = () => {
 
   // Conference approval (reject) - UI only
   const rejectConferenceMutation = useMutation({
-    mutationFn: ({ employeeId, notes }: { employeeId: string; notes?: string }) =>
-      trainingAPI.rejectConference(employeeId, notes),
+    mutationFn: ({ employeeId, notes }: { employeeId: string; notes?: string }) => {
+      console.log('useTrainingData: Rejecting conference for employee:', employeeId);
+      return trainingAPI.rejectConference(employeeId, notes);
+    },
     onSuccess: (data, variables) => {
-      // For UI-only rejection, we don't need to invalidate queries
-      toast.success('Conference rejected (UI only)');
+      console.log('useTrainingData: Reject conference success, invalidating queries');
+      queryClient.invalidateQueries({ queryKey: trainingKeys.employee(variables.employeeId) });
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === 'employees' });
+      // Trigger a custom event to refresh the UI
+      window.dispatchEvent(new CustomEvent('refreshEmployees'));
+      toast.success('Conference rejected successfully!');
     },
     onError: (error) => {
       toast.error('Failed to reject conference', {

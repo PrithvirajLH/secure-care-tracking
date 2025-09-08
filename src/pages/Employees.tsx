@@ -181,28 +181,28 @@ export default function Employees() {
 
       switch (sortField) {
         case "name":
-          aValue = (a.name || '').toLowerCase();
-          bValue = (b.name || '').toLowerCase();
+          aValue = (a.name || a.Employee || '').toLowerCase();
+          bValue = (b.name || b.Employee || '').toLowerCase();
           break;
         case "employeeId":
-          aValue = String(a.employeeNumber || a.employeeId || '').toLowerCase();
-          bValue = String(b.employeeNumber || b.employeeId || '').toLowerCase();
+          aValue = String(a.employeeNumber || a.employeeId || a.Employee || '').toLowerCase();
+          bValue = String(b.employeeNumber || b.employeeId || b.Employee || '').toLowerCase();
           break;
         case "facility":
-          aValue = (a.facility || '').toLowerCase();
-          bValue = (b.facility || '').toLowerCase();
+          aValue = (a.facility || a.Facility || '').toLowerCase();
+          bValue = (b.facility || b.Facility || '').toLowerCase();
           break;
         case "area":
-          aValue = (a.area || '').toLowerCase();
-          bValue = (b.area || '').toLowerCase();
+          aValue = (a.area || a.Area || '').toLowerCase();
+          bValue = (b.area || b.Area || '').toLowerCase();
           break;
         case "jobTitle":
-          aValue = (a.staffRoles || '').toLowerCase();
-          bValue = (b.staffRoles || '').toLowerCase();
+          aValue = (a.staffRoll || a.staffRoles || '').toLowerCase();
+          bValue = (b.staffRoll || b.staffRoles || '').toLowerCase();
           break;
         default:
-          aValue = (a.name || '').toLowerCase();
-          bValue = (b.name || '').toLowerCase();
+          aValue = (a.name || a.Employee || '').toLowerCase();
+          bValue = (b.name || b.Employee || '').toLowerCase();
       }
 
       if (aValue < bValue) return sortDirection === "asc" ? -1 : 1;
@@ -558,17 +558,17 @@ export default function Employees() {
                        <EmployeeDetailModal employee={e}>
                          <Button variant="ghost" className="h-auto p-0 justify-start hover:bg-transparent group">
                            <div className="text-left">
-                             <div className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors text-base">{e.name}</div>
-                             <div className="text-base text-gray-500">{e.employeeNumber || e.employeeId}</div>
+                             <div className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors text-base">{e.name || e.Employee}</div>
+                             <div className="text-base text-gray-500">{e.employeeNumber || e.employeeId || e.Employee}</div>
                            </div>
                            <Eye className="w-4 h-4 ml-2 text-gray-400 group-hover:text-blue-500 transition-colors" />
                          </Button>
                        </EmployeeDetailModal>
                      </TableCell>
-                     <TableCell className="text-gray-600 font-mono text-base py-3">{e.employeeNumber || e.employeeId}</TableCell>
-                     <TableCell className="text-gray-700 text-base py-3">{e.facility}</TableCell>
-                     <TableCell className="text-gray-700 text-base py-3">{e.area}</TableCell>
-                                           <TableCell className="text-gray-700 text-base py-3">{e.staffRoles || 'N/A'}</TableCell>
+                     <TableCell className="text-gray-600 font-mono text-base py-3">{e.employeeNumber || e.employeeId || e.Employee}</TableCell>
+                     <TableCell className="text-gray-700 text-base py-3">{e.facility || e.Facility}</TableCell>
+                     <TableCell className="text-gray-700 text-base py-3">{e.area || e.Area}</TableCell>
+                                           <TableCell className="text-gray-700 text-base py-3">{e.staffRoll || e.staffRoles || 'N/A'}</TableCell>
                      <TableCell className="text-base py-3">
                        <Badge 
                          variant={currentLevel.variant as any} 

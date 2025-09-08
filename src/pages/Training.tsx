@@ -100,33 +100,37 @@ export default function Training() {
   const [advisorDropdownOpen, setAdvisorDropdownOpen] = useState<string | null>(null);
   const [notesPopupPosition, setNotesPopupPosition] = useState<{x: number, y: number, positionAbove?: boolean} | null>(null);
   const [advisorPopupPosition, setAdvisorPopupPosition] = useState<{x: number, y: number, positionAbove?: boolean} | null>(null);
+  const [scheduledDates, setScheduledDates] = useState<{[key: string]: Date}>({});
+  const [completedDates, setCompletedDates] = useState<{[key: string]: Date}>({});
+  const [openDatePicker, setOpenDatePicker] = useState<string | null>(null);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Element;
-      if (!target.closest('[data-dropdown]')) {
+      if (!target.closest('[data-dropdown]') && !target.closest('.date-picker-popup')) {
         setNotesDropdownOpen(null);
         setAdvisorDropdownOpen(null);
         setNotesPopupPosition(null);
         setAdvisorPopupPosition(null);
-        setPopupPosition(null); // Keep for date picker compatibility
+        // Don't clear popupPosition if date picker is open
+        if (!openDatePicker) {
+          setPopupPosition(null);
+        }
       }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-  const [scheduledDates, setScheduledDates] = useState<{[key: string]: Date}>({});
-  const [completedDates, setCompletedDates] = useState<{[key: string]: Date}>({});
-  const [openDatePicker, setOpenDatePicker] = useState<string | null>(null);
+  }, [openDatePicker]);
   const [query, setQuery] = useState<string>("");
-  const [searchQuery, setSearchQuery] = useState<string>("");
   const [isApproving, setIsApproving] = useState<boolean>(false);
   const [isRejecting, setIsRejecting] = useState<boolean>(false);
   const [popupPosition, setPopupPosition] = useState<{x: number, y: number, positionAbove?: boolean} | null>(null);
   const [currentPopupEmployee, setCurrentPopupEmployee] = useState<any>(null);
   const [currentPopupFieldKey, setCurrentPopupFieldKey] = useState<string | null>(null);
+  const [isButtonClicking, setIsButtonClicking] = useState<boolean>(false);
+  const [isMouseDownInProgress, setIsMouseDownInProgress] = useState<boolean>(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   
   // Column visibility controls with localStorage persistence
@@ -144,9 +148,12 @@ export default function Training() {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Element;
       if (openDatePicker && 
+          !isButtonClicking &&
+          !isMouseDownInProgress &&
           !target.closest('.date-picker-popup') && 
           !target.closest('[data-radix-popper-content-wrapper]') &&
-          !target.closest('input')) { // Don't close when clicking on input fields
+          !target.closest('input') &&
+          !target.closest('button')) { // Don't close when clicking on buttons
         setOpenDatePicker(null);
         setPopupPosition(null);
         setCurrentPopupEmployee(null);
@@ -155,13 +162,17 @@ export default function Training() {
     };
 
     if (openDatePicker) {
-      document.addEventListener('mousedown', handleClickOutside);
+      // Use a longer delay to allow mousedown events to process first
+      const timeoutId = setTimeout(() => {
+        document.addEventListener('click', handleClickOutside);
+      }, 200);
+      
+      return () => {
+        clearTimeout(timeoutId);
+        document.removeEventListener('click', handleClickOutside);
+      };
     }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [openDatePicker]);
+   }, [openDatePicker, isButtonClicking, isMouseDownInProgress]);
   
   // Training data hook for database operations
   const {
@@ -178,16 +189,20 @@ export default function Training() {
   } = useTrainingData();
 
 
-  // Handle search input changes
+  // Handle search input changes (dynamic filter)
   const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setQuery(e.target.value);
   }, []);
 
-  // Handle Enter key press to trigger search
-  const handleSearchKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      setSearchQuery(query);
+  // Keep focus and caret position during re-renders while typing
+  useEffect(() => {
+    if (searchInputRef.current) {
+      const el = searchInputRef.current;
+      const caret = el.selectionStart ?? el.value.length;
+      el.focus({ preventScroll: true });
+      try {
+        el.setSelectionRange(caret, caret);
+      } catch {}
     }
   }, [query]);
 
@@ -266,8 +281,8 @@ export default function Training() {
     status: 'active',
     facility: facilityFilter !== 'all' ? facilityFilter : undefined,
     area: areaFilter !== 'all' ? areaFilter : undefined,
-    search: searchQuery.trim() || undefined
-  }), [activeTab, facilityFilter, areaFilter, searchQuery]);
+    search: query.trim() || undefined
+  }), [activeTab, facilityFilter, areaFilter, query]);
 
   const {
     employees: currentEmployees,
@@ -318,7 +333,6 @@ export default function Training() {
     setFacilityFilter('all');
     setAreaFilter('all');
     setQuery('');
-    setSearchQuery('');
     const next: Record<string, string> = {};
     filteredColumns.forEach(col => {
       const fieldKey = currentFieldMapping[col];
@@ -356,6 +370,7 @@ export default function Training() {
     };
   }, [refetch]);
 
+
   // Removed old hash-based navigation - now using URL search params
 
   // Handle training assignment
@@ -373,10 +388,10 @@ export default function Training() {
     
     // Special handling for conference columns
     if (fieldKey === 'conferenceCompleted') {
-      if (employee[fieldKey] && (employee.awaiting === true || employee.awaiting === 1)) {
+      if (employee[fieldKey] && (employee.awaiting === false || employee.awaiting === 0)) {
         return 'completed'; // Conference is completed and approved
       }
-      if (employee[fieldKey] && (employee.awaiting === false || employee.awaiting === 0)) {
+      if (employee[fieldKey] && (employee.awaiting === true || employee.awaiting === 1)) {
         return 'pending'; // Conference is completed but awaiting approval (shows as "Awaiting")
       }
       if (employee[fieldKey] && employee.awaiting === null) {
@@ -507,7 +522,6 @@ export default function Training() {
     setFacilityFilter('all');
     setAreaFilter('all');
     setQuery('');
-    setSearchQuery('');
     const reset: Record<string, string> = {};
     filteredColumns.forEach(col => {
       const fieldKey = currentFieldMapping[col];
@@ -528,6 +542,7 @@ export default function Training() {
     children, 
     variant = 'default', 
     onClick, 
+    onMouseDown,
     disabled = false, 
     className = '',
     icon: Icon,
@@ -537,6 +552,7 @@ export default function Training() {
     children?: React.ReactNode;
     variant?: 'default' | 'pending' | 'scheduled' | 'completed' | 'awaiting' | 'rejected' | 'awarded' | 'notes' | 'advisor';
     onClick?: (e?: React.MouseEvent) => void;
+    onMouseDown?: (e?: React.MouseEvent) => void;
     disabled?: boolean;
     className?: string;
     icon?: React.ComponentType<{ className?: string }>;
@@ -552,7 +568,7 @@ export default function Training() {
       completed: "bg-gradient-to-r from-blue-500 to-indigo-500 text-white",
       awaiting: "bg-gradient-to-r from-amber-500 to-yellow-500 text-white hover:from-amber-600 hover:to-yellow-600",
       rejected: "bg-gradient-to-r from-red-500 to-pink-500 text-white",
-      awarded: "bg-gradient-to-r from-blue-500 to-indigo-500 text-white",
+      awarded: "bg-gradient-to-r from-green-500 to-emerald-500 text-white",
       notes: "bg-gradient-to-r from-cyan-50 to-blue-50 text-cyan-700 border border-cyan-200 hover:from-cyan-100 hover:to-blue-100 hover:border-cyan-300",
       advisor: "bg-gradient-to-r from-purple-50 to-indigo-50 text-purple-700 border border-purple-200 hover:from-purple-100 hover:to-indigo-100 hover:border-purple-300"
     };
@@ -566,10 +582,11 @@ export default function Training() {
       </>
     );
 
-    if (onClick && !disabled) {
+    if ((onClick || onMouseDown) && !disabled) {
       return (
         <button
           onClick={onClick}
+          onMouseDown={onMouseDown}
           className={`${baseClasses} ${variantClasses[variant]} ${disabledClasses} ${className}`}
         >
           {content}
@@ -683,7 +700,20 @@ export default function Training() {
           variant="pending"
           icon={Clock}
           text="Pending"
-          onClick={() => setOpenDatePicker(key)}
+          onMouseDown={employee.awaiting ? undefined : (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setIsMouseDownInProgress(true);
+            const rect = (e.target as HTMLElement).getBoundingClientRect();
+            const position = { x: rect.left + rect.width / 2, y: rect.bottom + 8 };
+            setPopupPosition(position);
+            setCurrentPopupEmployee(employee);
+            setCurrentPopupFieldKey(fieldKey);
+            setOpenDatePicker(key);
+            // Reset the flag after a short delay
+            setTimeout(() => setIsMouseDownInProgress(false), 100);
+          }}
+          disabled={employee.awaiting}
         />
       );
     }
@@ -725,12 +755,14 @@ export default function Training() {
             variant="scheduled"
             icon={Clock}
             text="Scheduled"
-            onClick={conferenceRejected ? undefined : (e) => {
+            onMouseDown={conferenceRejected ? undefined : (e) => {
+              e.preventDefault();
+              e.stopPropagation();
               const rect = (e.target as HTMLElement).getBoundingClientRect();
               setPopupPosition({ x: rect.left + rect.width / 2, y: rect.bottom + 8 });
               setCurrentPopupEmployee(employee);
               setCurrentPopupFieldKey(fieldKey);
-              setOpenDatePicker(key);
+              // Don't set openDatePicker for scheduled items - let the render logic handle which popup to show
             }}
             disabled={conferenceRejected}
           />
@@ -748,14 +780,20 @@ export default function Training() {
         variant="pending"
         icon={Clock}
         text={isScheduling ? 'Scheduling...' : 'Pending'}
-        onClick={conferenceRejected ? undefined : (e) => {
+        onMouseDown={conferenceRejected || employee.awaiting ? undefined : (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setIsMouseDownInProgress(true);
           const rect = (e.target as HTMLElement).getBoundingClientRect();
-          setPopupPosition({ x: rect.left + rect.width / 2, y: rect.bottom + 8 });
+          const position = { x: rect.left + rect.width / 2, y: rect.bottom + 8 };
+          setPopupPosition(position);
           setCurrentPopupEmployee(employee);
           setCurrentPopupFieldKey(fieldKey);
           setOpenDatePicker(key);
+          // Reset the flag after a short delay
+          setTimeout(() => setIsMouseDownInProgress(false), 100);
         }}
-        disabled={isScheduling || conferenceRejected}
+        disabled={isScheduling || conferenceRejected || employee.awaiting}
       />
     );
   };
@@ -842,7 +880,7 @@ export default function Training() {
                        ref={searchInputRef}
                        value={query}
                        onChange={handleSearchChange}
-                       onKeyDown={handleSearchKeyDown}
+                       onFocus={(e) => e.currentTarget.select()}
                        placeholder="Employee name or ID"
                        className="h-8 text-sm pr-8 bg-white border-purple-200 shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                      />
@@ -850,7 +888,6 @@ export default function Training() {
                        <button
                          onClick={() => {
                            setQuery('');
-                           setSearchQuery('');
                          }}
                          className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
                        >
@@ -1336,30 +1373,58 @@ export default function Training() {
          >
            <div className="flex flex-col gap-2">
              <button
-               onClick={() => {
-                 // Close the popup immediately for smooth UX
-                 setOpenDatePicker(null);
-                 setPopupPosition(null);
-                 setCurrentPopupEmployee(null);
+               onMouseDown={(e) => {
+                 e.preventDefault();
+                 e.stopPropagation();
                  
-                 // Approve the conference
-                 approveConference({ employeeId: currentPopupEmployee.employeeId });
+                 // Store employee ID before clearing state
+                 // Handle case where currentPopupEmployee might be just the ID or the full object
+                 const employeeId = typeof currentPopupEmployee === 'object' 
+                   ? currentPopupEmployee?.employeeId 
+                   : currentPopupEmployee;
+                 
+                 // Approve the conference FIRST, then close popup
+                 if (employeeId) {
+                   approveConference({ employeeId: employeeId.toString() });
+                   
+                   // Close the popup immediately after API call is initiated
+                   setOpenDatePicker(null);
+                   setPopupPosition(null);
+                   setCurrentPopupEmployee(null);
+                 } else {
+                   console.error('Training page: No employee ID available for approval');
+                 }
                }}
                disabled={isApprovingConference}
+               title={isApprovingConference ? 'Approving...' : 'Click to approve'}
+               style={{ pointerEvents: 'auto', zIndex: 10000 }}
                className="inline-flex items-center justify-center gap-2 bg-green-500 text-white px-3 py-2 rounded-lg text-sm font-semibold hover:bg-green-600 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
              >
                <CheckCircle className="w-4 h-4" />
                {isApprovingConference ? 'Approving...' : 'Approve'}
              </button>
              <button
-               onClick={() => {
-                 // Close the popup immediately for smooth UX
-                 setOpenDatePicker(null);
-                 setPopupPosition(null);
-                 setCurrentPopupEmployee(null);
+               onMouseDown={(e) => {
+                 e.preventDefault();
+                 e.stopPropagation();
                  
-                 // Reject the conference
-                 rejectConference({ employeeId: currentPopupEmployee.employeeId });
+                 // Store employee ID before clearing state
+                 // Handle case where currentPopupEmployee might be just the ID or the full object
+                 const employeeId = typeof currentPopupEmployee === 'object' 
+                   ? currentPopupEmployee?.employeeId 
+                   : currentPopupEmployee;
+                 
+                 // Reject the conference FIRST, then close popup
+                 if (employeeId) {
+                   rejectConference({ employeeId: employeeId.toString() });
+                   
+                   // Close the popup immediately after API call is initiated
+                   setOpenDatePicker(null);
+                   setPopupPosition(null);
+                   setCurrentPopupEmployee(null);
+                 } else {
+                   console.error('Training page: No employee ID available for rejection');
+                 }
                }}
                disabled={isRejectingConference}
                className="inline-flex items-center justify-center gap-2 bg-red-500 text-white px-3 py-2 rounded-lg text-sm font-semibold hover:bg-red-600 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1373,9 +1438,8 @@ export default function Training() {
        )}
        
        {/* Portal popup for Mark Complete/Reschedule */}
-       {openDatePicker && popupPosition && currentPopupEmployee && currentPopupFieldKey && 
-        !openDatePicker.includes('conferenceCompleted') && 
-        !openDatePicker.startsWith('reschedule-') &&
+       {popupPosition && currentPopupEmployee && currentPopupFieldKey && 
+        (!openDatePicker || (!openDatePicker.includes('conferenceCompleted') && !openDatePicker.startsWith('reschedule-'))) &&
         ScheduleFieldMapping[currentPopupFieldKey] && 
         currentPopupEmployee[ScheduleFieldMapping[currentPopupFieldKey]] && createPortal(
          <div 
@@ -1388,7 +1452,13 @@ export default function Training() {
          >
            <div className="flex flex-col gap-2">
              <button
-               onClick={() => {
+               onMouseDown={(e) => {
+                 e.preventDefault();
+                 e.stopPropagation();
+                 // Store data before clearing state
+                 const employeeId = currentPopupEmployee?.employeeId;
+                 const requirementKey = currentPopupFieldKey;
+                 
                  // Close the popup immediately for smooth UX
                  setOpenDatePicker(null);
                  setPopupPosition(null);
@@ -1396,7 +1466,9 @@ export default function Training() {
                  setCurrentPopupFieldKey(null);
                  
                  // Complete the training
-                 completeTraining({ employeeId: currentPopupEmployee.employeeId, requirementKey: currentPopupFieldKey });
+                 if (employeeId && requirementKey) {
+                   completeTraining({ employeeId, requirementKey });
+                 }
                }}
                disabled={isCompleting}
                className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-3 py-2 rounded-lg text-sm font-semibold hover:from-blue-600 hover:to-indigo-600 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1405,7 +1477,9 @@ export default function Training() {
                {isCompleting ? 'Completing...' : 'Mark Complete'}
              </button>
              <button
-               onClick={() => {
+               onMouseDown={(e) => {
+                 e.preventDefault();
+                 e.stopPropagation();
                  setOpenDatePicker(`reschedule-${openDatePicker}`);
                }}
                disabled={isRescheduling}
@@ -1434,6 +1508,10 @@ export default function Training() {
              date={parseDate(currentPopupEmployee[ScheduleFieldMapping[currentPopupFieldKey]]) || undefined}
              onDateChange={(date) => {
                if (date) {
+                 // Store data before clearing state
+                 const employeeId = currentPopupEmployee?.employeeId;
+                 const requirementKey = currentPopupFieldKey;
+                 
                  // Close the popup immediately for smooth UX
                  setOpenDatePicker(null);
                  setPopupPosition(null);
@@ -1441,7 +1519,9 @@ export default function Training() {
                  setCurrentPopupFieldKey(null);
                  
                  // Reschedule the training
-                 rescheduleTraining({ employeeId: currentPopupEmployee.employeeId, requirementKey: currentPopupFieldKey, date });
+                 if (employeeId && requirementKey) {
+                   rescheduleTraining({ employeeId, requirementKey, date });
+                 }
                }
              }}
              placeholder="Reschedule date"
@@ -1451,11 +1531,18 @@ export default function Training() {
        )}
        
        {/* Portal popup for Schedule Date Picker */}
-       {openDatePicker && popupPosition && currentPopupEmployee && currentPopupFieldKey && 
-        !openDatePicker.includes('conferenceCompleted') && 
-        !openDatePicker.startsWith('reschedule-') &&
-        ((!ScheduleFieldMapping[currentPopupFieldKey]) || 
-         (ScheduleFieldMapping[currentPopupFieldKey] && !currentPopupEmployee[ScheduleFieldMapping[currentPopupFieldKey]])) && createPortal(
+       {(() => {
+         // Simplified render condition - just check if we have the basic requirements
+         const shouldRender = openDatePicker && 
+           popupPosition && 
+           currentPopupEmployee && 
+           currentPopupFieldKey && 
+           !openDatePicker.includes('conferenceCompleted') && 
+           !openDatePicker.startsWith('reschedule-');
+         
+         
+         return shouldRender;
+       })() && createPortal(
          <div 
            className="fixed z-[9999] bg-white border border-gray-300 rounded-lg shadow-xl p-3 date-picker-popup"
            style={{
@@ -1468,6 +1555,10 @@ export default function Training() {
              date={undefined}
              onDateChange={(date) => {
                if (date) {
+                 // Store data before clearing state
+                 const employeeId = currentPopupEmployee?.employeeId;
+                 const requirementKey = currentPopupFieldKey;
+                 
                  // Close the popup immediately for smooth UX
                  setOpenDatePicker(null);
                  setPopupPosition(null);
@@ -1475,7 +1566,12 @@ export default function Training() {
                  setCurrentPopupFieldKey(null);
                  
                  // Schedule the training
-                 scheduleTraining({ employeeId: currentPopupEmployee.employeeId, requirementKey: currentPopupFieldKey, date });
+                 if (employeeId && requirementKey) {
+                   console.log('Scheduling training for employee:', employeeId, 'requirement:', requirementKey, 'date:', date);
+                   scheduleTraining({ employeeId, requirementKey, date });
+                 } else {
+                   console.error('Missing data for scheduling:', { employeeId, requirementKey, date });
+                 }
                }
              }}
              placeholder="Schedule date"

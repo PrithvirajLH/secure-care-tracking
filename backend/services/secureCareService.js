@@ -2,7 +2,7 @@ const { getPool, sql } = require('../config/database');
 
 class SecureCareService {
   
-  // Get employees by level using direct table queries (no views needed)
+  // Get employees by level (or all levels) using direct table queries
   async getEmployeesByLevel(level, filters = {}) {
     const pool = await getPool();
     
@@ -14,6 +14,7 @@ class SecureCareService {
         e.name AS Employee,
         e.facility AS Facility,
         e.area AS Area,
+        e.staffRoll,
         e.awardType,
         FORMAT(e.assignedDate, 'yyyy-MM-dd') AS assignedDate,
         FORMAT(e.completedDate, 'yyyy-MM-dd') AS completedDate,
@@ -40,25 +41,30 @@ class SecureCareService {
         a.firstName + ' ' + ISNULL(a.lastName, '') as advisorName
       FROM dbo.SecureCareEmployee e
       LEFT JOIN dbo.Advisor a ON e.advisorId = a.advisorId
-      WHERE e.awardType = @level
     `;
     
     const request = pool.request();
-    request.input('level', sql.VarChar, level);
+    
+    // Apply level filter unless requesting all levels
+    const isAllLevels = !level || level.toLowerCase() === 'all' || level.toLowerCase() === 'all levels';
+    if (!isAllLevels) {
+      query += ` WHERE e.awardType = @level`;
+      request.input('level', sql.VarChar, level);
+    }
     
     // Apply additional filters
     if (filters.facility && filters.facility !== 'all') {
-      query += ` AND e.facility = @facility`;
+      query += ` ${isAllLevels ? 'WHERE' : 'AND'} e.facility = @facility`;
       request.input('facility', sql.VarChar, filters.facility);
     }
     
     if (filters.area && filters.area !== 'all') {
-      query += ` AND e.area = @area`;
+      query += ` ${query.includes('WHERE') ? 'AND' : 'WHERE'} e.area = @area`;
       request.input('area', sql.VarChar, filters.area);
     }
     
     if (filters.search) {
-      query += ` AND (e.name LIKE @search OR e.employeeNumber LIKE @search)`;
+      query += ` ${query.includes('WHERE') ? 'AND' : 'WHERE'} (e.name LIKE @search OR e.employeeNumber LIKE @search)`;
       request.input('search', sql.VarChar, `%${filters.search}%`);
     }
     
@@ -75,24 +81,26 @@ class SecureCareService {
     let countQuery = `
       SELECT COUNT(*) as total 
       FROM dbo.SecureCareEmployee e 
-      WHERE e.awardType = @level
     `;
     
     const countRequest = pool.request();
-    countRequest.input('level', sql.VarChar, level);
+    if (!isAllLevels) {
+      countRequest.input('level', sql.VarChar, level);
+      countQuery += ` WHERE e.awardType = @level`;
+    }
     
     if (filters.facility && filters.facility !== 'all') {
-      countQuery += ` AND e.facility = @facility`;
+      countQuery += ` ${countQuery.includes('WHERE') ? 'AND' : 'WHERE'} e.facility = @facility`;
       countRequest.input('facility', sql.VarChar, filters.facility);
     }
     
     if (filters.area && filters.area !== 'all') {
-      countQuery += ` AND e.area = @area`;
+      countQuery += ` ${countQuery.includes('WHERE') ? 'AND' : 'WHERE'} e.area = @area`;
       countRequest.input('area', sql.VarChar, filters.area);
     }
     
     if (filters.search) {
-      countQuery += ` AND (e.name LIKE @search OR e.employeeNumber LIKE @search)`;
+      countQuery += ` ${countQuery.includes('WHERE') ? 'AND' : 'WHERE'} (e.name LIKE @search OR e.employeeNumber LIKE @search)`;
       countRequest.input('search', sql.VarChar, `%${filters.search}%`);
     }
     
@@ -118,7 +126,7 @@ class SecureCareService {
     
     const result = await request.query(`
       UPDATE dbo.SecureCareEmployee 
-      SET awaiting = 1 
+      SET awaiting = 0 
       WHERE employeeId = @employeeId
     `);
     
@@ -127,6 +135,25 @@ class SecureCareService {
     }
     
     return { success: true, message: 'Conference approved successfully' };
+  }
+  
+  // Reject conference - set awaiting to NULL (rejected state)
+  async rejectConference(employeeId) {
+    const pool = await getPool();
+    const request = pool.request();
+    request.input('employeeId', sql.Int, employeeId);
+    
+    const result = await request.query(`
+      UPDATE dbo.SecureCareEmployee 
+      SET awaiting = NULL 
+      WHERE employeeId = @employeeId
+    `);
+    
+    if (result.rowsAffected[0] === 0) {
+      throw new Error('Employee not found');
+    }
+    
+    return { success: true, message: 'Conference rejected successfully' };
   }
   
   // Schedule training item - simplified without stored procedure

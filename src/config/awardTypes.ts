@@ -157,8 +157,8 @@ export const fmt = {
   
   conference: (awaiting: number | boolean | null, date?: string | Date | null): string => {
     if (!date) return 'Pending'; // No conference completed yet
-    if (awaiting === false || awaiting === 0) return `Awaiting ${fmt.date(date)}`; // Awaiting approval
-    if (awaiting === true || awaiting === 1) return fmt.date(date); // Approved
+    if (awaiting === true || awaiting === 1) return `Awaiting ${fmt.date(date)}`; // Awaiting approval
+    if (awaiting === false || awaiting === 0) return fmt.date(date); // Approved
     if (awaiting === null && date) return 'Rejected'; // Rejected
     return 'Pending'; // Default case
   },

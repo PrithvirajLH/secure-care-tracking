@@ -21,24 +21,10 @@ async function loadSeedData() {
     const pool = await sql.connect(dbConfig);
     console.log('✅ Connected successfully');
     
-    // Clear existing data first (carefully)
-    console.log('🧹 Clearing existing data...');
-    try {
-      await pool.request().query('DELETE FROM dbo.SecureCareEmployee');
-      console.log('  - SecureCareEmployee cleared');
-    } catch (err) {
-      console.log('  - SecureCareEmployee clear failed:', err.message);
-    }
+    // Optional: Clearing disabled for insert-only seeding
+    console.log('➡️ Insert-only seeding (no table clearing)');
     
-    try {
-      await pool.request().query('DELETE FROM dbo.Advisor');
-      console.log('  - Advisor cleared');
-    } catch (err) {
-      console.log('  - Advisor clear failed:', err.message);
-    }
-    console.log('✅ Data clearing attempted');
-    
-    // Load seed data
+    // Load complex seed data (10 advisors, 50 employees, varied states)
     const seedSQL = fs.readFileSync('./scripts/simple_seed.sql', 'utf8');
     
     console.log('📊 Loading seed data...');

@@ -75,6 +75,7 @@ class SecureCareAPI {
 
   // Schedule a training requirement
   async scheduleTraining(employeeId: string, columnName: string, date: Date): Promise<TrainingData> {
+    console.log('API: Scheduling training for employee:', employeeId, 'column:', columnName, 'date:', date);
     const response = await fetch(`${this.baseURL}/securecare/schedule`, {
       method: 'POST',
       headers: {
@@ -117,6 +118,7 @@ class SecureCareAPI {
 
   // Approve a conference completion
   async approveConference(employeeId: string, notes?: string): Promise<{ success: boolean }> {
+    console.log('API: Approving conference for employee:', employeeId, 'notes:', notes);
     const response = await fetch(`${this.baseURL}/securecare/approve`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -129,13 +131,22 @@ class SecureCareAPI {
     if (!response.ok) {
       throw new Error(`Failed to approve conference: ${response.statusText}`);
     }
-    return response.json();
+    const result = await response.json();
+    console.log('API: Approve conference response:', result);
+    return result;
   }
 
-  // Reject a conference completion (UI-only for now)
+  // Reject a conference completion
   async rejectConference(employeeId: string, notes?: string): Promise<{ success: boolean }> {
-    // For now, this is UI-only as per your specification
-    return Promise.resolve({ success: true });
+    const response = await fetch(`${this.baseURL}/securecare/reject`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ employeeId, notes })
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to reject conference: ${response.statusText}`);
+    }
+    return response.json();
   }
 
   // Get all advisors
