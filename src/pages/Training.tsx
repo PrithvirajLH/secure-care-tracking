@@ -87,7 +87,7 @@ export default function Training() {
   const [itemsPerPage] = useState(50);
   const [facilityFilter, setFacilityFilter] = useState<string>("all");
   const [areaFilter, setAreaFilter] = useState<string>("all");
-  const [reqStatusFilters, setReqStatusFilters] = useState<Record<string, 'all' | 'completed' | 'scheduled' | 'pending'>>({});
+  const [reqStatusFilters, setReqStatusFilters] = useState<Record<string, string>>({});
   
   // Enhanced UI state
   const [advisors, setAdvisors] = useState<any[]>([]);
@@ -319,7 +319,7 @@ export default function Training() {
     setAreaFilter('all');
     setQuery('');
     setSearchQuery('');
-    const next: Record<string, 'all' | 'completed' | 'scheduled' | 'pending'> = {};
+    const next: Record<string, string> = {};
     filteredColumns.forEach(col => {
       const fieldKey = currentFieldMapping[col];
       if (fieldKey) {
@@ -448,7 +448,33 @@ export default function Training() {
         
         const want = reqStatusFilters[fieldKey] || 'all';
         if (want === 'all') continue;
-        
+
+        // Custom filtering for Notes
+        if (column === 'Notes') {
+          const noteValue = (emp.notes || '').trim();
+          if (want === 'empty') {
+            if (noteValue !== '') return false;
+          } else {
+            if (noteValue !== want) return false;
+          }
+          continue;
+        }
+
+        // Custom filtering for Advisor
+        if (column === 'Advisor') {
+          const advisorId = emp.advisorId != null ? String(emp.advisorId) : '';
+          const hasAdvisor = advisorId !== '' || (emp.advisorName && String(emp.advisorName).trim() !== '');
+          if (want === 'unassigned') {
+            if (hasAdvisor) return false;
+          } else if (want === 'assigned') {
+            if (!hasAdvisor) return false;
+          } else {
+            // Specific advisor by id
+            if (advisorId !== want) return false;
+          }
+          continue;
+        }
+
         const status = computeRequirementStatus(emp, fieldKey);
         if (status !== want) return false;
       }
@@ -482,7 +508,7 @@ export default function Training() {
     setAreaFilter('all');
     setQuery('');
     setSearchQuery('');
-    const reset: Record<string, 'all' | 'completed' | 'scheduled' | 'pending'> = {};
+    const reset: Record<string, string> = {};
     filteredColumns.forEach(col => {
       const fieldKey = currentFieldMapping[col];
       if (fieldKey) {
@@ -969,47 +995,94 @@ export default function Training() {
                         </DropdownMenuContent>
                       </DropdownMenu>
                         )}
-                        {index > 2 && ( // Training requirement columns
-                         <DropdownMenu>
-                           <DropdownMenuTrigger asChild>
-                             <Button variant="ghost" size="sm" className="h-6 px-1 mt-1 flex-shrink-0">
-                               <Filter className="w-4 h-4" />
-                             </Button>
-                           </DropdownMenuTrigger>
-                                                     <DropdownMenuContent align="end" className="w-44">
-                             <DropdownMenuLabel>Status</DropdownMenuLabel>
-                             <DropdownMenuSeparator />
-                              <DropdownMenuRadioGroup 
-                                value={reqStatusFilters[currentFieldMapping[column]] || 'all'} 
-                                onValueChange={(v) => {
-                                  const fieldKey = currentFieldMapping[column];
-                                  if (fieldKey) {
-                                    setReqStatusFilters(prev => ({ ...prev, [fieldKey]: v as any }));
-                                  }
-                                }}
-                              >
-                               <DropdownMenuRadioItem value="all">All</DropdownMenuRadioItem>
-                                {column.includes("Awarded") ? (
-                                 <>
-                                   <DropdownMenuRadioItem value="completed">Awarded</DropdownMenuRadioItem>
-                                   <DropdownMenuRadioItem value="pending">Pending</DropdownMenuRadioItem>
-                                 </>
-                               ) : column.includes("Conference") ? (
-                                 <>
-                                   <DropdownMenuRadioItem value="completed">Completed</DropdownMenuRadioItem>
-                                   <DropdownMenuRadioItem value="pending">Awaiting</DropdownMenuRadioItem>
-                                   <DropdownMenuRadioItem value="rejected">Rejected</DropdownMenuRadioItem>
-                                 </>
-                               ) : (
-                                 <>
-                                   <DropdownMenuRadioItem value="completed">Completed</DropdownMenuRadioItem>
-                                   <DropdownMenuRadioItem value="scheduled">Scheduled</DropdownMenuRadioItem>
-                                   <DropdownMenuRadioItem value="pending">Pending</DropdownMenuRadioItem>
-                                 </>
-                               )}
-                             </DropdownMenuRadioGroup>
-                           </DropdownMenuContent>
-                        </DropdownMenu>
+                        {index > 2 && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm" className="h-6 px-1 mt-1 flex-shrink-0">
+                                <Filter className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-56 max-h-[320px] overflow-y-auto">
+                              {column === 'Notes' ? (
+                                <>
+                                  <DropdownMenuLabel>Filter by Notes</DropdownMenuLabel>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuRadioGroup
+                                    value={reqStatusFilters[currentFieldMapping[column]] || 'all'}
+                                    onValueChange={(v) => {
+                                      const fieldKey = currentFieldMapping[column];
+                                      if (fieldKey) {
+                                        setReqStatusFilters(prev => ({ ...prev, [fieldKey]: v }));
+                                      }
+                                    }}
+                                  >
+                                    <DropdownMenuRadioItem value="all">All</DropdownMenuRadioItem>
+                                    <DropdownMenuRadioItem value="empty">Empty</DropdownMenuRadioItem>
+                                    {NOTES_OPTIONS.filter(o => o.value !== '').map(o => (
+                                      <DropdownMenuRadioItem key={o.value} value={o.value}>{o.label}</DropdownMenuRadioItem>
+                                    ))}
+                                  </DropdownMenuRadioGroup>
+                                </>
+                              ) : column === 'Advisor' ? (
+                                <>
+                                  <DropdownMenuLabel>Filter by Advisor</DropdownMenuLabel>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuRadioGroup
+                                    value={reqStatusFilters[currentFieldMapping[column]] || 'all'}
+                                    onValueChange={(v) => {
+                                      const fieldKey = currentFieldMapping[column];
+                                      if (fieldKey) {
+                                        setReqStatusFilters(prev => ({ ...prev, [fieldKey]: v }));
+                                      }
+                                    }}
+                                  >
+                                    <DropdownMenuRadioItem value="all">All</DropdownMenuRadioItem>
+                                    <DropdownMenuRadioItem value="unassigned">Unassigned</DropdownMenuRadioItem>
+                                    <DropdownMenuRadioItem value="assigned">Assigned</DropdownMenuRadioItem>
+                                    {advisors.map(a => (
+                                      <DropdownMenuRadioItem key={a.advisorId} value={String(a.advisorId)}>
+                                        {a.fullName}
+                                      </DropdownMenuRadioItem>
+                                    ))}
+                                  </DropdownMenuRadioGroup>
+                                </>
+                              ) : (
+                                <>
+                                  <DropdownMenuLabel>Status</DropdownMenuLabel>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuRadioGroup
+                                    value={reqStatusFilters[currentFieldMapping[column]] || 'all'}
+                                    onValueChange={(v) => {
+                                      const fieldKey = currentFieldMapping[column];
+                                      if (fieldKey) {
+                                        setReqStatusFilters(prev => ({ ...prev, [fieldKey]: v }));
+                                      }
+                                    }}
+                                  >
+                                    <DropdownMenuRadioItem value="all">All</DropdownMenuRadioItem>
+                                    {column.includes("Awarded") ? (
+                                      <>
+                                        <DropdownMenuRadioItem value="completed">Awarded</DropdownMenuRadioItem>
+                                        <DropdownMenuRadioItem value="pending">Pending</DropdownMenuRadioItem>
+                                      </>
+                                    ) : column.includes("Conference") ? (
+                                      <>
+                                        <DropdownMenuRadioItem value="completed">Completed</DropdownMenuRadioItem>
+                                        <DropdownMenuRadioItem value="pending">Awaiting</DropdownMenuRadioItem>
+                                        <DropdownMenuRadioItem value="rejected">Rejected</DropdownMenuRadioItem>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <DropdownMenuRadioItem value="completed">Completed</DropdownMenuRadioItem>
+                                        <DropdownMenuRadioItem value="scheduled">Scheduled</DropdownMenuRadioItem>
+                                        <DropdownMenuRadioItem value="pending">Pending</DropdownMenuRadioItem>
+                                      </>
+                                    )}
+                                  </DropdownMenuRadioGroup>
+                                </>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         )}
                       </div>
                     </TableHead>
@@ -1146,7 +1219,7 @@ export default function Training() {
                                            <StatusBadge
                                              variant="advisor"
                                              icon={UserCheck}
-                                             text={employee.advisorName || currentAdvisor?.fullName || 'Assign Advisor'}
+                                             text={employee.advisorName || currentAdvisor?.fullName || 'Add advisor'}
                                              onClick={(e) => {
                                                const rect = e.currentTarget.getBoundingClientRect();
                                                const viewportHeight = window.innerHeight;
