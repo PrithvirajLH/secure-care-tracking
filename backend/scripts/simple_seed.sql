@@ -16,20 +16,9 @@ INSERT INTO dbo.SecureCareEmployee (
 ) VALUES
 -- 1) Amelia Baker → Consultant (Awaiting)
 ('C1','Lakeside','LVN','Amelia Baker','E2019',
- 'Consultant', NULL, NULL, '2025-09-05',
- NULL, 0, 'Consultant - Awaiting approval', 86,
+ 'Coach', NULL, NULL, '2025-09-05',
+ NULL, 0, 'Coach - Awaiting approval', 86,
  NULL, NULL,
- NULL, NULL,
- NULL, NULL,
- NULL, NULL,
- NULL, NULL,
- NULL, NULL,
- 1),
-
--- 2) Daniel Young → Consultant (Awaiting)
-('C1','Westlake','CNA','Daniel Young','E2014',
- 'Consultant', NULL, NULL, '2025-09-05',
- NULL, 0, 'Consultant - Awaiting approval', 88,
  NULL, NULL,
  NULL, NULL,
  NULL, NULL,

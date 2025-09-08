@@ -44,9 +44,9 @@ export const useTrainingData = () => {
     onSuccess: (data, variables) => {
       // Invalidate and refetch relevant queries
       queryClient.invalidateQueries({ queryKey: trainingKeys.employee(variables.employeeId) });
-      queryClient.invalidateQueries({ queryKey: ['employees'] });
-      queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === 'employees' });
-      queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === 'employees' });
+      queryClient.invalidateQueries({ queryKey: ['employee-levels', variables.employeeId] });
+      queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === 'employees-unique' });
+      queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === 'employees-training' });
       
       toast.success('Training scheduled successfully!', {
         description: `Scheduled for ${variables.date.toLocaleDateString()}`,
@@ -81,8 +81,9 @@ export const useTrainingData = () => {
     onSuccess: (data, variables) => {
       // Invalidate and refetch relevant queries
       queryClient.invalidateQueries({ queryKey: trainingKeys.employee(variables.employeeId) });
-      queryClient.invalidateQueries({ queryKey: ['employees'] });
-      queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === 'employees' });
+      queryClient.invalidateQueries({ queryKey: ['employee-levels', variables.employeeId] });
+      queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === 'employees-unique' });
+      queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === 'employees-training' });
       
       toast.success('Training marked as complete!', {
         description: 'Completed using scheduled date',
@@ -110,8 +111,9 @@ export const useTrainingData = () => {
     onSuccess: (data, variables) => {
       // Invalidate and refetch relevant queries
       queryClient.invalidateQueries({ queryKey: trainingKeys.employee(variables.employeeId) });
-      queryClient.invalidateQueries({ queryKey: ['employees'] });
-      queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === 'employees' });
+      queryClient.invalidateQueries({ queryKey: ['employee-levels', variables.employeeId] });
+      queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === 'employees-unique' });
+      queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === 'employees-training' });
       
       toast.success('Training rescheduled successfully!', {
         description: `Rescheduled for ${variables.date.toLocaleDateString()}`,
@@ -145,10 +147,9 @@ export const useTrainingData = () => {
     onSuccess: (data, variables) => {
       console.log('useTrainingData: Approve conference success, invalidating queries');
       queryClient.invalidateQueries({ queryKey: trainingKeys.employee(variables.employeeId) });
-      queryClient.invalidateQueries({ queryKey: ['employees'] });
-      queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === 'employees' });
-      // Trigger a custom event to refresh the UI
-      window.dispatchEvent(new CustomEvent('refreshEmployees'));
+      queryClient.invalidateQueries({ queryKey: ['employee-levels', variables.employeeId] });
+      queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === 'employees-unique' });
+      queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === 'employees-training' });
       toast.success('Conference approved successfully!');
     },
     onError: (error) => {
@@ -167,10 +168,9 @@ export const useTrainingData = () => {
     onSuccess: (data, variables) => {
       console.log('useTrainingData: Reject conference success, invalidating queries');
       queryClient.invalidateQueries({ queryKey: trainingKeys.employee(variables.employeeId) });
-      queryClient.invalidateQueries({ queryKey: ['employees'] });
-      queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === 'employees' });
-      // Trigger a custom event to refresh the UI
-      window.dispatchEvent(new CustomEvent('refreshEmployees'));
+      queryClient.invalidateQueries({ queryKey: ['employee-levels', variables.employeeId] });
+      queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === 'employees-unique' });
+      queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === 'employees-training' });
       toast.success('Conference rejected successfully!');
     },
     onError: (error) => {

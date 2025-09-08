@@ -39,7 +39,7 @@ import { Employee } from "@/context/AppContext";
 import { format } from "date-fns";
 import { useTrainingData, trainingKeys } from "@/hooks/useTrainingData";
 import { trainingAPI } from "@/services/api";
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 interface EmployeeDetailModalProps {
   employee: Employee;
@@ -52,6 +52,7 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
   const [advisors, setAdvisors] = useState<any[]>([]);
   const [isUpdatingNotes, setIsUpdatingNotes] = useState(false);
   const [isUpdatingAdvisor, setIsUpdatingAdvisor] = useState(false);
+  const queryClient = useQueryClient();
 
   // Check if employee has required fields
   const hasValidEmployeeId = employee?.employeeId && !isNaN(Number(employee.employeeId));
@@ -188,6 +189,13 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
     setIsUpdatingNotes(true);
     try {
       await trainingAPI.updateEmployeeNotes(currentEmployee.employeeId.toString(), notes);
+      
+      // Invalidate relevant queries to refresh data
+      queryClient.invalidateQueries({ queryKey: trainingKeys.employee(currentEmployee.employeeId.toString()) });
+      queryClient.invalidateQueries({ queryKey: ['employee-levels', currentEmployee.employeeId.toString()] });
+      queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === 'employees-unique' });
+      queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === 'employees-training' });
+      
       toast.success('Notes updated successfully');
     } catch (error) {
       console.error('Failed to update notes:', error);
@@ -206,6 +214,13 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
     setIsUpdatingAdvisor(true);
     try {
       await trainingAPI.updateEmployeeAdvisor(currentEmployee.employeeId.toString(), newAdvisorId);
+      
+      // Invalidate relevant queries to refresh data
+      queryClient.invalidateQueries({ queryKey: trainingKeys.employee(currentEmployee.employeeId.toString()) });
+      queryClient.invalidateQueries({ queryKey: ['employee-levels', currentEmployee.employeeId.toString()] });
+      queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === 'employees-unique' });
+      queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === 'employees-training' });
+      
       setSelectedAdvisorId(advisorId);
       toast.success('Advisor updated successfully');
     } catch (error) {
@@ -530,7 +545,12 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
         setInlineDatePicker(null);
       } catch (error) {
         toast.error('Failed to schedule training');
+        // Still close the date picker even if there's an error
+        setInlineDatePicker(null);
       }
+    } else {
+      // Close the date picker even if no date was selected
+      setInlineDatePicker(null);
     }
   };
 
@@ -585,23 +605,35 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
     setInlineDatePicker(null);
   };
 
-  // Click outside handler for inline date picker
+  // Click outside and escape key handler for inline date picker
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Element;
       if (inlineDatePicker && 
-          !target.closest('.inline-date-picker') && 
-          !target.closest('[data-radix-popper-content-wrapper]')) {
+          !target.closest('.inline-date-picker') &&
+          !target.closest('[data-radix-popper-content-wrapper]') &&
+          !target.closest('[data-radix-popper-content]') &&
+          !target.closest('[role="dialog"]') &&
+          !target.closest('.rdp') &&
+          !target.closest('[data-radix-collection-item]')) {
+        closeInlineDatePicker();
+      }
+    };
+
+    const handleEscapeKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && inlineDatePicker) {
         closeInlineDatePicker();
       }
     };
 
     if (inlineDatePicker) {
       document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleEscapeKey);
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscapeKey);
     };
   }, [inlineDatePicker]);
 
@@ -780,14 +812,28 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
     return (
       <div className="flex flex-col gap-1">
         {isInlineDatePickerOpen ? (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 inline-date-picker">
             <div className="min-w-[200px]">
               <DatePicker
                 date={undefined}
                 onDateChange={(date) => handleScheduleDate(String(record.employeeId), requirement.key, date)}
                 placeholder="Select date"
+                open={isInlineDatePickerOpen}
+                onOpenChange={(open) => {
+                  if (!open) {
+                    setInlineDatePicker(null);
+                  }
+                }}
               />
             </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setInlineDatePicker(null)}
+              className="h-8 w-8 p-0"
+            >
+              ×
+            </Button>
           </div>
         ) : (
           <button

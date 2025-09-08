@@ -16,15 +16,23 @@ interface DatePickerProps {
   onDateChange: (date: Date | undefined) => void
   placeholder?: string
   disabled?: boolean
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
 export function DatePicker({ 
   date, 
   onDateChange, 
   placeholder = "Pick a date", 
-  disabled = false
+  disabled = false,
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange
 }: DatePickerProps) {
-  const [open, setOpen] = React.useState(false)
+  const [internalOpen, setInternalOpen] = React.useState(false)
+  
+  // Use controlled state if provided, otherwise use internal state
+  const open = controlledOpen !== undefined ? controlledOpen : internalOpen
+  const setOpen = controlledOnOpenChange || setInternalOpen
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

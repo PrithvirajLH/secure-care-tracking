@@ -565,7 +565,7 @@ export default function Employees() {
 
                {/* Compact Pagination */}
         {totalPages > 1 && (
-          <div className="mt-6">
+          <div className="mt-6 mb-6 flex justify-center">
             <CompactPagination
               currentPage={apiCurrentPage}
               totalPages={totalPages}
