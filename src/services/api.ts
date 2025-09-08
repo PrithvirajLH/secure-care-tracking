@@ -130,7 +130,6 @@ class SecureCareAPI {
 
   // Schedule a training requirement
   async scheduleTraining(employeeId: string, columnName: string, date: Date): Promise<TrainingData> {
-    console.log('API: Scheduling training for employee:', employeeId, 'column:', columnName, 'date:', date);
     const response = await fetch(`${this.baseURL}/securecare/schedule`, {
       method: 'POST',
       headers: {
@@ -173,7 +172,6 @@ class SecureCareAPI {
 
   // Approve a conference completion
   async approveConference(employeeId: string, notes?: string): Promise<{ success: boolean }> {
-    console.log('API: Approving conference for employee:', employeeId, 'notes:', notes);
     const response = await fetch(`${this.baseURL}/securecare/approve`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -187,7 +185,6 @@ class SecureCareAPI {
       throw new Error(`Failed to approve conference: ${response.statusText}`);
     }
     const result = await response.json();
-    console.log('API: Approve conference response:', result);
     return result;
   }
 

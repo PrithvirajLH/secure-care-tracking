@@ -30,7 +30,7 @@ export default function Employees() {
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [sortField, setSortField] = useState<string>("name");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
-  const [currentPage, setCurrentPage] = useState<number>(1);
+  // Pagination is now handled by the useEmployees hook
   const [itemsPerPage] = useState<number>(10); // Changed from 100 to test pagination
   const [selectedJobTitle, setSelectedJobTitle] = useState<string>("all");
 
@@ -69,7 +69,7 @@ export default function Employees() {
     totalPages,
     totalEmployees,
     isFetching
-  } = useEmployees(stableFilters, itemsPerPage);
+  } = useEmployees({ ...stableFilters, level: 'all' }, itemsPerPage);
 
   // Sync local state with API state
   useEffect(() => {
@@ -78,27 +78,19 @@ export default function Employees() {
     }
   }, [currentEmployees, dispatch]);
 
-  // Sync local currentPage with API currentPage
-  useEffect(() => {
-    if (apiCurrentPage !== currentPage) {
-      setCurrentPage(apiCurrentPage);
-    }
-  }, [apiCurrentPage, currentPage]);
+  // Pagination is handled by the useEmployees hook
 
   // Debug logging for pagination and filters
   useEffect(() => {
-    console.log('Employees: API Page changed to:', apiCurrentPage);
-    console.log('Employees: Local Page changed to:', currentPage);
-    console.log('Employees: Total Pages:', totalPages);
-    console.log('Employees: Total Employees:', totalEmployees);
-  }, [apiCurrentPage, currentPage, totalPages, totalEmployees]);
+    // Page tracking removed
+  }, [apiCurrentPage, totalPages, totalEmployees]);
 
   useEffect(() => {
-    console.log('Employees: Filters changed:', stableFilters);
+    // Filter tracking removed
   }, [stableFilters]);
 
   useEffect(() => {
-    console.log('Employees: Sorting changed - Field:', sortField, 'Direction:', sortDirection);
+    // Sort tracking removed
   }, [sortField, sortDirection]);
 
   // Load initial state from URL
@@ -119,7 +111,6 @@ export default function Employees() {
     setSortField(sf);
     setSortDirection(sd);
     const pageNumber = Number.isFinite(pg) && pg > 0 ? pg : 1;
-    setCurrentPage(pageNumber);
     setApiCurrentPage(pageNumber);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -134,9 +125,9 @@ export default function Employees() {
     params.set("jobTitle", selectedJobTitle);
     params.set("sort", sortField);
     params.set("dir", sortDirection);
-    params.set("page", String(currentPage));
+    params.set("page", String(apiCurrentPage));
     setSearchParams(params, { replace: true });
-  }, [state.filters.query, selectedFacility, selectedArea, selectedStatus, selectedJobTitle, sortField, sortDirection, currentPage]);
+  }, [state.filters.query, selectedFacility, selectedArea, selectedStatus, selectedJobTitle, sortField, sortDirection, apiCurrentPage]);
 
   // Use currentEmployees from API instead of state.employees for consistency
   const employees = currentEmployees || [];
@@ -226,16 +217,7 @@ export default function Employees() {
     // The backend now returns the highest level record for each employee
     // We simply check if that highest level is awarded or in progress
     
-    // Debug logging for Sophie Allen
-    if (employee.name === 'Sophia Allen' || employee.Employee === 'Sophia Allen') {
-      console.log('Sophia Allen data:', {
-        name: employee.name || employee.Employee,
-        awardType: employee.awardType,
-        assignedDate: employee.assignedDate,
-        secureCareAwarded: employee.secureCareAwarded,
-        awaiting: employee.awaiting
-      });
-    }
+    // Debug logging for Sophie Allen removed
     
     // Handle both boolean and string values for secureCareAwarded
     const isAwarded = employee.secureCareAwarded === true || employee.secureCareAwarded === 1 || employee.secureCareAwarded === '1';
@@ -479,14 +461,7 @@ export default function Employees() {
     }
     
     // Debug logging for fallback case
-    if (employee.name === 'Sophia Allen' || employee.Employee === 'Sophia Allen') {
-      console.log('Sophia Allen fallback - no matching case:', {
-        awardType: employee.awardType,
-        assignedDate: employee.assignedDate,
-        secureCareAwarded: employee.secureCareAwarded,
-        isAwarded
-      });
-    }
+    // Debug logging for Sophia Allen removed
     
     // Fallback for employees with no training data
     return { 
@@ -501,42 +476,36 @@ export default function Employees() {
     };
   };
 
-         // Note: Filtering and sorting are now handled by the API and local sorting respectively
-
-  // Pagination is handled by the useEmployees hook
-  // No need for local pagination logic
-
-    // Reset to first page when filters or sorting change
+  // Reset to first page when filters or sorting change
   useEffect(() => {
-    setCurrentPage(1);
     setApiCurrentPage(1);
   }, [state.filters.query, selectedFacility, selectedArea, selectedStatus, selectedJobTitle, sortField, sortDirection]);
 
-      // Get filter options from API or use fallback
-      const facilities = useMemo(() => {
-        return filterOptions?.facilities?.sort() || [];
-      }, [filterOptions]);
+  // Get filter options from API or use fallback
+  const facilities = useMemo(() => {
+    return filterOptions?.facilities?.sort() || [];
+  }, [filterOptions]);
 
-      const areas = useMemo(() => {
-        if (!filterOptions?.areas) return [];
-        return filterOptions.areas.sort((a, b) => {
-          // Extract numeric part and sort numerically
-          const aNum = parseInt(a.replace(/\D/g, '')) || 0;
-          const bNum = parseInt(b.replace(/\D/g, '')) || 0;
-          return aNum - bNum;
-        });
-      }, [filterOptions]);
+  const areas = useMemo(() => {
+    if (!filterOptions?.areas) return [];
+    return filterOptions.areas.sort((a, b) => {
+      // Extract numeric part and sort numerically
+      const aNum = parseInt(a.replace(/\D/g, '')) || 0;
+      const bNum = parseInt(b.replace(/\D/g, '')) || 0;
+      return aNum - bNum;
+    });
+  }, [filterOptions]);
 
-      const jobTitles = useMemo(() => {
-        return filterOptions?.jobTitles?.sort() || [];
-      }, [filterOptions]);
+  const jobTitles = useMemo(() => {
+    return filterOptions?.jobTitles?.sort() || [];
+  }, [filterOptions]);
 
-      // Get unique statuses for filter options
-      const statuses = useMemo(() => [
-        'Not Started', 'Level 1 In Progress', 'Level 1', 'Level 2 In Progress', 'Level 2', 
-        'Level 3 In Progress', 'Level 3', 'Consultant In Progress', 'Consultant', 'Coach In Progress', 'Coach',
-        'Awaiting Approval', 'Conference Rejected'
-      ].sort(), []);
+  // Get unique statuses for filter options
+  const statuses = useMemo(() => [
+    'Not Started', 'Level 1 In Progress', 'Level 1', 'Level 2 In Progress', 'Level 2', 
+    'Level 3 In Progress', 'Level 3', 'Consultant In Progress', 'Consultant', 'Coach In Progress', 'Coach',
+    'Awaiting Approval', 'Conference Rejected'
+  ].sort(), []);
 
   const handleSort = (field: string) => {
     if (sortField === field) {
@@ -679,7 +648,7 @@ export default function Employees() {
                  const currentLevel = getCurrentLevel(e);
                  return (
                                      <TableRow key={e.employeeId} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'} hover:bg-gray-100/50 transition-colors`}>
-                     <TableCell className="font-medium text-base py-3">
+                     <TableCell className="font-medium text-base py-2">
                        <EmployeeDetailModal employee={e}>
                          <Button variant="ghost" className="h-auto p-0 justify-start hover:bg-transparent group">
                            <div className="text-left">
@@ -690,14 +659,14 @@ export default function Employees() {
                          </Button>
                        </EmployeeDetailModal>
                      </TableCell>
-                     <TableCell className="text-gray-600 font-mono text-base py-3">{e.employeeNumber || e.employeeId || e.Employee}</TableCell>
-                     <TableCell className="text-gray-700 text-base py-3">{e.facility || e.Facility}</TableCell>
-                     <TableCell className="text-gray-700 text-base py-3">{e.area || e.Area}</TableCell>
-                                           <TableCell className="text-gray-700 text-base py-3">{e.staffRoll || e.staffRoles || 'N/A'}</TableCell>
-                     <TableCell className="text-base py-3">
+                     <TableCell className="text-gray-600 font-mono text-base py-2">{e.employeeNumber || e.employeeId || e.Employee}</TableCell>
+                     <TableCell className="text-gray-700 text-base py-2">{e.facility || e.Facility}</TableCell>
+                     <TableCell className="text-gray-700 text-base py-2">{e.area || e.Area}</TableCell>
+                                           <TableCell className="text-gray-700 text-base py-2">{e.staffRoll || e.staffRoles || 'N/A'}</TableCell>
+                     <TableCell className="text-base py-2">
                        <Badge 
                          variant={currentLevel.variant as any} 
-                         className={`flex items-center gap-2 px-3 py-1.5 text-base font-medium ${currentLevel.bgColor} ${currentLevel.borderColor} ${currentLevel.textColor} ${currentLevel.className}`}
+                         className={`flex items-center gap-2 px-3 py-1 text-base font-medium ${currentLevel.bgColor} ${currentLevel.borderColor} ${currentLevel.textColor} ${currentLevel.className}`}
                        >
                          <currentLevel.icon className={`w-5 h-5 ${currentLevel.iconColor}`} />
                          {currentLevel.level}

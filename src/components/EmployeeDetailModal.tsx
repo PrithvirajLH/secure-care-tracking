@@ -61,7 +61,6 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
   const { data: freshEmployeeData, isLoading: isLoadingEmployee, error: employeeError } = useQuery({
     queryKey: trainingKeys.employee(employee.employeeId.toString()),
     queryFn: () => {
-      console.log('Fetching employee data for ID:', employee.employeeId);
       return trainingAPI.getEmployeeById(employee.employeeId.toString());
     },
     enabled: open && hasValidEmployeeId, // Only fetch when modal is open and has valid ID
@@ -72,7 +71,6 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
   const { data: levelRecords = [], error: levelsError } = useQuery({
     queryKey: ['employee-levels', String(employee.employeeId)],
     queryFn: () => {
-      console.log('Fetching level records for employee ID:', employee.employeeId);
       return trainingAPI.getEmployeeLevels(String(employee.employeeId));
     },
     enabled: open && hasValidEmployeeId,
@@ -108,14 +106,12 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
           map[rec.awardType] = rec;
         }
       });
-      console.log('Using API data for awardTypeToRecord:', Object.keys(map));
       return map;
     }
     
     // Fallback: if no API data, create a record from the employee prop
     if (employee?.awardType) {
       map[employee.awardType] = employee;
-      console.log('Using fallback data for awardTypeToRecord:', Object.keys(map));
     }
     
     return map;
@@ -124,26 +120,7 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
   // Debug logging (can be removed in production)
   useEffect(() => {
     if (open) {
-      console.log('=== EmployeeDetailModal Debug ===');
-      console.log('Employee object:', employee);
-      console.log('Employee ID:', employee.employeeId);
-      console.log('Employee Number:', employee.employeeNumber);
-      console.log('Employee Name:', employee.name || employee.Employee);
-      console.log('Employee Award Type:', employee.awardType);
-      console.log('Level Records Count:', levelRecords?.length || 0);
-      console.log('Level Records:', levelRecords?.map(r => ({ employeeId: r.employeeId, awardType: r.awardType, name: r.name })));
-      console.log('Award Type to Record Map Keys:', Object.keys(awardTypeToRecord));
-      console.log('Award Type to Record Map:', awardTypeToRecord);
-      console.log('Current Employee Data:', currentEmployee);
-      console.log('Fresh Employee Data:', freshEmployeeData);
-      console.log('Is Loading Employee:', isLoadingEmployee);
-      console.log('Employee API Error:', employeeError);
-      console.log('Levels API Error:', levelsError);
-      console.log('Has Complete API Data:', hasCompleteApiData);
-      console.log('Should Use Fallback:', shouldUseFallback);
-      console.log('Has Valid Employee ID:', hasValidEmployeeId);
-      console.log('Award Type Records Available:', Object.keys(awardTypeToRecord));
-      console.log('================================');
+      // Debug logging removed
     }
   }, [open, levelRecords, employee, awardTypeToRecord, currentEmployee, freshEmployeeData, isLoadingEmployee]);
   
@@ -350,13 +327,7 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
     const awardTypeForLevel = levelKeyToAwardType[level];
     let recordForLevel: any | undefined = awardTypeToRecord[awardTypeForLevel];
     
-    console.log(`getLevelProgress for ${level}:`, {
-      awardTypeForLevel,
-      hasSpecificRecord: !!recordForLevel,
-      levelRecordsCount: levelRecords.length,
-      currentEmployeeAwardType: currentEmployee?.awardType,
-      awardTypeToRecordKeys: Object.keys(awardTypeToRecord)
-    });
+    // Debug logging removed
     
     // If we don't have the specific awardType record, look for higher level records that might show completion
     if (!recordForLevel && levelRecords.length > 0) {
@@ -368,18 +339,15 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
       
       // Use the highest level record as it will have the most complete data
       recordForLevel = sortedRecords[0];
-      console.log(`Using highest level record for ${level}:`, recordForLevel?.awardType);
     }
     
     // If still no record, try to use the current employee data as fallback
     if (!recordForLevel && currentEmployee) {
       recordForLevel = currentEmployee;
-      console.log(`Using current employee as fallback for ${level}:`, currentEmployee?.awardType);
     }
     
     // If still no record, return empty progress
     if (!recordForLevel) {
-      console.log(`No record found for ${level}, returning empty progress`);
       return { requirements: [], total: 0, completed: 0, color: "", icon: Users } as any;
     }
     switch (level) {
@@ -531,8 +499,6 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
   const handleScheduleDate = async (employeeId: string, requirementKey: string, date: Date | undefined) => {
     const key = `${employeeId}-${requirementKey}`;
     if (date && scheduleTraining) {
-      console.log('Scheduling training:', { employeeId, requirementKey, date, key });
-      
       try {
         scheduleTraining({ employeeId, requirementKey, date });
         

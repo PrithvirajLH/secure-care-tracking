@@ -29,7 +29,7 @@ async function initDatabase() {
   try {
     if (!pool) {
       pool = await sql.connect(dbConfig);
-      console.log('✅ Database connected successfully');
+      // Connection success logging removed
     }
     return pool;
   } catch (err) {
@@ -51,7 +51,7 @@ async function closeDatabase() {
   if (pool) {
     await pool.close();
     pool = null;
-    console.log('🔌 Database connection closed');
+    // Connection close logging removed
   }
 }
 

@@ -47,6 +47,7 @@ import { FloatingNav } from "@/components/ui/floating-navbar";
 import { useEmployees, useEmployeeStats, useTrainingEmployees } from "@/hooks/useEmployees";
 import PageHeader from "@/components/PageHeader";
 import { trainingAPI } from "@/services/api";
+import { useQuery } from "@tanstack/react-query";
 
 // Import new configuration
 import { 
@@ -361,7 +362,6 @@ export default function Training() {
 
   // Handle training assignment
   const handleTrainingAssignment = (assignments: any[]) => {
-    console.log("Training assignments:", assignments);
     toast.success(`Assigned training to ${assignments.length} employees`);
   };
 
@@ -398,19 +398,26 @@ export default function Training() {
     return 'pending';
   };
 
-  // Facility to area mapping for filtering
+  // Fetch filter options from API
+  const { data: filterOptions } = useQuery({
+    queryKey: ['filter-options'],
+    queryFn: () => trainingAPI.getFilterOptions(),
+    staleTime: 10 * 60 * 1000, // 10 minutes
+  });
+
+  // Facility to area mapping for filtering - now using dynamic data
   const facilityToAreaMapping = useMemo(() => {
-    const allFacilities = [
-      'Afton Oaks Nursing and Rehabilitation Center', 'Alvarado Meadows Nursing and Rehab', 'Amarillo Skilled Care', 'Amistad', 'Arboretum of Winnie',
-      // ... (all other facilities)
-    ];
+    if (!filterOptions?.facilities || !filterOptions?.areas) {
+      return {};
+    }
     
-    const areas = ['Area 1', 'Area 2', 'Area 3', 'Area 4', 'Area 5', 'Area 6', 'Area 7', 'Area 8', 'Area 9', 'Area 10', 'Area 11', 'Area 12', 'Area 13', 'Area 14', 'Area 15', 'Area 16'];
+    const allFacilities = filterOptions.facilities;
+    const areas = filterOptions.areas;
     const mapping: { [facility: string]: string } = {};
     let facilityIndex = 0;
     
     for (let areaIndex = 0; areaIndex < areas.length; areaIndex++) {
-      const facilitiesPerArea = areaIndex < 8 ? 10 : 11;
+      const facilitiesPerArea = Math.ceil(allFacilities.length / areas.length);
       for (let i = 0; i < facilitiesPerArea && facilityIndex < allFacilities.length; i++) {
         mapping[allFacilities[facilityIndex]] = areas[areaIndex];
         facilityIndex++;
@@ -418,7 +425,7 @@ export default function Training() {
     }
     
     return mapping;
-  }, []);
+  }, [filterOptions]);
 
   const uniqueFacilities = useMemo(() => {
     if (areaFilter !== 'all') {
@@ -431,13 +438,15 @@ export default function Training() {
   }, [areaFilter, facilityToAreaMapping]);
 
   const uniqueAreas = useMemo(() => {
-    const allAreas = ['Area 1', 'Area 2', 'Area 3', 'Area 4', 'Area 5', 'Area 6', 'Area 7', 'Area 8', 'Area 9', 'Area 10', 'Area 11', 'Area 12', 'Area 13', 'Area 14', 'Area 15', 'Area 16'];
-    return allAreas.sort((a, b) => {
+    if (!filterOptions?.areas) {
+      return [];
+    }
+    return filterOptions.areas.sort((a, b) => {
       const numA = parseInt(a.replace('Area ', ''));
       const numB = parseInt(b.replace('Area ', ''));
       return numA - numB;
     });
-  }, []);
+  }, [filterOptions]);
 
   // Apply requirement status filters and search filter locally
   const filteredEmployees = useMemo(() => {
@@ -979,7 +988,7 @@ export default function Training() {
                   {filteredColumns.map((column, index) => (
                     <TableHead 
                       key={index} 
-                      className={`font-bold text-purple-900 py-4 px-4 bg-purple-100 text-base whitespace-pre-line text-center align-middle ${
+                      className={`font-bold text-purple-900 py-2 px-4 bg-purple-100 text-base whitespace-pre-line text-center align-middle ${
                         index === 0 ? "w-[12%]" : 
                         index === 1 ? "w-[8%]" : // Facility column - reduced width
                         index === 2 ? "w-[6%]" : // Area column - reduced width
@@ -1145,7 +1154,7 @@ export default function Training() {
                                 
                                                                  if (colIndex === 0) { // Employee column
                                    return (
-                                     <TableCell key={colIndex} className="py-4 px-4 w-[12%] text-center">
+                                     <TableCell key={colIndex} className="py-2 px-4 w-[12%] text-center">
                                   <div className="flex flex-col items-center justify-center">
                                     <EmployeeDetailModal 
                                       employee={employee}
@@ -1161,9 +1170,9 @@ export default function Training() {
                                    );
                                 } else if (colIndex === 1) { // Facility column
                                    return (
-                                     <TableCell key={colIndex} className="py-4 px-4 w-[8%] text-center">
+                                     <TableCell key={colIndex} className="py-2 px-4 w-[8%] text-center">
                                   <div className="flex justify-center">
-                                    <div className="bg-purple-100 rounded-lg px-2 py-1 inline-block">
+                                    <div className="bg-purple-100 rounded-lg px-2 py-0.5 inline-block">
                                          <span className="text-sm font-medium text-purple-700">{employee.facility || employee.Facility}</span>
                                     </div>
                                   </div>
@@ -1171,9 +1180,9 @@ export default function Training() {
                                    );
                                 } else if (colIndex === 2) { // Area column
                                    return (
-                                     <TableCell key={colIndex} className="py-4 px-4 w-[6%] text-center">
+                                     <TableCell key={colIndex} className="py-2 px-4 w-[6%] text-center">
                                   <div className="flex justify-center">
-                                    <div className="bg-lavender-100 rounded-lg px-2 py-1 inline-block">
+                                    <div className="bg-lavender-100 rounded-lg px-2 py-0.5 inline-block">
                                          <span className="text-sm font-medium text-lavender-700">{employee.area || employee.Area}</span>
                                     </div>
                                   </div>
@@ -1185,7 +1194,7 @@ export default function Training() {
                                    const isNotesDropdownOpen = notesDropdownOpen === employee.employeeId.toString();
                                    
                                    return (
-                                     <TableCell key={colIndex} className="py-4 px-4 w-[12%] text-center">
+                                     <TableCell key={colIndex} className="py-2 px-4 w-[12%] text-center">
                                        <div className="flex justify-center">
                                          <div className="relative" data-dropdown>
                                            <StatusBadge
@@ -1247,7 +1256,7 @@ export default function Training() {
                                    const isAdvisorDropdownOpen = advisorDropdownOpen === employee.employeeId.toString();
                                    
                                    return (
-                                     <TableCell key={colIndex} className="py-4 px-4 w-[12%] text-center">
+                                     <TableCell key={colIndex} className="py-2 px-4 w-[12%] text-center">
                                        <div className="flex justify-center">
                                          <div className="relative" data-dropdown>
                                            <StatusBadge
@@ -1316,7 +1325,7 @@ export default function Training() {
                                    );
                                 } else { // Training requirement columns
                                    return (
-                                     <TableCell key={colIndex} className={`py-4 px-4 text-center ${
+                                     <TableCell key={colIndex} className={`py-2 px-4 text-center ${
                                        column.includes("Awarded") ? "w-[12%]" : "w-[10%]"
                                      }`}>
                                        <div className="flex justify-center items-center">
@@ -1333,7 +1342,7 @@ export default function Training() {
                    </div>
 
                                       {/* Compact Pagination */}
-                   <div className="flex-shrink-0 border-t border-gray-200 bg-white px-6 py-4">
+                   <div className="flex-shrink-0 border-t border-gray-200 bg-white px-6 py-2">
                      <div className="flex items-center justify-between">
                        <div className="text-sm text-gray-600">
                          {isFetching && <span className="text-purple-600">• Loading...</span>}
@@ -1564,7 +1573,6 @@ export default function Training() {
                  
                  // Schedule the training
                  if (employeeId && requirementKey) {
-                   console.log('Scheduling training for employee:', employeeId, 'requirement:', requirementKey, 'date:', date);
                    scheduleTraining({ employeeId, requirementKey, date });
                  } else {
                    console.error('Missing data for scheduling:', { employeeId, requirementKey, date });

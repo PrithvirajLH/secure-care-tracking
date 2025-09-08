@@ -1,11 +1,11 @@
 import { useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Award, FileText, UsersRound, Clock, CheckCircle, AlertCircle, TrendingUp, Home } from "lucide-react";
-import { Pie, PieChart, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from "recharts";
+import { Award, FileText, UsersRound, Clock, CheckCircle, AlertCircle, TrendingUp, Home, Calendar } from "lucide-react";
+import { Pie, PieChart, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, LabelList } from "recharts";
 import { motion } from "framer-motion";
 import { useApp } from "@/context/AppContext";
-import { useEmployees } from "@/hooks/useEmployees";
+import { useTrainingEmployees } from "@/hooks/useEmployees";
 import { useTrainingData } from "@/hooks/useTrainingData";
 import { parseDate } from "@/config/awardTypes";
 import PageHeader from "@/components/PageHeader";
@@ -43,9 +43,8 @@ const getRequirementDisplayName = (requirementKey: string): string => {
 export default function Dashboard() {
   const { state } = useApp();
 
-  // For Dashboard, we need limited employees, so we'll use the default page size
-  // and also fall back to state.employees if the API data is not available
-  const { employees: apiEmployees, isLoading, error, isFetching } = useEmployees({});
+  // For Dashboard, we need all employee records to calculate accurate stats
+  const { employees: apiEmployees, isLoading, error, isFetching } = useTrainingEmployees({ level: 'all' }, 100);
   // Note: allTrainingData not available in useTrainingData hook, using employee data instead
   const isLoadingAll = false;
 
@@ -57,27 +56,23 @@ export default function Dashboard() {
   // This ensures the Dashboard always has data to display
   const employees = useMemo(() => {
     if (apiEmployees && apiEmployees.length > 0) {
-      console.log('Dashboard: Using API employees:', apiEmployees.length);
       return apiEmployees;
     } else if (state.employees && state.employees.length > 0) {
-      console.log('Dashboard: Using state employees:', state.employees.length);
       return state.employees;
     } else {
-      console.log('Dashboard: No employees available');
       return [];
     }
   }, [apiEmployees, state.employees]);
 
   // Debug logging
   useEffect(() => {
-    console.log('Dashboard: API employees count:', apiEmployees?.length || 0);
-    console.log('Dashboard: State employees count:', state.employees?.length || 0);
-    console.log('Dashboard: Final employees count:', employees.length);
+    // Employee count tracking removed
   }, [apiEmployees, state.employees, employees]);
 
   const stats = useMemo(() => {
-    const total = employees.length;
-    console.log('Dashboard: Calculating stats for', total, 'employees');
+    // Get unique employees count (one record per employeeNumber)
+    const uniqueEmployeeNumbers = new Set(employees.map(e => e.employeeNumber));
+    const total = uniqueEmployeeNumbers.size;
     
     // Calculate completion rates for each level using correct database fields
     const level1Completed = employees.filter(e => e.awardType === 'Level 1' && e.secureCareAwarded).length;
@@ -86,12 +81,22 @@ export default function Dashboard() {
     const consultantCompleted = employees.filter(e => e.awardType === 'Consultant' && e.secureCareAwarded).length;
     const coachCompleted = employees.filter(e => e.awardType === 'Coach' && e.secureCareAwarded).length;
 
-    // Calculate in-progress counts
-    const level1InProgress = employees.filter(e => e.awardType === 'Level 1' && e.assignedDate && !e.secureCareAwarded).length;
-    const level2InProgress = employees.filter(e => e.awardType === 'Level 2' && e.assignedDate && !e.secureCareAwarded).length;
-    const level3InProgress = employees.filter(e => e.awardType === 'Level 3' && e.assignedDate && !e.secureCareAwarded).length;
-    const consultantInProgress = employees.filter(e => e.awardType === 'Consultant' && e.assignedDate && !e.secureCareAwarded).length;
-    const coachInProgress = employees.filter(e => e.awardType === 'Coach' && e.assignedDate && !e.secureCareAwarded).length;
+    // Calculate in-progress counts using correct logic
+    const level1InProgress = employees.filter(e => 
+      e.awardType === 'Level 1' && e.assignedDate && !e.secureCareAwarded
+    ).length;
+    const level2InProgress = employees.filter(e => 
+      e.awardType === 'Level 2' && !e.secureCareAwarded && e.awaiting !== 1 && e.awaiting !== true
+    ).length;
+    const level3InProgress = employees.filter(e => 
+      e.awardType === 'Level 3' && !e.secureCareAwarded && e.awaiting !== 1 && e.awaiting !== true
+    ).length;
+    const consultantInProgress = employees.filter(e => 
+      e.awardType === 'Consultant' && !e.secureCareAwarded && e.awaiting !== 1 && e.awaiting !== true
+    ).length;
+    const coachInProgress = employees.filter(e => 
+      e.awardType === 'Coach' && !e.secureCareAwarded && e.awaiting !== 1 && e.awaiting !== true
+    ).length;
 
     // Calculate pending counts (no award type assigned yet)
     const level1Pending = employees.filter(e => !e.awardType || e.awardType === 'Level 1' && !e.assignedDate).length;
@@ -136,10 +141,17 @@ export default function Dashboard() {
     const consultantPercentage = Math.round((consultantCompleted / Math.max(level3Completed, 1)) * 100);
     const coachPercentage = Math.round((coachCompleted / Math.max(consultantCompleted, 1)) * 100);
 
+    // Simple statistics based on secureCareAwarded field - count ALL records, not unique employees
+    // Count ALL records where secureCareAwarded = 1
+    const totalCompleted = employees.filter(e => e.secureCareAwarded === 1 || e.secureCareAwarded === true).length;
+    
+    // Count ALL records where secureCareAwarded = 0
+    const totalInProgress = employees.filter(e => e.secureCareAwarded === 0 || e.secureCareAwarded === false).length;
+
     const calculatedStats = {
       total,
-      totalCompleted: level1Completed + level2Completed + level3Completed + consultantCompleted + coachCompleted,
-      totalInProgress: level1InProgress + level2InProgress + level3InProgress + consultantInProgress + coachInProgress,
+      totalCompleted,
+      totalInProgress,
       totalPending: level1Pending + level2Pending + level3Pending + consultantPending + coachPending,
       totalOverdue: level1Overdue + level2Overdue + level3Overdue,
       awaitingApprovals,
@@ -159,53 +171,194 @@ export default function Dashboard() {
       }
     };
 
-    console.log('Dashboard: Calculated stats:', calculatedStats);
     return calculatedStats;
   }, [employees]);
 
-  // Enhanced stats with basic employee data (no real-time training data available)
+  // Enhanced stats with basic employee data
   const enhancedStats = useMemo(() => {
-    // Use basic stats without real-time training integration
     return {
       ...stats,
-      activeTrainingSessions: 0,
-      overdueTraining: stats.totalOverdue,
-      recentCompletions: 0
+      overdueTraining: stats.totalOverdue
     };
   }, [stats]) as typeof stats & {
-    activeTrainingSessions: number;
     overdueTraining: number;
-    recentCompletions: number;
   };
 
   const donutData = [
-    { name: "Level 1", value: enhancedStats.completion.level1 },
-    { name: "Level 2", value: enhancedStats.completion.level2 },
-    { name: "Level 3", value: enhancedStats.completion.level3 },
-    { name: "Consultant", value: enhancedStats.completion.consultant },
-    { name: "Coach", value: enhancedStats.completion.coach },
-  ];
+    { name: "Level 1", value: enhancedStats.completion.level1, count: enhancedStats.counts.level1.completed },
+    { name: "Level 2", value: enhancedStats.completion.level2, count: enhancedStats.counts.level2.completed },
+    { name: "Level 3", value: enhancedStats.completion.level3, count: enhancedStats.counts.level3.completed },
+    { name: "Consultant", value: enhancedStats.completion.consultant, count: enhancedStats.counts.consultant.completed },
+    { name: "Coach", value: enhancedStats.completion.coach, count: enhancedStats.counts.coach.completed },
+  ].filter(item => item.value > 0); // Only show levels with completions
 
   // Generate facility data from actual employee data using correct database fields
   const facilityData = useMemo(() => {
-    const facilityStats = employees.reduce((acc, employee) => {
-      if (!acc[employee.facility]) {
-        acc[employee.facility] = { total: 0, completed: 0 };
+    // Filter out employees with null/undefined facility names
+    // Handle both 'facility' and 'Facility' field names (case sensitivity)
+    const validEmployees = employees.filter(employee => {
+      const facilityName = employee.facility || employee.Facility;
+      return facilityName && 
+        facilityName.trim() !== '' && 
+        facilityName !== 'null' && 
+        facilityName !== 'undefined';
+    });
+
+    if (validEmployees.length === 0) {
+      return []; // Return empty array if no valid facilities
+    }
+
+    const facilityStats = validEmployees.reduce((acc, employee) => {
+      const facilityName = (employee.facility || employee.Facility).trim();
+      if (!acc[facilityName]) {
+        acc[facilityName] = { total: 0, completed: 0, inProgress: 0, awaiting: 0 };
       }
-      acc[employee.facility].total++;
-      if (employee.secureCareAwarded) {
-        acc[employee.facility].completed++;
+      acc[facilityName].total++;
+      if (employee.secureCareAwarded === 1 || employee.secureCareAwarded === true) {
+        acc[facilityName].completed++;
+      } else if (employee.awaiting === 1 || employee.awaiting === true) {
+        acc[facilityName].awaiting++;
+      } else {
+        acc[facilityName].inProgress++;
       }
       return acc;
-    }, {} as Record<string, { total: number; completed: number }>);
+    }, {} as Record<string, { total: number; completed: number; inProgress: number; awaiting: number }>);
 
-    return Object.entries(facilityStats)
-      .map(([name, stats]) => ({
-        name,
-        completed: Math.round(((stats as any).completed / Math.max((stats as any).total, 1)) * 100)
-      }))
+    const facilityDataArray = Object.entries(facilityStats)
+      .map(([name, stats]) => {
+        const typedStats = stats as { total: number; completed: number; inProgress: number; awaiting: number };
+        return {
+          name: name.length > 20 ? name.substring(0, 20) + '...' : name, // Truncate long names
+          fullName: name, // Keep full name for tooltip
+          completed: Math.round((typedStats.completed / Math.max(typedStats.total, 1)) * 100),
+          completedCount: typedStats.completed,
+          totalCount: typedStats.total,
+          inProgressCount: typedStats.inProgress,
+          awaitingCount: typedStats.awaiting
+        };
+      })
       .sort((a, b) => b.completed - a.completed)
       .slice(0, 5); // Top 5 facilities
+
+    return facilityDataArray;
+  }, [employees]);
+
+  // Generate recent activity data
+  const recentActivity = useMemo(() => {
+    const activities: Array<{
+      id: string;
+      type: 'awaiting' | 'scheduled' | 'completed' | 'rescheduled' | 'awarded' | 'rejected';
+      employeeName: string;
+      level: string;
+      date: string;
+      description: string;
+      icon: any;
+      color: string;
+    }> = [];
+
+    employees.forEach(employee => {
+      const employeeName = employee.Employee || employee.name || 'Unknown Employee';
+      const level = employee.awardType || 'Unknown Level';
+      
+      // Awaiting approval
+      if (employee.awaiting === 1 || employee.awaiting === true) {
+        activities.push({
+          id: `${employee.employeeId}-awaiting`,
+          type: 'awaiting',
+          employeeName,
+          level,
+          date: employee.conferenceCompleted || new Date().toISOString().split('T')[0],
+          description: `Awaiting approval for ${level}`,
+          icon: AlertCircle,
+          color: 'text-amber-600'
+        });
+      }
+
+      // Scheduled activities
+      const scheduledFields = [
+        { field: 'scheduleStandingVideo', name: 'Standing Video' },
+        { field: 'scheduleSleepingVideo', name: 'Sleeping Video' },
+        { field: 'scheduleFeedGradVideo', name: 'Feed/Grad Video' },
+        { field: 'schedulenoHandnoSpeak', name: 'No Hand/No Speak' },
+        { field: 'scheduleSession1', name: 'Session 1' },
+        { field: 'scheduleSession2', name: 'Session 2' },
+        { field: 'scheduleSession3', name: 'Session 3' }
+      ];
+
+      scheduledFields.forEach(({ field, name }) => {
+        if (employee[field]) {
+          activities.push({
+            id: `${employee.employeeId}-${field}`,
+            type: 'scheduled',
+            employeeName,
+            level,
+            date: employee[field],
+            description: `Scheduled for ${name} in ${level}`,
+            icon: Calendar,
+            color: 'text-blue-600'
+          });
+        }
+      });
+
+      // Completed activities
+      const completedFields = [
+        { field: 'standingVideo', name: 'Standing Video' },
+        { field: 'sleepingVideo', name: 'Sleeping Video' },
+        { field: 'feedGradVideo', name: 'Feed/Grad Video' },
+        { field: 'noHandnoSpeak', name: 'No Hand/No Speak' },
+        { field: 'session1', name: 'Session 1' },
+        { field: 'session2', name: 'Session 2' },
+        { field: 'session3', name: 'Session 3' }
+      ];
+
+      completedFields.forEach(({ field, name }) => {
+        if (employee[field]) {
+          activities.push({
+            id: `${employee.employeeId}-${field}`,
+            type: 'completed',
+            employeeName,
+            level,
+            date: employee[field],
+            description: `Completed ${name} in ${level}`,
+            icon: CheckCircle,
+            color: 'text-green-600'
+          });
+        }
+      });
+
+      // Awarded
+      if (employee.secureCareAwarded === 1 || employee.secureCareAwarded === true) {
+        activities.push({
+          id: `${employee.employeeId}-awarded`,
+          type: 'awarded',
+          employeeName,
+          level,
+          date: employee.secureCareAwardedDate || new Date().toISOString().split('T')[0],
+          description: `Has been awarded ${level}`,
+          icon: Award,
+          color: 'text-purple-600'
+        });
+      }
+
+      // Rejected
+      if (employee.awaiting === null) {
+        activities.push({
+          id: `${employee.employeeId}-rejected`,
+          type: 'rejected',
+          employeeName,
+          level,
+          date: employee.conferenceCompleted || new Date().toISOString().split('T')[0],
+          description: `Conference rejected for ${level}`,
+          icon: AlertCircle,
+          color: 'text-red-600'
+        });
+      }
+    });
+
+    // Sort by date (most recent first) and take top 5
+    return activities
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 5);
   }, [employees]);
 
   // Loading state
@@ -263,7 +416,7 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-blue-700">{enhancedStats.total}</div>
-              <p className="text-xs text-blue-600 mt-1">Active Staff</p>
+              <p className="text-xs text-blue-600 mt-1">Total Staff</p>
             </CardContent>
           </Card>
         </motion.div>
@@ -287,7 +440,7 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-yellow-700">{enhancedStats.totalInProgress}</div>
-              <p className="text-xs text-yellow-600 mt-1">Active Training</p>
+              <p className="text-xs text-yellow-600 mt-1">Training In Progress</p>
             </CardContent>
           </Card>
         </motion.div>
@@ -303,139 +456,6 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         </motion.div>
-      </div>
-
-      {/* Additional stats row */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <Card className="shadow-sm bg-gradient-to-br from-indigo-50 to-indigo-100 border-indigo-200">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-indigo-700">Active Sessions</CardTitle>
-            <Clock className="h-4 w-4 text-indigo-700" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-indigo-700">{enhancedStats.activeTrainingSessions}</div>
-            <p className="text-xs text-indigo-600 mt-1">Current Training</p>
-          </CardContent>
-        </Card>
-        <Card className="shadow-sm bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-orange-700">Recent Completions</CardTitle>
-            <CheckCircle className="h-4 w-4 text-orange-700" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-orange-700">{enhancedStats.recentCompletions}</div>
-            <p className="text-xs text-orange-600 mt-1">Last 7 Days</p>
-          </CardContent>
-        </Card>
-        <Card className="shadow-sm bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-purple-700">Training Efficiency</CardTitle>
-            <TrendingUp className="h-4 w-4 text-purple-700" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-purple-700">
-              {employees.length > 0 ? 
-                Math.round((employees.filter(e => e.secureCareAwarded).length / employees.length) * 100) : 0}%
-            </div>
-            <p className="text-xs text-purple-600 mt-1">Completion Rate</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Awaiting approvals details */}
-      {enhancedStats.awaitingApprovals > 0 && (
-        <Card className="shadow-sm border-amber-200 bg-amber-50">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-amber-700">
-              <AlertCircle className="w-5 h-5" />
-              Awaiting Conference Approvals
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-amber-700">
-                  {enhancedStats.awaitingApprovals} items awaiting approval
-                </span>
-                <span className="text-xs text-amber-600">
-                  Approve to progress awarding
-                </span>
-              </div>
-              
-              {/* Awaiting list */}
-              <div className="mt-4">
-                <div className="text-sm font-medium text-amber-700 mb-2">Awaiting employees:</div>
-                <div className="space-y-2 max-h-40 overflow-y-auto">
-                  {employees
-                    .filter(e => e.awaiting === 0)
-                    .slice(0, 5) // Show top 5 overdue
-                    .map((employee, index) => {
-                      return (
-                        <div key={index} className="flex items-center justify-between p-2 bg-white rounded border border-amber-200">
-                          <div className="flex-1">
-                            <div className="text-sm font-medium text-gray-700">
-                              {employee.name}
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              {employee.awardType || 'Training'} - Awaiting approval
-                            </div>
-                          </div>
-                          <div className="text-xs text-amber-600 font-medium">
-                            {employee.conferenceCompleted ? new Date(employee.conferenceCompleted).toLocaleDateString() : '—'}
-                          </div>
-                        </div>
-                      );
-                    })}
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card className="shadow-sm">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-blue-600" />
-              Certification Progress
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie dataKey="value" data={donutData} innerRadius={60} outerRadius={90} paddingAngle={4}>
-                    {donutData.map((_, i) => (
-                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                    ))}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-sm">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Award className="w-5 h-5 text-green-600" />
-              Top Facilities
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={facilityData}>
-                  <XAxis dataKey="name" />
-                  <YAxis domain={[0, 100]} />
-                  <Tooltip />
-                  <Bar dataKey="completed" fill="#10b981" radius={[6, 6, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
       </div>
 
       {/* Level-wise Statistics */}
@@ -478,46 +498,170 @@ export default function Dashboard() {
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card className="shadow-sm lg:col-span-2">
+        <Card className="shadow-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Clock className="w-5 h-5 text-blue-600" />
-              Recent Activity
+              <TrendingUp className="w-5 h-5 text-blue-600" />
+              Certification Progress
             </CardTitle>
+            <p className="text-sm text-gray-600 mt-1">
+              Completion rates by certification level
+            </p>
           </CardHeader>
           <CardContent>
-            <ul className="space-y-3">
-              {employees
-                .filter(e => e.secureCareAwardedDate)
-                .sort((a, b) => {
-                  const aDate = new Date(a.secureCareAwardedDate);
-                  const bDate = new Date(b.secureCareAwardedDate);
-                  return bDate.getTime() - aDate.getTime();
-                })
-                .slice(0, 5)
-                .map((employee, index) => {
-                  const awardDate = new Date(employee.secureCareAwardedDate);
-                  const level = employee.awardType || 'Level 1';
-                  
-                  const daysAgo = Math.floor((new Date().getTime() - awardDate.getTime()) / (1000 * 60 * 60 * 24));
-                  const timeText = daysAgo === 0 ? 'Today' : daysAgo === 1 ? 'Yesterday' : `${daysAgo} days ago`;
-                  
-                  return (
-                    <li key={employee.employeeId} className="flex items-center justify-between rounded-md border p-3 hover:bg-gray-50 transition-colors">
-                      <span className="font-medium">{employee.name} completed {level}</span>
-                      <span className="text-xs text-muted-foreground">{timeText}</span>
-                    </li>
-                  );
-                })}
-              {employees.filter(e => e.secureCareAwardedDate).length === 0 && (
-                <li className="text-center text-muted-foreground py-4">
-                  No recent activity
-                </li>
+            <div className="h-80">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie 
+                    dataKey="value" 
+                    data={donutData} 
+                    innerRadius={60} 
+                    outerRadius={90} 
+                    paddingAngle={4}
+                    label={({ name, value }) => `${name}: ${value}%`}
+                    labelLine={false}
+                  >
+                    {donutData.map((_, i) => (
+                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    formatter={(value, name, props) => [
+                      `${value}% (${props.payload.count} completed)`, 
+                      name
+                    ]}
+                    labelStyle={{ color: '#374151', fontWeight: 'bold' }}
+                    contentStyle={{ 
+                      backgroundColor: '#f9fafb', 
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '8px',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                    }}
+                  />
+                  <Legend 
+                    verticalAlign="bottom" 
+                    height={36}
+                    formatter={(value) => <span className="text-sm text-gray-700">{value}</span>}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Award className="w-5 h-5 text-green-600" />
+              Top Facilities
+            </CardTitle>
+            <p className="text-sm text-gray-600 mt-1">
+              Completion rates by facility (all training records)
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="h-64">
+              {facilityData.length === 0 ? (
+                <div className="flex items-center justify-center h-full text-gray-500">
+                  <div className="text-center">
+                    <Award className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+                    <p className="text-sm">No facility data available</p>
+                  </div>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={facilityData}>
+                    <XAxis 
+                      dataKey="name" 
+                      tick={{ fontSize: 12 }}
+                      angle={-45}
+                      textAnchor="end"
+                      height={60}
+                    />
+                    <YAxis 
+                      domain={[0, 100]} 
+                      tick={{ fontSize: 12 }}
+                      label={{ value: 'Completion %', angle: -90, position: 'insideLeft' }}
+                    />
+                    <Tooltip 
+                      formatter={(value, name, props) => [
+                        `${value}% (${props.payload.completedCount}/${props.payload.totalCount} records)`,
+                        'Completion Rate'
+                      ]}
+                      labelFormatter={(label, payload) => {
+                        const fullName = payload?.[0]?.payload?.fullName || label;
+                        return `Facility: ${fullName}`;
+                      }}
+                      contentStyle={{ 
+                        backgroundColor: '#f9fafb', 
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '8px',
+                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                      }}
+                    />
+                    <Bar 
+                      dataKey="completed" 
+                      fill="#10b981" 
+                      radius={[6, 6, 0, 0]}
+                      name="Completion Rate"
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
               )}
-            </ul>
+            </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Recent Activity */}
+      <Card className="shadow-sm">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Clock className="w-5 h-5 text-indigo-600" />
+            Recent Activity
+          </CardTitle>
+          <p className="text-sm text-gray-600 mt-1">
+            Latest 5 activities across all training levels
+          </p>
+        </CardHeader>
+        <CardContent>
+          {recentActivity.length === 0 ? (
+            <div className="flex items-center justify-center py-8 text-gray-500">
+              <div className="text-center">
+                <Clock className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+                <p className="text-sm">No recent activity found</p>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {recentActivity.map((activity, index) => {
+                const IconComponent = activity.icon;
+                return (
+                  <div key={activity.id} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                    <div className={`flex-shrink-0 w-8 h-8 rounded-full bg-white flex items-center justify-center border-2 ${activity.color.replace('text-', 'border-')}`}>
+                      <IconComponent className={`w-4 h-4 ${activity.color}`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-medium text-gray-900 truncate">
+                          {activity.employeeName}
+                        </p>
+                        <span className="text-xs text-gray-500 flex-shrink-0 ml-2">
+                          {new Date(activity.date).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-600 mt-1">
+                        {activity.description}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
     </div>
   );
 }

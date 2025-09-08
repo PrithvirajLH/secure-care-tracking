@@ -5,7 +5,6 @@ const { parse } = require('csv-parse');
 const sql = require('mssql');
 
 function usageAndExit() {
-  console.log('Usage: node import-csv.js <path-to-csv>');
   process.exit(1);
 }
 
@@ -209,7 +208,6 @@ async function main() {
   }
 
   const pool = await connect();
-  console.log('Connected to SQL Server');
 
   // Stream CSV rows
   const parser = fs.createReadStream(fullPath).pipe(
@@ -221,13 +219,14 @@ async function main() {
     try {
       await insertEmployee(pool, row);
       count++;
-      if (count % 50 === 0) console.log(`Inserted ${count} employees...`);
+      if (count % 50 === 0) {
+        // Progress logging removed
+      }
     } catch (e) {
       console.error('Row insert failed:', e.message, 'Row:', row);
     }
   }
 
-  console.log(`Done. Inserted ${count} employees.`);
   await pool.close();
 }
 

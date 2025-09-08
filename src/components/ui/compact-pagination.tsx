@@ -75,12 +75,8 @@ export function CompactPagination({
   const pageNumbers = generatePageNumbers();
 
   const handlePageChange = (page: number) => {
-    console.log('CompactPagination: Page change requested to:', page);
     if (page >= 1 && page <= totalPages && page !== currentPage) {
-      console.log('CompactPagination: Calling onPageChange with:', page);
       onPageChange(page);
-    } else {
-      console.log('CompactPagination: Page change rejected - invalid page or same page');
     }
   };
 

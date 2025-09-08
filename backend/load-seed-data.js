@@ -17,28 +17,28 @@ const dbConfig = {
 
 async function loadSeedData() {
   try {
-    console.log('🔌 Connecting to database...');
+    // Connection logging removed
     const pool = await sql.connect(dbConfig);
-    console.log('✅ Connected successfully');
+    // Success logging removed
     
     // Optional: Clearing disabled for insert-only seeding
-    console.log('➡️ Insert-only seeding (no table clearing)');
+    // Seeding mode logging removed
     
     // Load complex seed data (10 advisors, 50 employees, varied states)
     const seedSQL = fs.readFileSync('./scripts/simple_seed.sql', 'utf8');
     
-    console.log('📊 Loading seed data...');
+    // Loading logging removed
     await pool.request().query(seedSQL);
-    console.log('✅ Seed data loaded successfully');
+    // Success logging removed
     
     // Verify data was loaded
     const result = await pool.request().query('SELECT COUNT(*) as employeeCount FROM dbo.SecureCareEmployee');
     const advisorResult = await pool.request().query('SELECT COUNT(*) as advisorCount FROM dbo.Advisor');
     
-    console.log(`📈 Data loaded: ${result.recordset[0].employeeCount} employees, ${advisorResult.recordset[0].advisorCount} advisors`);
+    // Data count logging removed
     
     // Show some sample data
-    console.log('\n📋 Sample data preview:');
+    // Sample data preview logging removed
     const sampleData = await pool.request().query(`
       SELECT TOP 5 
         employeeId, name, employeeNumber, awardType, facility, area, 
@@ -50,7 +50,7 @@ async function loadSeedData() {
     console.table(sampleData.recordset);
     
     await pool.close();
-    console.log('🎉 Database seeding complete!');
+    // Completion logging removed
   } catch (err) {
     console.error('❌ Error:', err.message);
     if (err.originalError) {

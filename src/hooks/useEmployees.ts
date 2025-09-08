@@ -25,7 +25,7 @@ export const useEmployees = (filters: EmployeeFilters, pageSize: number = 10) =>
   const { data, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ['employees-unique', filters.level, currentPage, JSON.stringify(filters)],
     queryFn: async () => {
-      const level = filters.level ? getLevelFromTabKey(filters.level) : 'all';
+      const level = filters.level && filters.level !== 'all' ? getLevelFromTabKey(filters.level) : 'all';
       return trainingAPI.getUniqueEmployeesByLevel(level, {
         ...filters,
         page: currentPage,
@@ -65,7 +65,7 @@ export const useTrainingEmployees = (filters: EmployeeFilters, pageSize: number 
   const { data, isLoading, error, refetch, isFetching } = useQuery({
     queryKey: ['employees-training', filters.level, currentPage, JSON.stringify(filters)],
     queryFn: async () => {
-      const level = filters.level ? getLevelFromTabKey(filters.level) : 'all';
+      const level = filters.level && filters.level !== 'all' ? getLevelFromTabKey(filters.level) : 'all';
       return trainingAPI.getEmployeesByLevel(level, {
         ...filters,
         page: currentPage,

@@ -721,13 +721,7 @@ class SecureCareService {
       emp.Employee === 'Sophia Allen' || emp.name === 'Sophia Allen'
     );
     if (sophiaAllen) {
-      console.log('Sophia Allen backend data:', {
-        name: sophiaAllen.Employee || sophiaAllen.name,
-        awardType: sophiaAllen.awardType,
-        assignedDate: sophiaAllen.assignedDate,
-        secureCareAwarded: sophiaAllen.secureCareAwarded,
-        awaiting: sophiaAllen.awaiting
-      });
+      // Debug logging removed
     }
     
     return {
@@ -757,7 +751,6 @@ class SecureCareService {
     }
 
     const employeeNumber = currentResult.recordset[0].employeeNumber;
-    console.log('getEmployeeLevelsByEmployeeId: Found employeeNumber:', employeeNumber, 'for employeeId:', employeeId);
 
     // Now fetch all records with the same employeeNumber (all award types/levels)
     const levelsRequest = pool.request();
@@ -808,10 +801,7 @@ class SecureCareService {
           ELSE 99
         END
     `);
-
-    console.log('getEmployeeLevelsByEmployeeId: Found records:', levelsResult.recordset.length, 'for employeeNumber:', employeeNumber);
-    console.log('getEmployeeLevelsByEmployeeId: Records:', levelsResult.recordset.map(r => ({ employeeId: r.employeeId, awardType: r.awardType, name: r.name })));
-
+    
     return levelsResult.recordset;
   }
 

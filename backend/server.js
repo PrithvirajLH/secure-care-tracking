@@ -57,9 +57,7 @@ app.use('*', (req, res) => {
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`🚀 SecureCare Backend API running on port ${PORT}`);
-  console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
-  console.log(`🔗 API base URL: http://localhost:${PORT}/api`);
+  // Server startup logging removed
 });
 
 module.exports = app;
