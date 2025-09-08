@@ -53,25 +53,40 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
   const [isUpdatingNotes, setIsUpdatingNotes] = useState(false);
   const [isUpdatingAdvisor, setIsUpdatingAdvisor] = useState(false);
 
+  // Check if employee has required fields
+  const hasValidEmployeeId = employee?.employeeId && !isNaN(Number(employee.employeeId));
+  
   // Fetch fresh employee data from API to ensure we have the latest data
-  const { data: freshEmployeeData, isLoading: isLoadingEmployee } = useQuery({
+  const { data: freshEmployeeData, isLoading: isLoadingEmployee, error: employeeError } = useQuery({
     queryKey: trainingKeys.employee(employee.employeeId.toString()),
-    queryFn: () => trainingAPI.getEmployeeById(employee.employeeId.toString()),
-    enabled: open, // Only fetch when modal is open
+    queryFn: () => {
+      console.log('Fetching employee data for ID:', employee.employeeId);
+      return trainingAPI.getEmployeeById(employee.employeeId.toString());
+    },
+    enabled: open && hasValidEmployeeId, // Only fetch when modal is open and has valid ID
     staleTime: 0, // Always fetch fresh data
   });
 
   // Also fetch all SecureCareEmployee records (all award types) for this employee
-  const { data: levelRecords = [] } = useQuery({
+  const { data: levelRecords = [], error: levelsError } = useQuery({
     queryKey: ['employee-levels', String(employee.employeeId)],
-    queryFn: () => trainingAPI.getEmployeeLevels(String(employee.employeeId)),
-    enabled: open,
+    queryFn: () => {
+      console.log('Fetching level records for employee ID:', employee.employeeId);
+      return trainingAPI.getEmployeeLevels(String(employee.employeeId));
+    },
+    enabled: open && hasValidEmployeeId,
     staleTime: 0,
   });
 
 
-  // Use fresh data if available, otherwise fall back to prop data
+  // Always use fresh data from API - ignore the employee prop data for display
+  // The employee prop is only used to get the employeeId for API calls
   const currentEmployee = freshEmployeeData || employee;
+  
+  // Check if we have complete data from API
+  const hasCompleteApiData = !employeeError && !levelsError && levelRecords.length > 0;
+  const shouldUseFallback = !hasCompleteApiData && employee;
+  const isLoading = isLoadingEmployee || (open && hasValidEmployeeId && levelRecords.length === 0 && !levelsError);
   
   // Map between awardType and level key used in tabs
   const levelKeyToAwardType: Record<string, string> = {
@@ -84,19 +99,52 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
 
   const awardTypeToRecord = useMemo(() => {
     const map: Record<string, any> = {};
-    (levelRecords as any[]).forEach((rec) => {
-      if (rec?.awardType) map[rec.awardType] = rec;
-    });
-    return map;
-  }, [levelRecords]);
-
-  // Debug logging
-  useEffect(() => {
-    if (open && levelRecords.length > 0) {
-      console.log('EmployeeDetailModal: levelRecords for employee', employee.employeeId, ':', levelRecords);
-      console.log('EmployeeDetailModal: awardTypeToRecord map:', awardTypeToRecord);
+    
+    // Always prioritize API data - this gives us ALL level records for the employee
+    if (levelRecords && levelRecords.length > 0) {
+      (levelRecords as any[]).forEach((rec) => {
+        if (rec?.awardType) {
+          map[rec.awardType] = rec;
+        }
+      });
+      console.log('Using API data for awardTypeToRecord:', Object.keys(map));
+      return map;
     }
-  }, [open, levelRecords, employee.employeeId, awardTypeToRecord]);
+    
+    // Fallback: if no API data, create a record from the employee prop
+    if (employee?.awardType) {
+      map[employee.awardType] = employee;
+      console.log('Using fallback data for awardTypeToRecord:', Object.keys(map));
+    }
+    
+    return map;
+  }, [levelRecords, employee]);
+
+  // Debug logging (can be removed in production)
+  useEffect(() => {
+    if (open) {
+      console.log('=== EmployeeDetailModal Debug ===');
+      console.log('Employee object:', employee);
+      console.log('Employee ID:', employee.employeeId);
+      console.log('Employee Number:', employee.employeeNumber);
+      console.log('Employee Name:', employee.name || employee.Employee);
+      console.log('Employee Award Type:', employee.awardType);
+      console.log('Level Records Count:', levelRecords?.length || 0);
+      console.log('Level Records:', levelRecords?.map(r => ({ employeeId: r.employeeId, awardType: r.awardType, name: r.name })));
+      console.log('Award Type to Record Map Keys:', Object.keys(awardTypeToRecord));
+      console.log('Award Type to Record Map:', awardTypeToRecord);
+      console.log('Current Employee Data:', currentEmployee);
+      console.log('Fresh Employee Data:', freshEmployeeData);
+      console.log('Is Loading Employee:', isLoadingEmployee);
+      console.log('Employee API Error:', employeeError);
+      console.log('Levels API Error:', levelsError);
+      console.log('Has Complete API Data:', hasCompleteApiData);
+      console.log('Should Use Fallback:', shouldUseFallback);
+      console.log('Has Valid Employee ID:', hasValidEmployeeId);
+      console.log('Award Type Records Available:', Object.keys(awardTypeToRecord));
+      console.log('================================');
+    }
+  }, [open, levelRecords, employee, awardTypeToRecord, currentEmployee, freshEmployeeData, isLoadingEmployee]);
   
   const [notes, setNotes] = useState(employee.notes || "");
   const [selectedAdvisorId, setSelectedAdvisorId] = useState<string>(employee.advisorId?.toString() || "none");
@@ -281,90 +329,135 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
   };
 
   const getLevelProgress = (level: string) => {
-    // Pick the correct record for this tab's award type; if not present, return empty progress
-    const awardTypeForLevel = levelKeyToAwardType[level];
-    const recordForLevel: any | undefined = awardTypeToRecord[awardTypeForLevel];
+    // For each level, we need to find the best record that shows the completion status for that level
+    // This could be the specific awardType record OR a higher level record that shows completion of lower levels
     
-    // If no specific record for this level, but we have level records, return empty
-    // If no level records at all, fall back to currentEmployee for backward compatibility
+    const awardTypeForLevel = levelKeyToAwardType[level];
+    let recordForLevel: any | undefined = awardTypeToRecord[awardTypeForLevel];
+    
+    console.log(`getLevelProgress for ${level}:`, {
+      awardTypeForLevel,
+      hasSpecificRecord: !!recordForLevel,
+      levelRecordsCount: levelRecords.length,
+      currentEmployeeAwardType: currentEmployee?.awardType,
+      awardTypeToRecordKeys: Object.keys(awardTypeToRecord)
+    });
+    
+    // If we don't have the specific awardType record, look for higher level records that might show completion
+    if (!recordForLevel && levelRecords.length > 0) {
+      // Find the highest level record that could contain data for this level
+      const sortedRecords = levelRecords.sort((a, b) => {
+        const levelOrder = { 'Level 1': 1, 'Level 2': 2, 'Level 3': 3, 'Consultant': 4, 'Coach': 5 };
+        return (levelOrder[b.awardType] || 99) - (levelOrder[a.awardType] || 99);
+      });
+      
+      // Use the highest level record as it will have the most complete data
+      recordForLevel = sortedRecords[0];
+      console.log(`Using highest level record for ${level}:`, recordForLevel?.awardType);
+    }
+    
+    // If still no record, try to use the current employee data as fallback
+    if (!recordForLevel && currentEmployee) {
+      recordForLevel = currentEmployee;
+      console.log(`Using current employee as fallback for ${level}:`, currentEmployee?.awardType);
+    }
+    
+    // If still no record, return empty progress
     if (!recordForLevel) {
-      if (levelRecords.length === 0) {
-        // No level records found, fall back to currentEmployee
-        console.log('EmployeeDetailModal: No level records found, falling back to currentEmployee for level:', level);
-        // Use the original logic with currentEmployee
-        return getLevelProgressWithEmployee(level, currentEmployee);
-      } else {
-        // Level records exist but not for this specific level
-        console.log('EmployeeDetailModal: No record found for level:', level, 'awardType:', awardTypeForLevel);
-        return { requirements: [], total: 0, completed: 0, color: "", icon: Users } as any;
-      }
+      console.log(`No record found for ${level}, returning empty progress`);
+      return { requirements: [], total: 0, completed: 0, color: "", icon: Users } as any;
     }
     switch (level) {
       case "care-partner":
+        // For Level 1, check if employee has completed Level 1 or higher
+        const hasLevel1Record = awardTypeToRecord['Level 1'];
+        const level1Completed = hasLevel1Record ? !!hasLevel1Record.secureCareAwarded : (recordForLevel.awardType === 'Level 1' && !!recordForLevel.secureCareAwarded);
+        const level1AwardedDate = hasLevel1Record ? hasLevel1Record.secureCareAwardedDate : (recordForLevel.awardType === 'Level 1' ? recordForLevel.secureCareAwardedDate : null);
+        
         return {
           requirements: [
             { name: "Relias Training Assigned", key: "assignedDate", completed: !!recordForLevel.assignedDate, date: recordForLevel.assignedDate },
             { name: "Relias Training Completed", key: "completedDate", completed: !!recordForLevel.completedDate, date: recordForLevel.completedDate },
-            { name: "Level 1 Awarded", key: "secureCareAwarded", completed: (recordForLevel.awardType === 'Level 1') && !!recordForLevel.secureCareAwarded, date: (recordForLevel.awardType === 'Level 1') ? recordForLevel.secureCareAwardedDate : null }
+            { name: "Level 1 Awarded", key: "secureCareAwarded", completed: level1Completed, date: level1AwardedDate }
           ],
           total: 3,
-          completed: [!!recordForLevel.assignedDate, !!recordForLevel.completedDate, (recordForLevel.awardType === 'Level 1') && !!recordForLevel.secureCareAwarded].filter(Boolean).length,
+          completed: [!!recordForLevel.assignedDate, !!recordForLevel.completedDate, level1Completed].filter(Boolean).length,
           color: "text-blue-600",
           icon: Users
         };
       case "associate":
+        // For Level 2, check if employee has completed Level 2 or higher
+        const hasLevel2Record = awardTypeToRecord['Level 2'];
+        const level2Completed = hasLevel2Record ? !!hasLevel2Record.secureCareAwarded : (recordForLevel.awardType === 'Level 2' && !!recordForLevel.secureCareAwarded);
+        const level2AwardedDate = hasLevel2Record ? hasLevel2Record.secureCareAwardedDate : (recordForLevel.awardType === 'Level 2' ? recordForLevel.secureCareAwardedDate : null);
+        
         return {
           requirements: [
             { name: "Conference Completed", key: "conferenceCompleted", completed: !!recordForLevel.conferenceCompleted, date: recordForLevel.conferenceCompleted },
-            { name: "Standing Video", key: "standingVideo", completed: !!recordForLevel.standingVideo, date: recordForLevel.standingVideo },
-            { name: "Sleeping/Sitting Video", key: "sleepingVideo", completed: !!recordForLevel.sleepingVideo, date: recordForLevel.sleepingVideo },
-            { name: "Feeding Video", key: "feedGradVideo", completed: !!recordForLevel.feedGradVideo, date: recordForLevel.feedGradVideo },
-            { name: "Level 2 Awarded", key: "secureCareAwarded", completed: (recordForLevel.awardType === 'Level 2') && !!recordForLevel.secureCareAwarded, date: (recordForLevel.awardType === 'Level 2') ? recordForLevel.secureCareAwardedDate : null }
+            { name: "Standing Video", key: "standingVideo", completed: !!recordForLevel.standingVideo, scheduled: !!recordForLevel.scheduleStandingVideo, date: recordForLevel.standingVideo || recordForLevel.scheduleStandingVideo },
+            { name: "Sleeping/Sitting Video", key: "sleepingVideo", completed: !!recordForLevel.sleepingVideo, scheduled: !!recordForLevel.scheduleSleepingVideo, date: recordForLevel.sleepingVideo || recordForLevel.scheduleSleepingVideo },
+            { name: "Feeding Video", key: "feedGradVideo", completed: !!recordForLevel.feedGradVideo, scheduled: !!recordForLevel.scheduleFeedGradVideo, date: recordForLevel.feedGradVideo || recordForLevel.scheduleFeedGradVideo },
+            { name: "Level 2 Awarded", key: "secureCareAwarded", completed: level2Completed, date: level2AwardedDate }
           ],
           total: 5,
-          completed: [!!recordForLevel.conferenceCompleted, !!recordForLevel.standingVideo, !!recordForLevel.sleepingVideo, !!recordForLevel.feedGradVideo, (recordForLevel.awardType === 'Level 2') && !!recordForLevel.secureCareAwarded].filter(Boolean).length,
+          completed: [!!recordForLevel.conferenceCompleted, !!recordForLevel.standingVideo, !!recordForLevel.sleepingVideo, !!recordForLevel.feedGradVideo, level2Completed].filter(Boolean).length,
           color: "text-green-600",
           icon: Award
         };
       case "champion":
+        // For Level 3, check if employee has completed Level 3 or higher
+        const hasLevel3Record = awardTypeToRecord['Level 3'];
+        const level3Completed = hasLevel3Record ? !!hasLevel3Record.secureCareAwarded : (recordForLevel.awardType === 'Level 3' && !!recordForLevel.secureCareAwarded);
+        const level3AwardedDate = hasLevel3Record ? hasLevel3Record.secureCareAwardedDate : (recordForLevel.awardType === 'Level 3' ? recordForLevel.secureCareAwardedDate : null);
+        
         return {
           requirements: [
             { name: "Conference Completed", key: "conferenceCompleted", completed: !!recordForLevel.conferenceCompleted, date: recordForLevel.conferenceCompleted },
-            { name: "Sitting/Standing/Approaching", key: "standingVideo", completed: !!recordForLevel.standingVideo, date: recordForLevel.standingVideo },
-            { name: "No Hand/No Speak", key: "noHandnoSpeak", completed: !!recordForLevel.noHandnoSpeak, date: recordForLevel.noHandnoSpeak },
-            { name: "Challenge Sleeping", key: "sleepingVideo", completed: !!recordForLevel.sleepingVideo, date: recordForLevel.sleepingVideo },
-            { name: "Level 3 Awarded", key: "secureCareAwarded", completed: (recordForLevel.awardType === 'Level 3') && !!recordForLevel.secureCareAwarded, date: (recordForLevel.awardType === 'Level 3') ? recordForLevel.secureCareAwardedDate : null }
+            { name: "Sitting/Standing/Approaching", key: "standingVideo", completed: !!recordForLevel.standingVideo, scheduled: !!recordForLevel.scheduleStandingVideo, date: recordForLevel.standingVideo || recordForLevel.scheduleStandingVideo },
+            { name: "No Hand/No Speak", key: "noHandnoSpeak", completed: !!recordForLevel.noHandnoSpeak, scheduled: !!recordForLevel.schedulenoHandnoSpeak, date: recordForLevel.noHandnoSpeak || recordForLevel.schedulenoHandnoSpeak },
+            { name: "Challenge Sleeping", key: "sleepingVideo", completed: !!recordForLevel.sleepingVideo, scheduled: !!recordForLevel.scheduleSleepingVideo, date: recordForLevel.sleepingVideo || recordForLevel.scheduleSleepingVideo },
+            { name: "Level 3 Awarded", key: "secureCareAwarded", completed: level3Completed, date: level3AwardedDate }
           ],
           total: 5,
-          completed: [!!recordForLevel.conferenceCompleted, !!recordForLevel.standingVideo, !!recordForLevel.noHandnoSpeak, !!recordForLevel.sleepingVideo, (recordForLevel.awardType === 'Level 3') && !!recordForLevel.secureCareAwarded].filter(Boolean).length,
+          completed: [!!recordForLevel.conferenceCompleted, !!recordForLevel.standingVideo, !!recordForLevel.noHandnoSpeak, !!recordForLevel.sleepingVideo, level3Completed].filter(Boolean).length,
           color: "text-purple-600",
           icon: Star
         };
       case "consultant":
+        // For Consultant, check if employee has completed Consultant or higher
+        const hasConsultantRecord = awardTypeToRecord['Consultant'];
+        const consultantCompleted = hasConsultantRecord ? !!hasConsultantRecord.secureCareAwarded : (recordForLevel.awardType === 'Consultant' && !!recordForLevel.secureCareAwarded);
+        const consultantAwardedDate = hasConsultantRecord ? hasConsultantRecord.secureCareAwardedDate : (recordForLevel.awardType === 'Consultant' ? recordForLevel.secureCareAwardedDate : null);
+        
         return {
           requirements: [
             { name: "Conference Completed", key: "conferenceCompleted", completed: !!recordForLevel.conferenceCompleted, date: recordForLevel.conferenceCompleted },
-            { name: "Coaching Session 1", key: "session1", completed: !!recordForLevel.session1, date: recordForLevel.session1 },
-            { name: "Coaching Session 2", key: "session2", completed: !!recordForLevel.session2, date: recordForLevel.session2 },
-            { name: "Coaching Session 3", key: "session3", completed: !!recordForLevel.session3, date: recordForLevel.session3 },
-            { name: "Consultant Awarded", key: "secureCareAwarded", completed: (recordForLevel.awardType === 'Consultant') && !!recordForLevel.secureCareAwarded, date: (recordForLevel.awardType === 'Consultant') ? recordForLevel.secureCareAwardedDate : null }
+            { name: "Coaching Session 1", key: "session1", completed: !!recordForLevel.session1, scheduled: !!recordForLevel.scheduleSession1, date: recordForLevel.session1 || recordForLevel.scheduleSession1 },
+            { name: "Coaching Session 2", key: "session2", completed: !!recordForLevel.session2, scheduled: !!recordForLevel.scheduleSession2, date: recordForLevel.session2 || recordForLevel.scheduleSession2 },
+            { name: "Coaching Session 3", key: "session3", completed: !!recordForLevel.session3, scheduled: !!recordForLevel.scheduleSession3, date: recordForLevel.session3 || recordForLevel.scheduleSession3 },
+            { name: "Consultant Awarded", key: "secureCareAwarded", completed: consultantCompleted, date: consultantAwardedDate }
           ],
           total: 5,
-          completed: [!!recordForLevel.conferenceCompleted, !!recordForLevel.session1, !!recordForLevel.session2, !!recordForLevel.session3, (recordForLevel.awardType === 'Consultant') && !!recordForLevel.secureCareAwarded].filter(Boolean).length,
+          completed: [!!recordForLevel.conferenceCompleted, !!recordForLevel.session1, !!recordForLevel.session2, !!recordForLevel.session3, consultantCompleted].filter(Boolean).length,
           color: "text-orange-600",
           icon: GraduationCap
         };
       case "coach":
+        // For Coach, check if employee has completed Coach
+        const hasCoachRecord = awardTypeToRecord['Coach'];
+        const coachCompleted = hasCoachRecord ? !!hasCoachRecord.secureCareAwarded : (recordForLevel.awardType === 'Coach' && !!recordForLevel.secureCareAwarded);
+        const coachAwardedDate = hasCoachRecord ? hasCoachRecord.secureCareAwardedDate : (recordForLevel.awardType === 'Coach' ? recordForLevel.secureCareAwardedDate : null);
+        
         return {
           requirements: [
             { name: "Conference Completed", key: "conferenceCompleted", completed: !!recordForLevel.conferenceCompleted, date: recordForLevel.conferenceCompleted },
-            { name: "Coaching Session 1", key: "session1", completed: !!recordForLevel.session1, date: recordForLevel.session1 },
-            { name: "Coaching Session 2", key: "session2", completed: !!recordForLevel.session2, date: recordForLevel.session2 },
-            { name: "Coaching Session 3", key: "session3", completed: !!recordForLevel.session3, date: recordForLevel.session3 },
-            { name: "Coach Awarded", key: "secureCareAwarded", completed: (recordForLevel.awardType === 'Coach') && !!recordForLevel.secureCareAwarded, date: (recordForLevel.awardType === 'Coach') ? recordForLevel.secureCareAwardedDate : null }
+            { name: "Coaching Session 1", key: "session1", completed: !!recordForLevel.session1, scheduled: !!recordForLevel.scheduleSession1, date: recordForLevel.session1 || recordForLevel.scheduleSession1 },
+            { name: "Coaching Session 2", key: "session2", completed: !!recordForLevel.session2, scheduled: !!recordForLevel.scheduleSession2, date: recordForLevel.session2 || recordForLevel.scheduleSession2 },
+            { name: "Coaching Session 3", key: "session3", completed: !!recordForLevel.session3, scheduled: !!recordForLevel.scheduleSession3, date: recordForLevel.session3 || recordForLevel.scheduleSession3 },
+            { name: "Coach Awarded", key: "secureCareAwarded", completed: coachCompleted, date: coachAwardedDate }
           ],
           total: 5,
-          completed: [!!recordForLevel.conferenceCompleted, !!recordForLevel.session1, !!recordForLevel.session2, !!recordForLevel.session3, (recordForLevel.awardType === 'Coach') && !!recordForLevel.secureCareAwarded].filter(Boolean).length,
+          completed: [!!recordForLevel.conferenceCompleted, !!recordForLevel.session1, !!recordForLevel.session2, !!recordForLevel.session3, coachCompleted].filter(Boolean).length,
           color: "text-teal-600",
           icon: TrendingUp
         };
@@ -516,9 +609,34 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
   const getStatusBadge = (requirement: any) => {
     // Use the record that matches the currently selected level/awardType
     const awardTypeForLevel = levelKeyToAwardType[currentLevel];
-    const record = awardTypeToRecord[awardTypeForLevel] || currentEmployee;
+    const record = awardTypeToRecord[awardTypeForLevel];
+    
+    // If no record exists for this awardType, don't show any data
+    if (!record) {
+      return (
+        <div className="inline-flex items-center gap-1 bg-gray-100 text-gray-400 px-2 py-1 rounded-full text-sm font-semibold cursor-not-allowed w-20">
+          <Clock className="w-3 h-3" />
+          <span className="text-sm">No Data</span>
+        </div>
+      );
+    }
 
     const value = (record as any)[requirement.key];
+    
+    // Map requirement keys to their corresponding schedule field names
+    const scheduleFieldMap: Record<string, string> = {
+      'standingVideo': 'scheduleStandingVideo',
+      'sleepingVideo': 'scheduleSleepingVideo', 
+      'feedGradVideo': 'scheduleFeedGradVideo',
+      'noHandnoSpeak': 'schedulenoHandnoSpeak',
+      'session1': 'scheduleSession1',
+      'session2': 'scheduleSession2',
+      'session3': 'scheduleSession3'
+    };
+    
+    const scheduleFieldName = scheduleFieldMap[requirement.key];
+    const scheduledValue = scheduleFieldName ? (record as any)[scheduleFieldName] : null;
+    
     const key = `${record.employeeId}-${requirement.key}`;
     const isInlineDatePickerOpen = inlineDatePicker === key;
     const isConferenceRequirement = /ConferenceCompleted/i.test(requirement.key);
@@ -648,6 +766,16 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
       );
     }
 
+    // Scheduled state - show scheduled date
+    if (scheduledValue) {
+      return (
+        <div className="inline-flex items-center gap-1 bg-gradient-to-r from-amber-500 to-orange-500 text-white px-2 py-1 rounded-full text-sm font-semibold shadow-sm">
+          <Calendar className="w-3 h-3" />
+          <span className="text-sm font-medium">{fmt.date(scheduledValue)}</span>
+        </div>
+      );
+    }
+
     // Pending/schedule UI (inline) for this record
     return (
       <div className="flex flex-col gap-1">
@@ -688,6 +816,14 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
           </DialogTitle>
         </DialogHeader>
         
+        {isLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto mb-4"></div>
+              <p className="text-muted-foreground">Loading employee data...</p>
+            </div>
+          </div>
+        ) : (
         <div className="space-y-6">
           {/* Employee Info */}
           <Card>
@@ -945,6 +1081,7 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
             </Button>
           </div>
         </div>
+        )}
       </DialogContent>
     </Dialog>
     </TooltipProvider>

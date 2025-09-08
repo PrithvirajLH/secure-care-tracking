@@ -214,119 +214,97 @@ export default function Employees() {
   }, [currentEmployees, sortField, sortDirection, selectedStatus]);
 
     const getCurrentLevel = (employee: any) => {
-    // Check for current progress first (what they're working on now)
-    // Coach in progress: has awardType Coach but not secureCareAwarded
-    if (employee.awardType === 'Coach' && employee.assignedDate && !employee.secureCareAwarded) return { 
-      level: "Coach In Progress", 
-      variant: "outline", 
-      icon: Crown,
-      iconColor: "text-yellow-600",
-      bgColor: "bg-gradient-to-r from-yellow-50 to-amber-50",
-      borderColor: "border-yellow-200",
-      textColor: "text-yellow-700",
-      className: "shadow-sm hover:shadow-md transition-all duration-200"
-    };
+    // The backend now returns the highest level record for each employee
+    // We simply check if that highest level is awarded or in progress
     
-    // Consultant in progress: has awardType Consultant but not secureCareAwarded
-    if (employee.awardType === 'Consultant' && employee.assignedDate && !employee.secureCareAwarded) return { 
-      level: "Consultant In Progress", 
-      variant: "outline", 
-      icon: Trophy,
-      iconColor: "text-purple-600",
-      bgColor: "bg-gradient-to-r from-purple-50 to-indigo-50",
-      borderColor: "border-purple-200",
-      textColor: "text-purple-700",
-      className: "shadow-sm hover:shadow-md transition-all duration-200"
-    };
+    // Debug logging for Sophie Allen
+    if (employee.name === 'Sophia Allen' || employee.Employee === 'Sophia Allen') {
+      console.log('Sophia Allen data:', {
+        name: employee.name || employee.Employee,
+        awardType: employee.awardType,
+        assignedDate: employee.assignedDate,
+        secureCareAwarded: employee.secureCareAwarded,
+        awaiting: employee.awaiting
+      });
+    }
     
-    // Level 3 in progress: has awardType Level 3 but not secureCareAwarded
-    if (employee.awardType === 'Level 3' && employee.assignedDate && !employee.secureCareAwarded) return { 
-      level: "Level 3 In Progress", 
-      variant: "outline", 
-      icon: Medal,
-      iconColor: "text-blue-600",
-      bgColor: "bg-gradient-to-r from-blue-50 to-cyan-50",
-      borderColor: "border-blue-200",
-      textColor: "text-blue-700",
-      className: "shadow-sm hover:shadow-md transition-all duration-200"
-    };
+    // Handle both boolean and string values for secureCareAwarded
+    const isAwarded = employee.secureCareAwarded === true || employee.secureCareAwarded === 1 || employee.secureCareAwarded === '1';
     
-    // Level 2 in progress: has awardType Level 2 but not secureCareAwarded
-    if (employee.awardType === 'Level 2' && employee.assignedDate && !employee.secureCareAwarded) return { 
-      level: "Level 2 In Progress", 
-      variant: "outline", 
-      icon: Star,
-      iconColor: "text-orange-600",
-      bgColor: "bg-gradient-to-r from-orange-50 to-red-50",
-      borderColor: "border-orange-200",
-      textColor: "text-orange-700",
-      className: "shadow-sm hover:shadow-md transition-all duration-200"
-    };
+    // Determine status based on award type and completion status
+    switch (employee.awardType) {
+      case 'Coach':
+        return { 
+          level: isAwarded ? "Coach" : "Coach In Progress", 
+          variant: "outline", 
+          icon: Crown,
+          iconColor: isAwarded ? "text-yellow-500" : "text-yellow-600",
+          bgColor: "bg-gradient-to-r from-yellow-50 to-amber-50",
+          borderColor: "border-yellow-200",
+          textColor: "text-yellow-700",
+          className: "shadow-sm hover:shadow-md transition-all duration-200"
+        };
+        
+      case 'Consultant':
+        return { 
+          level: isAwarded ? "Consultant" : "Consultant In Progress", 
+          variant: "outline", 
+          icon: Trophy,
+          iconColor: isAwarded ? "text-purple-500" : "text-purple-600",
+          bgColor: "bg-gradient-to-r from-purple-50 to-indigo-50",
+          borderColor: "border-purple-200",
+          textColor: "text-purple-700",
+          className: "shadow-sm hover:shadow-md transition-all duration-200"
+        };
+        
+      case 'Level 3':
+        return { 
+          level: isAwarded ? "Level 3" : "Level 3 In Progress", 
+          variant: "outline", 
+          icon: Medal,
+          iconColor: isAwarded ? "text-blue-500" : "text-blue-600",
+          bgColor: "bg-gradient-to-r from-blue-50 to-cyan-50",
+          borderColor: "border-blue-200",
+          textColor: "text-blue-700",
+          className: "shadow-sm hover:shadow-md transition-all duration-200"
+        };
+        
+      case 'Level 2':
+        return { 
+          level: isAwarded ? "Level 2" : "Level 2 In Progress", 
+          variant: "outline", 
+          icon: Star,
+          iconColor: isAwarded ? "text-orange-500" : "text-orange-600",
+          bgColor: "bg-gradient-to-r from-orange-50 to-red-50",
+          borderColor: "border-orange-200",
+          textColor: "text-orange-700",
+          className: "shadow-sm hover:shadow-md transition-all duration-200"
+        };
+        
+      case 'Level 1':
+        return { 
+          level: isAwarded ? "Level 1" : "Level 1 In Progress", 
+          variant: "outline", 
+          icon: isAwarded ? Award : Clock,
+          iconColor: isAwarded ? "text-green-500" : "text-yellow-600",
+          bgColor: isAwarded ? "bg-gradient-to-r from-green-50 to-emerald-50" : "bg-gradient-to-r from-yellow-50 to-orange-50",
+          borderColor: isAwarded ? "border-green-200" : "border-yellow-200",
+          textColor: isAwarded ? "text-green-700" : "text-yellow-700",
+          className: "shadow-sm hover:shadow-md transition-all duration-200"
+        };
+    }
     
-    // Level 1 in progress: has awardType Level 1 but not secureCareAwarded
-    if (employee.awardType === 'Level 1' && employee.assignedDate && !employee.secureCareAwarded) return { 
-      level: "Level 1 In Progress", 
-      variant: "outline", 
-      icon: Clock,
-      iconColor: "text-yellow-600",
-      bgColor: "bg-gradient-to-r from-yellow-50 to-orange-50",
-      borderColor: "border-yellow-200",
-      textColor: "text-yellow-700",
-      className: "shadow-sm hover:shadow-md transition-all duration-200"
-    };
-
-    // If awarded, show completed level
-    if (employee.awardType === 'Coach' && employee.secureCareAwarded) return { 
-      level: "Coach", 
-      variant: "outline", 
-      icon: Crown,
-      iconColor: "text-yellow-500",
-      bgColor: "bg-gradient-to-r from-yellow-50 to-amber-50",
-      borderColor: "border-yellow-200",
-      textColor: "text-yellow-700",
-      className: "shadow-sm hover:shadow-md transition-all duration-200"
-    };
-    if (employee.awardType === 'Consultant' && employee.secureCareAwarded) return { 
-      level: "Consultant", 
-      variant: "outline", 
-      icon: Trophy,
-      iconColor: "text-purple-500",
-      bgColor: "bg-gradient-to-r from-purple-50 to-indigo-50",
-      borderColor: "border-purple-200",
-      textColor: "text-purple-700",
-      className: "shadow-sm hover:shadow-md transition-all duration-200"
-    };
-    if (employee.awardType === 'Level 3' && employee.secureCareAwarded) return { 
-      level: "Level 3", 
-      variant: "outline", 
-      icon: Medal,
-      iconColor: "text-blue-500",
-      bgColor: "bg-gradient-to-r from-blue-50 to-cyan-50",
-      borderColor: "border-blue-200",
-      textColor: "text-blue-700",
-      className: "shadow-sm hover:shadow-md transition-all duration-200"
-    };
-    if (employee.awardType === 'Level 2' && employee.secureCareAwarded) return { 
-      level: "Level 2", 
-      variant: "outline", 
-      icon: Star,
-      iconColor: "text-orange-500",
-      bgColor: "bg-gradient-to-r from-orange-50 to-red-50",
-      borderColor: "border-orange-200",
-      textColor: "text-orange-700",
-      className: "shadow-sm hover:shadow-md transition-all duration-200"
-    };
-    if (employee.awardType === 'Level 1' && employee.secureCareAwarded) return { 
-      level: "Level 1", 
-      variant: "outline", 
-      icon: Award,
-      iconColor: "text-green-500",
-      bgColor: "bg-gradient-to-r from-green-50 to-emerald-50",
-      borderColor: "border-green-200",
-      textColor: "text-green-700",
-      className: "shadow-sm hover:shadow-md transition-all duration-200"
-    };
+    // Debug logging for fallback case
+    if (employee.name === 'Sophia Allen' || employee.Employee === 'Sophia Allen') {
+      console.log('Sophia Allen fallback - no matching case:', {
+        awardType: employee.awardType,
+        assignedDate: employee.assignedDate,
+        secureCareAwarded: employee.secureCareAwarded,
+        isAwarded
+      });
+    }
     
+    // Fallback for employees with no training data
     return { 
       level: "Not Started", 
       variant: "outline", 

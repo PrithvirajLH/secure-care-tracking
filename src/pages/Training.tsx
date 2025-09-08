@@ -44,7 +44,7 @@ import { toast } from "sonner";
 import { useTrainingData } from "@/hooks/useTrainingData";
 import EmployeeDetailModal from "@/components/EmployeeDetailModal";
 import { FloatingNav } from "@/components/ui/floating-navbar";
-import { useEmployees, useEmployeeStats } from "@/hooks/useEmployees";
+import { useEmployees, useEmployeeStats, useTrainingEmployees } from "@/hooks/useEmployees";
 import PageHeader from "@/components/PageHeader";
 import { trainingAPI } from "@/services/api";
 
@@ -294,7 +294,7 @@ export default function Training() {
     totalEmployees,
     isFetching,
     refetch
-  } = useEmployees(filters, itemsPerPage);
+  } = useTrainingEmployees(filters, itemsPerPage);
 
   // Get current level configuration
   const currentLevel: AwardType = getLevelFromTabKey(activeTab);

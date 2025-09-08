@@ -62,6 +62,34 @@ class SecureCareAPI {
     return response.json();
   }
 
+  // Get unique employees by level (one entry per employee with highest status)
+  async getUniqueEmployeesByLevel(level: string, filters: any = {}): Promise<EmployeeResponse> {
+    const params = new URLSearchParams({
+      page: (filters.page || 1).toString(),
+      limit: (filters.limit || 50).toString()
+    });
+    
+    if (filters.facility && filters.facility !== 'all') {
+      params.append('facility', filters.facility);
+    }
+    
+    if (filters.area && filters.area !== 'all') {
+      params.append('area', filters.area);
+    }
+    
+    if (filters.search) {
+      params.append('search', filters.search);
+    }
+    
+    const response = await fetch(`${this.baseURL}/securecare/employees-unique/${encodeURIComponent(level)}?${params}`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch unique employees: ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+
   // Get employee by ID
   async getEmployeeById(employeeId: string): Promise<any> {
     const response = await fetch(`${this.baseURL}/securecare/employee/${employeeId}`);

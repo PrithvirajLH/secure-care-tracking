@@ -26,6 +26,30 @@ router.get('/employees/:level', async (req, res) => {
   }
 });
 
+// Get unique employees by level (one entry per employee with highest status)
+router.get('/employees-unique/:level', async (req, res) => {
+  try {
+    const { level } = req.params;
+    const filters = {
+      facility: req.query.facility,
+      area: req.query.area,
+      search: req.query.search,
+      page: req.query.page || 1,
+      limit: req.query.limit || 50
+    };
+    
+    const result = await secureCareService.getUniqueEmployeesByLevel(level, filters);
+    res.json(result);
+    
+  } catch (error) {
+    console.error('Get unique employees error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: error.message 
+    });
+  }
+});
+
 // Get employee by ID
 router.get('/employee/:id', async (req, res) => {
   try {

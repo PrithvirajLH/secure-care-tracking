@@ -1,9 +1,10 @@
--- Level 3 entries for 4 employees (awaiting = 1 per your note)
+-- Level 4 (Consultant) — Awaiting = 1, with conferenceCompleted date
 -- awaiting: 1 = Awaiting, 0 = Approved, NULL = Rejected
 
 INSERT INTO dbo.SecureCareEmployee (
     area, facility, staffRoll, [name], employeeNumber,
     awardType, assignedDate, completedDate, conferenceCompleted,
+    secureCareAwardedDate, secureCareAwarded, notes, advisorId,
     scheduleStandingVideo, standingVideo,
     scheduleSleepingVideo, sleepingVideo,
     scheduleFeedGradVideo, feedGradVideo,
@@ -11,48 +12,28 @@ INSERT INTO dbo.SecureCareEmployee (
     [scheduleSession#1], [session#1],
     [scheduleSession#2], [session#2],
     [scheduleSession#3], [session#3],
-    secureCareAwardedDate, secureCareAwarded, notes, advisorId, awaiting
+    awaiting
 ) VALUES
--- 1) Amelia Baker
+-- 1) Amelia Baker → Consultant (Awaiting)
 ('C1','Lakeside','LVN','Amelia Baker','E2019',
- 'Level 3', NULL, NULL, '2025-08-25',
+ 'Consultant', NULL, NULL, '2025-09-05',
+ NULL, 0, 'Consultant - Awaiting approval', 86,
  NULL, NULL,
  NULL, NULL,
  NULL, NULL,
  NULL, NULL,
  NULL, NULL,
  NULL, NULL,
- NULL, 0, 'Level 3 - Awaiting', 86, 1),
+ 1),
 
--- 2) Ava White
-('D1','Hillview','CNA','Ava White','E2010',
- 'Level 3', NULL, NULL, '2025-08-25',
- NULL, NULL,
- NULL, NULL,
- NULL, NULL,
- NULL, NULL,
- NULL, NULL,
- NULL, NULL,
- NULL, 0, 'Level 3 - Awaiting', 86, 1),
-
--- 3) Charlotte Perez
-('D1','Hillview','CNA','Charlotte Perez','E2020',
- 'Level 3', NULL, NULL, '2025-08-25',
- NULL, NULL,
- NULL, NULL,
- NULL, NULL,
- NULL, NULL,
- NULL, NULL,
- NULL, NULL,
- NULL, 0, 'Level 3 - Awaiting', 87, 1),
-
--- 4) Daniel Young
+-- 2) Daniel Young → Consultant (Awaiting)
 ('C1','Westlake','CNA','Daniel Young','E2014',
- 'Level 3', NULL, NULL, '2025-08-25',
+ 'Consultant', NULL, NULL, '2025-09-05',
+ NULL, 0, 'Consultant - Awaiting approval', 88,
  NULL, NULL,
  NULL, NULL,
  NULL, NULL,
  NULL, NULL,
  NULL, NULL,
  NULL, NULL,
- NULL, 0, 'Level 3 - Awaiting', 88, 1);
+ 1);

@@ -362,6 +362,169 @@ class SecureCareService {
     return result.recordset[0];
   }
 
+  // Get unique employees with their highest completed or in-progress status
+  async getUniqueEmployeesByLevel(level, filters = {}) {
+    const pool = await getPool();
+    
+    // First, get the highest status for each employee using a subquery
+    // Priority: 1) Highest level, 2) In progress (started but not awarded), 3) Completed, 4) Awaiting
+    let query = `
+      SELECT 
+        e.employeeId,
+        e.employeeNumber,
+        e.name AS Employee,
+        e.facility AS Facility,
+        e.area AS Area,
+        e.staffRoll,
+        e.awardType,
+        FORMAT(e.assignedDate, 'yyyy-MM-dd') AS assignedDate,
+        FORMAT(e.completedDate, 'yyyy-MM-dd') AS completedDate,
+        FORMAT(e.conferenceCompleted, 'yyyy-MM-dd') AS conferenceCompleted,
+        FORMAT(e.scheduleStandingVideo, 'yyyy-MM-dd') AS scheduleStandingVideo,
+        FORMAT(e.standingVideo, 'yyyy-MM-dd') AS standingVideo,
+        FORMAT(e.scheduleSleepingVideo, 'yyyy-MM-dd') AS scheduleSleepingVideo,
+        FORMAT(e.sleepingVideo, 'yyyy-MM-dd') AS sleepingVideo,
+        FORMAT(e.scheduleFeedGradVideo, 'yyyy-MM-dd') AS scheduleFeedGradVideo,
+        FORMAT(e.feedGradVideo, 'yyyy-MM-dd') AS feedGradVideo,
+        FORMAT(e.schedulenoHandnoSpeak, 'yyyy-MM-dd') AS schedulenoHandnoSpeak,
+        FORMAT(e.noHandnoSpeak, 'yyyy-MM-dd') AS noHandnoSpeak,
+        FORMAT(e.[scheduleSession#1], 'yyyy-MM-dd') AS scheduleSession1,
+        FORMAT(e.[session#1], 'yyyy-MM-dd') AS session1,
+        FORMAT(e.[scheduleSession#2], 'yyyy-MM-dd') AS scheduleSession2,
+        FORMAT(e.[session#2], 'yyyy-MM-dd') AS session2,
+        FORMAT(e.[scheduleSession#3], 'yyyy-MM-dd') AS scheduleSession3,
+        FORMAT(e.[session#3], 'yyyy-MM-dd') AS session3,
+        e.secureCareAwarded,
+        FORMAT(e.secureCareAwardedDate, 'yyyy-MM-dd') AS secureCareAwardedDate,
+        e.awaiting,
+        e.notes,
+        e.advisorId,
+        a.firstName + ' ' + ISNULL(a.lastName, '') as advisorName
+      FROM dbo.SecureCareEmployee e
+      LEFT JOIN dbo.Advisor a ON e.advisorId = a.advisorId
+      WHERE e.employeeId IN (
+        SELECT TOP 1 WITH TIES e2.employeeId
+        FROM dbo.SecureCareEmployee e2
+        WHERE e2.employeeNumber = e.employeeNumber
+        ORDER BY 
+          CASE 
+            WHEN e2.awardType = 'Coach' THEN 1
+            WHEN e2.awardType = 'Consultant' THEN 2
+            WHEN e2.awardType = 'Level 3' THEN 3
+            WHEN e2.awardType = 'Level 2' THEN 4
+            WHEN e2.awardType = 'Level 1' THEN 5
+            ELSE 99
+          END,
+          e2.employeeId
+      )
+    `;
+    
+    const request = pool.request();
+    
+    // Apply level filter unless requesting all levels
+    const isAllLevels = !level || level.toLowerCase() === 'all' || level.toLowerCase() === 'all levels';
+    if (!isAllLevels) {
+      query += ` AND e.awardType = @level`;
+      request.input('level', sql.VarChar, level);
+    }
+    
+    // Apply additional filters
+    if (filters.facility && filters.facility !== 'all') {
+      query += ` AND e.facility = @facility`;
+      request.input('facility', sql.VarChar, filters.facility);
+    }
+    
+    if (filters.area && filters.area !== 'all') {
+      query += ` AND e.area = @area`;
+      request.input('area', sql.VarChar, filters.area);
+    }
+    
+    if (filters.search) {
+      query += ` AND (e.name LIKE @search OR e.employeeNumber LIKE @search)`;
+      request.input('search', sql.VarChar, `%${filters.search}%`);
+    }
+    
+    // Add pagination
+    const page = parseInt(filters.page) || 1;
+    const limit = parseInt(filters.limit) || 50;
+    const offset = (page - 1) * limit;
+    
+    query += ` ORDER BY e.name OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY`;
+    
+    const result = await request.query(query);
+    
+    // Get total count for unique employees
+    let countQuery = `
+      SELECT COUNT(DISTINCT e.employeeNumber) as total 
+      FROM dbo.SecureCareEmployee e
+      WHERE e.employeeId IN (
+        SELECT TOP 1 WITH TIES e2.employeeId
+        FROM dbo.SecureCareEmployee e2
+        WHERE e2.employeeNumber = e.employeeNumber
+        ORDER BY 
+          CASE 
+            WHEN e2.awardType = 'Coach' THEN 1
+            WHEN e2.awardType = 'Consultant' THEN 2
+            WHEN e2.awardType = 'Level 3' THEN 3
+            WHEN e2.awardType = 'Level 2' THEN 4
+            WHEN e2.awardType = 'Level 1' THEN 5
+            ELSE 99
+          END,
+          CASE WHEN e2.secureCareAwarded = 1 THEN 0 ELSE 1 END,
+          CASE WHEN e2.awaiting = 1 THEN 0 ELSE 1 END,
+          e2.employeeId
+      )
+    `;
+    
+    const countRequest = pool.request();
+    if (!isAllLevels) {
+      countRequest.input('level', sql.VarChar, level);
+      countQuery += ` AND e.awardType = @level`;
+    }
+    
+    if (filters.facility && filters.facility !== 'all') {
+      countQuery += ` AND e.facility = @facility`;
+      countRequest.input('facility', sql.VarChar, filters.facility);
+    }
+    
+    if (filters.area && filters.area !== 'all') {
+      countQuery += ` AND e.area = @area`;
+      countRequest.input('area', sql.VarChar, filters.area);
+    }
+    
+    if (filters.search) {
+      countQuery += ` AND (e.name LIKE @search OR e.employeeNumber LIKE @search)`;
+      countRequest.input('search', sql.VarChar, `%${filters.search}%`);
+    }
+    
+    const countResult = await countRequest.query(countQuery);
+    const total = countResult.recordset[0].total;
+    
+    // Debug logging for Sophia Allen
+    const sophiaAllen = result.recordset.find(emp => 
+      emp.Employee === 'Sophia Allen' || emp.name === 'Sophia Allen'
+    );
+    if (sophiaAllen) {
+      console.log('Sophia Allen backend data:', {
+        name: sophiaAllen.Employee || sophiaAllen.name,
+        awardType: sophiaAllen.awardType,
+        assignedDate: sophiaAllen.assignedDate,
+        secureCareAwarded: sophiaAllen.secureCareAwarded,
+        awaiting: sophiaAllen.awaiting
+      });
+    }
+    
+    return {
+      employees: result.recordset,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
+        totalEmployees: total,
+        pageSize: limit
+      }
+    };
+  }
+
   // Get all awardType records for a given employee based on their employeeNumber
   async getEmployeeLevelsByEmployeeId(employeeId) {
     const pool = await getPool();

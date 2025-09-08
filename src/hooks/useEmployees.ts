@@ -13,7 +13,7 @@ interface EmployeeFilters {
   search?: string;
 }
 
-// Hook for paginated employee data using new view-based approach
+// Hook for paginated employee data using new view-based approach (unique employees only)
 export const useEmployees = (filters: EmployeeFilters, pageSize: number = 10) => {
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -23,7 +23,47 @@ export const useEmployees = (filters: EmployeeFilters, pageSize: number = 10) =>
   }, [filters.level, filters.facility, filters.area, filters.status, filters.jobTitle]);
 
   const { data, isLoading, error, refetch, isFetching } = useQuery({
-    queryKey: ['employees', filters.level, currentPage, JSON.stringify(filters)],
+    queryKey: ['employees-unique', filters.level, currentPage, JSON.stringify(filters)],
+    queryFn: async () => {
+      const level = filters.level ? getLevelFromTabKey(filters.level) : 'all';
+      return trainingAPI.getUniqueEmployeesByLevel(level, {
+        ...filters,
+        page: currentPage,
+        limit: pageSize
+      });
+    },
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+  });
+
+  const totalPages = data?.pagination?.totalPages || 0;
+  const totalEmployees = data?.pagination?.totalEmployees || 0;
+
+  return {
+    employees: data?.employees || [],
+    isLoading,
+    error,
+    currentPage,
+    setCurrentPage,
+    totalPages,
+    totalEmployees,
+    refetch,
+    isFetching,
+    hasNextPage: currentPage < totalPages,
+  };
+};
+
+// Hook for training page - shows all employees for a specific level (including completed)
+export const useTrainingEmployees = (filters: EmployeeFilters, pageSize: number = 10) => {
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Reset to page 1 when filters change (excluding search to prevent focus loss)
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filters.level, filters.facility, filters.area, filters.status, filters.jobTitle]);
+
+  const { data, isLoading, error, refetch, isFetching } = useQuery({
+    queryKey: ['employees-training', filters.level, currentPage, JSON.stringify(filters)],
     queryFn: async () => {
       const level = filters.level ? getLevelFromTabKey(filters.level) : 'all';
       return trainingAPI.getEmployeesByLevel(level, {
