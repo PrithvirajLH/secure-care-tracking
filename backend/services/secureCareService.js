@@ -845,6 +845,467 @@ class SecureCareService {
       jobTitles: jobTitlesResult.recordset.map(row => row.staffRoll)
     };
   }
+
+  // Analytics Methods
+  async getAnalyticsOverview(filters = {}) {
+    try {
+      const pool = await getPool();
+      const request = pool.request();
+    
+    // Build base query with filters
+    let whereClause = '';
+    const conditions = [];
+    
+    if (filters.facility && filters.facility !== 'all') {
+      conditions.push('e.facility = @facility');
+      request.input('facility', sql.VarChar, filters.facility);
+    }
+    
+    if (filters.area && filters.area !== 'all') {
+      conditions.push('e.area = @area');
+      request.input('area', sql.VarChar, filters.area);
+    }
+    
+    if (filters.level && filters.level !== 'all') {
+      conditions.push('e.awardType = @level');
+      request.input('level', sql.VarChar, filters.level);
+    }
+    
+    if (conditions.length > 0) {
+      whereClause = 'WHERE ' + conditions.join(' AND ');
+    }
+    
+    // Build the query with conditional date filtering for completed certifications
+    let completedDateFilter = '';
+    if (filters.startDate && filters.endDate) {
+      completedDateFilter = `AND e.secureCareAwardedDate BETWEEN @startDate AND @endDate`;
+      request.input('startDate', sql.Date, filters.startDate);
+      request.input('endDate', sql.Date, filters.endDate);
+    }
+    
+    const query = `
+      SELECT 
+        COUNT(*) as totalEmployees,
+        SUM(CASE WHEN e.secureCareAwarded = 1 ${completedDateFilter} THEN 1 ELSE 0 END) as completedCertifications,
+        SUM(CASE WHEN e.secureCareAwarded = 0 THEN 1 ELSE 0 END) as inProgress,
+        SUM(CASE WHEN e.assignedDate IS NULL THEN 1 ELSE 0 END) as notStarted,
+        SUM(CASE WHEN e.awardType = 'Level 1' AND e.secureCareAwarded = 1 ${completedDateFilter} THEN 1 ELSE 0 END) as level1Completed,
+        SUM(CASE WHEN e.awardType = 'Level 2' AND e.secureCareAwarded = 1 ${completedDateFilter} THEN 1 ELSE 0 END) as level2Completed,
+        SUM(CASE WHEN e.awardType = 'Level 3' AND e.secureCareAwarded = 1 ${completedDateFilter} THEN 1 ELSE 0 END) as level3Completed,
+        SUM(CASE WHEN e.awardType = 'Consultant' AND e.secureCareAwarded = 1 ${completedDateFilter} THEN 1 ELSE 0 END) as consultantCompleted,
+        SUM(CASE WHEN e.awardType = 'Coach' AND e.secureCareAwarded = 1 ${completedDateFilter} THEN 1 ELSE 0 END) as coachCompleted,
+        AVG(CASE 
+          WHEN e.assignedDate IS NOT NULL AND e.secureCareAwardedDate IS NOT NULL ${completedDateFilter}
+          THEN DATEDIFF(day, e.assignedDate, e.secureCareAwardedDate) 
+          ELSE NULL 
+        END) as averageCompletionTime
+      FROM dbo.SecureCareEmployee e
+      ${whereClause}
+    `;
+    
+    console.log('Analytics Overview Query:', query);
+    const result = await request.query(query);
+    console.log('Analytics Overview Result:', result.recordset[0]);
+    
+    // Debug query to check actual data
+    const debugQuery = `
+      SELECT 
+        COUNT(*) as total,
+        SUM(CASE WHEN e.secureCareAwarded = 1 THEN 1 ELSE 0 END) as completed,
+        SUM(CASE WHEN e.secureCareAwarded = 0 THEN 1 ELSE 0 END) as notCompleted,
+        SUM(CASE WHEN e.secureCareAwarded IS NULL THEN 1 ELSE 0 END) as nullAwarded,
+        SUM(CASE WHEN e.secureCareAwarded = 0 THEN 1 ELSE 0 END) as inProgress,
+        SUM(CASE WHEN e.awaiting = 1 THEN 1 ELSE 0 END) as awaiting,
+        SUM(CASE WHEN e.assignedDate IS NULL THEN 1 ELSE 0 END) as notStarted
+      FROM dbo.SecureCareEmployee e
+    `;
+    const debugResult = await pool.request().query(debugQuery);
+    console.log('Debug Analytics Data:', debugResult.recordset[0]);
+    
+    return result.recordset[0];
+    } catch (error) {
+      console.error('Error in getAnalyticsOverview:', error);
+      throw error;
+    }
+  }
+
+  async getFacilityPerformance(filters = {}) {
+    const pool = await getPool();
+    const request = pool.request();
+    
+    let whereClause = '';
+    const conditions = [];
+    
+    if (filters.level && filters.level !== 'all') {
+      conditions.push('e.awardType = @level');
+      request.input('level', sql.VarChar, filters.level);
+    }
+    
+    if (filters.startDate && filters.endDate) {
+      conditions.push('e.secureCareAwardedDate BETWEEN @startDate AND @endDate');
+      request.input('startDate', sql.Date, filters.startDate);
+      request.input('endDate', sql.Date, filters.endDate);
+    }
+    
+    if (conditions.length > 0) {
+      whereClause = 'WHERE ' + conditions.join(' AND ');
+    }
+    
+    const query = `
+      SELECT 
+        e.facility,
+        COUNT(*) as total,
+        SUM(CASE WHEN e.secureCareAwarded = 1 THEN 1 ELSE 0 END) as completed,
+        SUM(CASE WHEN e.secureCareAwarded = 0 THEN 1 ELSE 0 END) as inProgress,
+        AVG(CASE 
+          WHEN e.assignedDate IS NOT NULL AND e.secureCareAwardedDate IS NOT NULL 
+          THEN DATEDIFF(day, e.assignedDate, e.secureCareAwardedDate) 
+          ELSE NULL 
+        END) as avgTime
+      FROM dbo.SecureCareEmployee e
+      ${whereClause}
+      GROUP BY e.facility
+      HAVING e.facility IS NOT NULL AND e.facility != ''
+      ORDER BY 
+        CASE WHEN COUNT(*) > 0 THEN (SUM(CASE WHEN e.secureCareAwarded = 1 THEN 1 ELSE 0 END) * 100.0 / COUNT(*)) ELSE 0 END DESC
+    `;
+    
+    const result = await request.query(query);
+    return result.recordset.map(row => ({
+      facility: row.facility,
+      total: row.total,
+      completed: row.completed,
+      inProgress: row.inProgress,
+      completionRate: row.total > 0 ? (row.completed / row.total) * 100 : 0,
+      avgTime: Math.round(row.avgTime || 0)
+    }));
+  }
+
+  async getAreaPerformance(filters = {}) {
+    const pool = await getPool();
+    const request = pool.request();
+    
+    let whereClause = '';
+    const conditions = [];
+    
+    if (filters.level && filters.level !== 'all') {
+      conditions.push('e.awardType = @level');
+      request.input('level', sql.VarChar, filters.level);
+    }
+    
+    if (filters.startDate && filters.endDate) {
+      conditions.push('e.secureCareAwardedDate BETWEEN @startDate AND @endDate');
+      request.input('startDate', sql.Date, filters.startDate);
+      request.input('endDate', sql.Date, filters.endDate);
+    }
+    
+    if (conditions.length > 0) {
+      whereClause = 'WHERE ' + conditions.join(' AND ');
+    }
+    
+    const query = `
+      SELECT 
+        e.area,
+        COUNT(*) as total,
+        SUM(CASE WHEN e.secureCareAwarded = 1 THEN 1 ELSE 0 END) as completed,
+        SUM(CASE WHEN e.assignedDate IS NOT NULL AND e.secureCareAwarded = 0 THEN 1 ELSE 0 END) as inProgress
+      FROM dbo.SecureCareEmployee e
+      ${whereClause}
+      GROUP BY e.area
+      HAVING e.area IS NOT NULL AND e.area != ''
+      ORDER BY 
+        CASE WHEN COUNT(*) > 0 THEN (SUM(CASE WHEN e.secureCareAwarded = 1 THEN 1 ELSE 0 END) * 100.0 / COUNT(*)) ELSE 0 END DESC
+    `;
+    
+    const result = await request.query(query);
+    return result.recordset.map(row => ({
+      area: row.area,
+      total: row.total,
+      completed: row.completed,
+      inProgress: row.inProgress,
+      completionRate: row.total > 0 ? (row.completed / row.total) * 100 : 0
+    }));
+  }
+
+  async getMonthlyTrends(filters = {}) {
+    try {
+      const pool = await getPool();
+      const request = pool.request();
+      
+      let whereClause = '';
+      const conditions = [];
+      
+      if (filters.facility && filters.facility !== 'all') {
+        conditions.push('e.facility = @facility');
+        request.input('facility', sql.VarChar, filters.facility);
+      }
+      
+      if (filters.area && filters.area !== 'all') {
+        conditions.push('e.area = @area');
+        request.input('area', sql.VarChar, filters.area);
+      }
+      
+      if (filters.level && filters.level !== 'all') {
+        conditions.push('e.awardType = @level');
+        request.input('level', sql.VarChar, filters.level);
+      }
+      
+      // Add the date conditions to the where clause
+      conditions.push('e.secureCareAwardedDate IS NOT NULL');
+      conditions.push('e.secureCareAwardedDate >= DATEADD(month, -6, GETDATE())');
+      
+      if (conditions.length > 0) {
+        whereClause = 'WHERE ' + conditions.join(' AND ');
+      }
+      
+      const query = `
+        SELECT 
+          YEAR(e.secureCareAwardedDate) as year,
+          MONTH(e.secureCareAwardedDate) as month,
+          COUNT(*) as completed
+        FROM dbo.SecureCareEmployee e
+        ${whereClause}
+        GROUP BY YEAR(e.secureCareAwardedDate), MONTH(e.secureCareAwardedDate)
+        ORDER BY year, month
+      `;
+      
+      console.log('Monthly Trends Query:', query);
+      const completedResult = await request.query(query);
+      
+      // Query for in-progress data (assigned but not completed)
+      const inProgressConditions = [];
+      if (filters.facility && filters.facility !== 'all') {
+        inProgressConditions.push('e.facility = @facility');
+      }
+      if (filters.area && filters.area !== 'all') {
+        inProgressConditions.push('e.area = @area');
+      }
+      if (filters.level && filters.level !== 'all') {
+        inProgressConditions.push('e.awardType = @level');
+      }
+      
+      inProgressConditions.push('e.secureCareAwarded = 0');
+      inProgressConditions.push('e.assignedDate >= DATEADD(month, -6, GETDATE())');
+      
+      const inProgressWhereClause = 'WHERE ' + inProgressConditions.join(' AND ');
+      
+      const inProgressQuery = `
+        SELECT 
+          YEAR(e.assignedDate) as year,
+          MONTH(e.assignedDate) as month,
+          COUNT(*) as inProgress
+        FROM dbo.SecureCareEmployee e
+        ${inProgressWhereClause}
+        GROUP BY YEAR(e.assignedDate), MONTH(e.assignedDate)
+        ORDER BY year, month
+      `;
+      
+      console.log('In Progress Query:', inProgressQuery);
+      const inProgressResult = await request.query(inProgressQuery);
+      
+      // Generate last 6 months with data
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const trends = [];
+      
+      for (let i = 5; i >= 0; i--) {
+        const date = new Date();
+        date.setMonth(date.getMonth() - i);
+        const year = date.getFullYear();
+        const month = date.getMonth() + 1;
+        
+        const completedData = completedResult.recordset.find(row => row.year === year && row.month === month);
+        const inProgressData = inProgressResult.recordset.find(row => row.year === year && row.month === month);
+        
+        trends.push({
+          month: months[date.getMonth()],
+          completed: completedData ? completedData.completed : 0,
+          inProgress: inProgressData ? inProgressData.inProgress : 0,
+          new: Math.floor((completedData ? completedData.completed : 0) * 0.3) // Estimate new enrollments as 30% of completions
+        });
+      }
+      
+      return trends;
+    } catch (error) {
+      console.error('Error in getMonthlyTrends:', error);
+      throw error;
+    }
+  }
+
+  async getCertificationProgress(filters = {}) {
+    const pool = await getPool();
+    const request = pool.request();
+    
+    let whereClause = '';
+    const conditions = [];
+    
+    if (filters.facility && filters.facility !== 'all') {
+      conditions.push('e.facility = @facility');
+      request.input('facility', sql.VarChar, filters.facility);
+    }
+    
+    if (filters.area && filters.area !== 'all') {
+      conditions.push('e.area = @area');
+      request.input('area', sql.VarChar, filters.area);
+    }
+    
+    if (filters.startDate && filters.endDate) {
+      conditions.push('e.secureCareAwardedDate BETWEEN @startDate AND @endDate');
+      request.input('startDate', sql.Date, filters.startDate);
+      request.input('endDate', sql.Date, filters.endDate);
+    }
+    
+    if (conditions.length > 0) {
+      whereClause = 'WHERE ' + conditions.join(' AND ');
+    }
+    
+    const query = `
+      SELECT 
+        e.awardType as level,
+        COUNT(*) as total,
+        SUM(CASE WHEN e.secureCareAwarded = 1 THEN 1 ELSE 0 END) as completed,
+        SUM(CASE WHEN e.secureCareAwarded = 0 THEN 1 ELSE 0 END) as inProgress,
+        AVG(CASE 
+          WHEN e.assignedDate IS NOT NULL AND e.secureCareAwardedDate IS NOT NULL 
+          THEN DATEDIFF(day, e.assignedDate, e.secureCareAwardedDate) 
+          ELSE NULL 
+        END) as avgTime
+      FROM dbo.SecureCareEmployee e
+      ${whereClause}
+      AND e.awardType IS NOT NULL
+      GROUP BY e.awardType
+      ORDER BY 
+        CASE e.awardType
+          WHEN 'Level 1' THEN 1
+          WHEN 'Level 2' THEN 2
+          WHEN 'Level 3' THEN 3
+          WHEN 'Consultant' THEN 4
+          WHEN 'Coach' THEN 5
+          ELSE 99
+        END
+    `;
+    
+    const result = await request.query(query);
+    const totalEmployees = result.recordset.reduce((sum, row) => sum + row.total, 0);
+    
+    return result.recordset.map(row => ({
+      level: row.level,
+      completed: row.completed,
+      inProgress: row.inProgress,
+      target: Math.round(totalEmployees * (row.level === 'Level 1' ? 0.8 : row.level === 'Level 2' ? 0.6 : row.level === 'Level 3' ? 0.4 : row.level === 'Consultant' ? 0.2 : 0.1)),
+      efficiency: totalEmployees > 0 ? (row.completed / totalEmployees) * 100 : 0,
+      avgTime: Math.round(row.avgTime || 0)
+    }));
+  }
+
+  async getRecentActivity(filters = {}) {
+    try {
+      const pool = await getPool();
+      const request = pool.request();
+      
+      let whereClause = '';
+      const conditions = [];
+      
+      if (filters.facility && filters.facility !== 'all') {
+        conditions.push('e.facility = @facility');
+        request.input('facility', sql.VarChar, filters.facility);
+      }
+      
+      if (filters.area && filters.area !== 'all') {
+        conditions.push('e.area = @area');
+        request.input('area', sql.VarChar, filters.area);
+      }
+      
+      if (filters.level && filters.level !== 'all') {
+        conditions.push('e.awardType = @level');
+        request.input('level', sql.VarChar, filters.level);
+      }
+      
+      // Add the date condition to the where clause
+      conditions.push('e.secureCareAwardedDate IS NOT NULL');
+      
+      if (conditions.length > 0) {
+        whereClause = 'WHERE ' + conditions.join(' AND ');
+      }
+      
+      const query = `
+        SELECT TOP 10
+          e.name as employee,
+          e.facility,
+          e.awardType as achievement,
+          e.secureCareAwardedDate as date,
+          DATEDIFF(day, e.assignedDate, e.secureCareAwardedDate) as timeToComplete
+        FROM dbo.SecureCareEmployee e
+        ${whereClause}
+        ORDER BY e.secureCareAwardedDate DESC
+      `;
+      
+      console.log('Recent Activity Query:', query);
+      const result = await request.query(query);
+      return result.recordset.map(row => ({
+        employee: row.employee,
+        facility: row.facility,
+        achievement: row.achievement,
+        date: row.date,
+        timeToComplete: row.timeToComplete || 0,
+        performance: row.timeToComplete < 120 ? 'Excellent' : row.timeToComplete < 180 ? 'Good' : 'Average'
+      }));
+    } catch (error) {
+      console.error('Error in getRecentActivity:', error);
+      throw error;
+    }
+  }
+
+  async getAnalyticsMetrics(filters = {}) {
+    const pool = await getPool();
+    const request = pool.request();
+    
+    let whereClause = '';
+    const conditions = [];
+    
+    if (filters.facility && filters.facility !== 'all') {
+      conditions.push('e.facility = @facility');
+      request.input('facility', sql.VarChar, filters.facility);
+    }
+    
+    if (filters.area && filters.area !== 'all') {
+      conditions.push('e.area = @area');
+      request.input('area', sql.VarChar, filters.area);
+    }
+    
+    if (conditions.length > 0) {
+      whereClause = 'WHERE ' + conditions.join(' AND ');
+    }
+    
+    const query = `
+      SELECT 
+        SUM(CASE WHEN e.assignedDate IS NOT NULL AND e.secureCareAwarded = 0 THEN 1 ELSE 0 END) as activeTrainingSessions,
+        SUM(CASE 
+          WHEN e.assignedDate IS NOT NULL 
+          AND e.secureCareAwarded = 0 
+          AND DATEDIFF(day, e.assignedDate, GETDATE()) > 30 
+          THEN 1 ELSE 0 
+        END) as overdueTraining,
+        SUM(CASE 
+          WHEN e.secureCareAwardedDate IS NOT NULL 
+          AND e.secureCareAwardedDate >= DATEADD(day, -7, GETDATE()) 
+          THEN 1 ELSE 0 
+        END) as recentCompletions,
+        COUNT(*) as totalEmployees,
+        SUM(CASE WHEN e.secureCareAwarded = 1 THEN 1 ELSE 0 END) as completedCertifications
+      FROM dbo.SecureCareEmployee e
+      ${whereClause}
+    `;
+    
+    const result = await request.query(query);
+    const data = result.recordset[0];
+    
+    return {
+      activeTrainingSessions: data.activeTrainingSessions,
+      overdueTraining: data.overdueTraining,
+      recentCompletions: data.recentCompletions,
+      trainingEfficiency: data.totalEmployees > 0 ? ((data.completedCertifications / data.totalEmployees) * 100).toFixed(1) : '0'
+    };
+  }
 }
 
 module.exports = new SecureCareService();

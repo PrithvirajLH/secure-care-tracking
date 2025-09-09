@@ -250,4 +250,147 @@ router.post('/update-advisor', async (req, res) => {
   }
 });
 
+// Analytics Routes
+router.get('/analytics/overview', async (req, res) => {
+  try {
+    const filters = {
+      facility: req.query.facility,
+      area: req.query.area,
+      level: req.query.level,
+      startDate: req.query.startDate,
+      endDate: req.query.endDate
+    };
+    
+    const result = await secureCareService.getAnalyticsOverview(filters);
+    res.json(result);
+    
+  } catch (error) {
+    console.error('Get analytics overview error:', error);
+    res.status(500).json({ 
+      error: 'Failed to get analytics overview',
+      message: error.message 
+    });
+  }
+});
+
+router.get('/analytics/facility-performance', async (req, res) => {
+  try {
+    const filters = {
+      level: req.query.level,
+      startDate: req.query.startDate,
+      endDate: req.query.endDate
+    };
+    
+    const result = await secureCareService.getFacilityPerformance(filters);
+    res.json(result);
+    
+  } catch (error) {
+    console.error('Get facility performance error:', error);
+    res.status(500).json({ 
+      error: 'Failed to get facility performance',
+      message: error.message 
+    });
+  }
+});
+
+router.get('/analytics/area-performance', async (req, res) => {
+  try {
+    const filters = {
+      level: req.query.level,
+      startDate: req.query.startDate,
+      endDate: req.query.endDate
+    };
+    
+    const result = await secureCareService.getAreaPerformance(filters);
+    res.json(result);
+    
+  } catch (error) {
+    console.error('Get area performance error:', error);
+    res.status(500).json({ 
+      error: 'Failed to get area performance',
+      message: error.message 
+    });
+  }
+});
+
+router.get('/analytics/monthly-trends', async (req, res) => {
+  try {
+    const filters = {
+      facility: req.query.facility,
+      area: req.query.area,
+      level: req.query.level
+    };
+    
+    const result = await secureCareService.getMonthlyTrends(filters);
+    res.json(result);
+    
+  } catch (error) {
+    console.error('Get monthly trends error:', error);
+    res.status(500).json({ 
+      error: 'Failed to get monthly trends',
+      message: error.message 
+    });
+  }
+});
+
+router.get('/analytics/certification-progress', async (req, res) => {
+  try {
+    const filters = {
+      facility: req.query.facility,
+      area: req.query.area,
+      startDate: req.query.startDate,
+      endDate: req.query.endDate
+    };
+    
+    const result = await secureCareService.getCertificationProgress(filters);
+    res.json(result);
+    
+  } catch (error) {
+    console.error('Get certification progress error:', error);
+    res.status(500).json({ 
+      error: 'Failed to get certification progress',
+      message: error.message 
+    });
+  }
+});
+
+router.get('/analytics/recent-activity', async (req, res) => {
+  try {
+    const filters = {
+      facility: req.query.facility,
+      area: req.query.area,
+      level: req.query.level
+    };
+    
+    const result = await secureCareService.getRecentActivity(filters);
+    res.json(result);
+    
+  } catch (error) {
+    console.error('Get recent activity error:', error);
+    res.status(500).json({ 
+      error: 'Failed to get recent activity',
+      message: error.message 
+    });
+  }
+});
+
+router.get('/analytics/metrics', async (req, res) => {
+  try {
+    const filters = {
+      facility: req.query.facility,
+      area: req.query.area
+    };
+    
+    const result = await secureCareService.getAnalyticsMetrics(filters);
+    res.json(result);
+    
+  } catch (error) {
+    console.error('Get analytics metrics error:', error);
+    res.status(500).json({ 
+      error: 'Failed to get analytics metrics',
+      message: error.message 
+    });
+  }
+});
+
 module.exports = router;

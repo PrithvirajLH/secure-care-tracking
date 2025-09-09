@@ -1,14 +1,11 @@
 import React, { useMemo, useState } from "react";
-import { useApp } from "@/context/AppContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { BentoGrid, BentoCard } from "@/components/magicui/bento-grid";
 import { DatePicker } from "@/components/ui/date-picker";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { 
   BarChart, 
   Bar, 
@@ -23,12 +20,7 @@ import {
   Pie, 
   Cell,
   AreaChart,
-  Area,
-  RadarChart,
-  PolarGrid,
-  PolarAngleAxis,
-  PolarRadiusAxis,
-  Radar
+  Area
 } from "recharts";
 import { 
   TrendingUp, 
@@ -47,507 +39,41 @@ import {
   Activity,
   Target
 } from "lucide-react";
-import { useTrainingData } from "@/hooks/useTrainingData";
-import { useTrainingEmployees } from "@/hooks/useEmployees";
+import { useAnalytics, AnalyticsFilters } from "@/hooks/useAnalytics";
 import { toast } from "sonner";
 import PageHeader from "@/components/PageHeader";
 
 export default function Analytics() {
-  const { state } = useApp();
   const [timeRange, setTimeRange] = useState<string>("1y");
   const [selectedFacility, setSelectedFacility] = useState<string>("all");
   const [selectedLevel, setSelectedLevel] = useState<string>("all");
   const [customStartDate, setCustomStartDate] = useState<Date | undefined>(undefined);
   const [customEndDate, setCustomEndDate] = useState<Date | undefined>(undefined);
 
-  // Note: allTrainingData not available in useTrainingData hook, using employee data instead
-  const isLoadingAll = false;
-
-  // Use the same data source as Training and Employees pages for consistency
-  const filters = useMemo(() => ({
-    facility: selectedFacility !== "all" ? selectedFacility : undefined,
-    area: undefined, // Include all areas for analytics
-    // No status filter - include all employees for comprehensive analytics
-  }), [selectedFacility]);
-
-  const {
-    employees: currentEmployees,
-    isLoading: isLoadingEmployees,
-    error: employeesError
-  } = useTrainingEmployees(filters, 100); // Get all employee records for analytics
-
-  // Use currentEmployees from API instead of state.employees for consistency
-  const employees = currentEmployees || [];
-
-  // Helper functions for advanced analytics
-  const calculateAverageCompletionTime = (employees: any[]) => {
-    const completedEmployees = employees.filter(e => e.secureCareAwardedDate);
-    if (completedEmployees.length === 0) return 0;
-    
-    const totalDays = completedEmployees.reduce((sum, emp) => {
-      if (emp.assignedDate && emp.secureCareAwardedDate) {
-        const startTime = new Date(emp.assignedDate).getTime();
-        const endTime = new Date(emp.secureCareAwardedDate).getTime();
-        return sum + (endTime - startTime);
-      }
-      return sum;
-    }, 0);
-    
-    return Math.round(totalDays / completedEmployees.length / (1000 * 60 * 60 * 24));
-  };
-
-  const calculateCertificationVelocity = (employees: any[], days: number) => {
-    // Handle case when days is 0 (all time)
-    if (days === 0) {
-      const totalCompletions = employees.filter(e => e.secureCareAwardedDate).length;
-      return totalCompletions > 0 ? "1.00" : "0.00";
-    }
-    
-    const recentCompletions = employees.filter(e => {
-      if (e.secureCareAwardedDate) {
-        const awardDate = new Date(e.secureCareAwardedDate);
-        return (new Date().getTime() - awardDate.getTime()) <= (days * 24 * 60 * 60 * 1000);
-      }
-      return false;
-    }).length;
-    
-    return (recentCompletions / days).toFixed(2);
-  };
-
-  const calculateRetentionRate = (employees: any[]) => {
-    const advancedCertifications = employees.filter(e => 
-      (e.awardType === 'Level 3' || e.awardType === 'Consultant' || e.awardType === 'Coach') && e.secureCareAwarded
-    ).length;
-    const totalWithBasic = employees.filter(e => e.awardType === 'Level 1' && e.secureCareAwarded).length;
-    return totalWithBasic > 0 ? ((advancedCertifications / totalWithBasic) * 100).toFixed(1) : 0;
-  };
-
-  const analyzeBottlenecks = (employees: any[]) => {
-    const bottlenecks = [];
-    const level1InProgress = employees.filter(e => e.awardType === 'Level 1' && e.assignedDate && !e.secureCareAwarded).length;
-    const level2InProgress = employees.filter(e => e.awardType === 'Level 2' && e.assignedDate && !e.secureCareAwarded).length;
-    const level3InProgress = employees.filter(e => e.awardType === 'Level 3' && e.assignedDate && !e.secureCareAwarded).length;
-    
-    if (level1InProgress > employees.length * 0.3) bottlenecks.push('Level 1');
-    if (level2InProgress > employees.length * 0.2) bottlenecks.push('Level 2');
-    if (level3InProgress > employees.length * 0.1) bottlenecks.push('Level 3');
-    
-    return bottlenecks;
-  };
-
-  const calculateFacilityAvgTime = (facilityEmployees: any[]) => {
-    const completed = facilityEmployees.filter(e => e.secureCareAwardedDate);
-    if (completed.length === 0) return 0;
-    
-    const totalTime = completed.reduce((sum, emp) => {
-      if (emp.assignedDate && emp.secureCareAwardedDate) {
-        const startTime = new Date(emp.assignedDate).getTime();
-        const endTime = new Date(emp.secureCareAwardedDate).getTime();
-        return sum + (endTime - startTime);
-      }
-      return sum;
-    }, 0);
-    
-    return Math.round(totalTime / completed.length / (1000 * 60 * 60 * 24));
-  };
-
-  const calculateLevelAvgTime = (employees: any[], level: string) => {
-    const awardTypeMap = {
-      'level1': 'Level 1',
-      'level2': 'Level 2', 
-      'level3': 'Level 3',
-      'consultant': 'Consultant',
-      'coach': 'Coach'
+  // Build analytics filters
+  const analyticsFilters = useMemo((): AnalyticsFilters => {
+    const filters: AnalyticsFilters = {
+      facility: selectedFacility !== "all" ? selectedFacility : undefined,
+      level: selectedLevel !== "all" ? selectedLevel : undefined
     };
-    
-    const targetAwardType = awardTypeMap[level as keyof typeof awardTypeMap];
-    const levelEmployees = employees.filter(e => e.awardType === targetAwardType && e.secureCareAwardedDate);
-    
-    if (levelEmployees.length === 0) return 0;
-    
-    const totalTime = levelEmployees.reduce((sum, emp) => {
-      if (emp.assignedDate && emp.secureCareAwardedDate) {
-        const startTime = new Date(emp.assignedDate).getTime();
-        const endTime = new Date(emp.secureCareAwardedDate).getTime();
-        return sum + (endTime - startTime);
-      }
-      return sum;
-    }, 0);
-    
-    return Math.round(totalTime / levelEmployees.length / (1000 * 60 * 60 * 24));
-  };
 
-  const calculateTimeToComplete = (employee: any, achievement: string) => {
-    // Use the actual database fields
-    const startDate = employee.assignedDate;
-    const endDate = employee.secureCareAwardedDate;
-    
-    if (!startDate || !endDate) return 0;
-    return Math.round((new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24));
-  };
-
-  const generateMonthlyTrends = (employees: any[], days: number) => {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const currentMonth = new Date().getMonth();
-    const currentYear = new Date().getFullYear();
-    
-    // Generate last 6 months of data
-    return Array.from({ length: 6 }, (_, index) => {
-      const monthOffset = 5 - index; // Start from 5 months ago
-      const targetDate = new Date(currentYear, currentMonth - monthOffset, 1);
-      const monthName = months[targetDate.getMonth()];
-      
-      // Count employees with certifications awarded in this month
-      const monthEmployees = employees.filter(e => {
-        if (e.secureCareAwardedDate) {
-          const awardDate = new Date(e.secureCareAwardedDate);
-          return awardDate.getMonth() === targetDate.getMonth() && 
-                 awardDate.getFullYear() === targetDate.getFullYear();
-        }
-        return false;
-      });
-      
-      // Count in-progress employees for this month
-      const inProgressEmployees = employees.filter(e => {
-        if (e.assignedDate && !e.secureCareAwarded) {
-          const startDate = new Date(e.assignedDate);
-          return startDate.getMonth() === targetDate.getMonth() && 
-                 startDate.getFullYear() === targetDate.getFullYear();
-        }
-        return false;
-      });
-      
-      return {
-        month: monthName,
-        completed: monthEmployees.length,
-        inProgress: inProgressEmployees.length,
-        new: Math.floor(monthEmployees.length * 0.3) // Estimate new enrollments
-      };
-    });
-  };
-
-  const generatePredictions = (employees: any[], days: number) => {
-    const currentRate = parseFloat(calculateCertificationVelocity(employees, days));
-    const totalEmployees = employees.length;
-    const completed = employees.filter(e => e.secureCareAwarded).length;
-    
-    const remaining = totalEmployees - completed;
-    const predictedCompletions = Math.min(remaining, Math.round(currentRate * 30)); // Next 30 days
-    
-    return {
-      nextMonth: predictedCompletions,
-      completionRate: ((completed + predictedCompletions) / totalEmployees * 100).toFixed(1),
-      targetAchievement: Math.round((completed + predictedCompletions) / totalEmployees * 100)
-    };
-  };
-
-  // Calculate analytics data with dynamic filtering
-  const analyticsData = useMemo(() => {
-    let employees = currentEmployees;
-    
-    // Apply facility filter
-    if (selectedFacility !== "all") {
-      employees = employees.filter(e => (e.facility || e.Facility) === selectedFacility);
-    }
-
-    // Apply time range filter with enhanced options including custom date range
-    const now = new Date();
-    let startDate: Date | null = null;
-    let endDate: Date | null = null;
-    
-    // Calculate timeRangeDays for use throughout the function
-    const timeRangeDays = {
-      "3m": 90,
-      "6m": 180,
-      "1y": 365,
-      "all": 0
-    }[timeRange] || 365;
-    
+    // Add date range filters
     if (timeRange === "custom" && customStartDate && customEndDate) {
-      startDate = customStartDate;
-      endDate = customEndDate;
-    } else {
-      if (timeRangeDays > 0) {
-        startDate = new Date(now.getTime() - (timeRangeDays * 24 * 60 * 60 * 1000));
-        endDate = now;
-      }
-    }
-    
-    // Filter employees based on time range and level
-    let filteredEmployees = employees;
-    
-    if (startDate && endDate) {
-      filteredEmployees = employees.filter(e => {
-        // Check if employee has certification activity within the date range
-        if (e.secureCareAwardedDate) {
-          const awardDate = new Date(e.secureCareAwardedDate);
-          return awardDate >= startDate! && awardDate <= endDate!;
-        }
-        return false;
-      });
-    }
-    
-    // Apply level filter
-    if (selectedLevel !== "all") {
-      const levelMap = {
-        "level1": "Level 1",
-        "level2": "Level 2", 
-        "level3": "Level 3",
-        "consultant": "Consultant",
-        "coach": "Coach"
-      };
-      
-      const targetLevel = levelMap[selectedLevel as keyof typeof levelMap];
-      filteredEmployees = filteredEmployees.filter(e => {
-        return e.awardType === targetLevel && e.secureCareAwarded;
-      });
+      filters.startDate = customStartDate.toISOString().split('T')[0];
+      filters.endDate = customEndDate.toISOString().split('T')[0];
+    } else if (timeRange !== "all") {
+      const now = new Date();
+      const days = timeRange === "3m" ? 90 : timeRange === "6m" ? 180 : 365;
+      const startDate = new Date(now.getTime() - (days * 24 * 60 * 60 * 1000));
+      filters.startDate = startDate.toISOString().split('T')[0];
+      filters.endDate = now.toISOString().split('T')[0];
     }
 
-    // Overall statistics
-    const totalEmployees = filteredEmployees.length;
-    const completedCertifications = filteredEmployees.filter(e => e.secureCareAwarded).length;
-    const inProgress = filteredEmployees.filter(e => e.assignedDate && !e.secureCareAwarded).length;
-    const notStarted = totalEmployees - completedCertifications - inProgress;
+    return filters;
+  }, [timeRange, selectedFacility, selectedLevel, customStartDate, customEndDate]);
 
-    // Level-wise breakdown - using exact same logic as Dashboard
-    const level1Completed = filteredEmployees.filter(e => e.awardType === 'Level 1' && e.secureCareAwarded).length;
-    const level2Completed = filteredEmployees.filter(e => e.awardType === 'Level 2' && e.secureCareAwarded).length;
-    const level3Completed = filteredEmployees.filter(e => e.awardType === 'Level 3' && e.secureCareAwarded).length;
-    const consultantCompleted = filteredEmployees.filter(e => e.awardType === 'Consultant' && e.secureCareAwarded).length;
-    const coachCompleted = filteredEmployees.filter(e => e.awardType === 'Coach' && e.secureCareAwarded).length;
-
-    // Calculate in-progress counts using exact same logic as Dashboard
-    const level1InProgress = filteredEmployees.filter(e => 
-      e.awardType === 'Level 1' && e.assignedDate && !e.secureCareAwarded
-    ).length;
-    const level2InProgress = filteredEmployees.filter(e => 
-      e.awardType === 'Level 2' && !e.secureCareAwarded && e.awaiting !== 1 && e.awaiting !== true
-    ).length;
-    const level3InProgress = filteredEmployees.filter(e => 
-      e.awardType === 'Level 3' && !e.secureCareAwarded && e.awaiting !== 1 && e.awaiting !== true
-    ).length;
-    const consultantInProgress = filteredEmployees.filter(e => 
-      e.awardType === 'Consultant' && !e.secureCareAwarded && e.awaiting !== 1 && e.awaiting !== true
-    ).length;
-    const coachInProgress = filteredEmployees.filter(e => 
-      e.awardType === 'Coach' && !e.secureCareAwarded && e.awaiting !== 1 && e.awaiting !== true
-    ).length;
-
-    // Advanced metrics
-    const averageCompletionTime = calculateAverageCompletionTime(filteredEmployees);
-    const certificationVelocity = calculateCertificationVelocity(filteredEmployees, timeRangeDays);
-    const retentionRate = calculateRetentionRate(filteredEmployees);
-    const bottleneckAnalysis = analyzeBottlenecks(filteredEmployees);
-
-    // Facility performance with advanced metrics
-    const facilityStats = filteredEmployees.reduce((acc, emp) => {
-      const facilityName = emp.facility || emp.Facility;
-      if (!acc[facilityName]) {
-        acc[facilityName] = { 
-          total: 0, 
-          completed: 0, 
-          inProgress: 0, 
-          avgTime: 0,
-          efficiency: 0
-        };
-      }
-      acc[facilityName].total++;
-      if (emp.secureCareAwarded) {
-        acc[facilityName].completed++;
-      } else if (emp.assignedDate && !emp.secureCareAwarded) {
-        acc[facilityName].inProgress++;
-      }
-      return acc;
-    }, {} as Record<string, { total: number; completed: number; inProgress: number; avgTime: number; efficiency: number }>);
-
-    // Calculate facility efficiency
-    Object.keys(facilityStats).forEach(facility => {
-      const stats = facilityStats[facility];
-      stats.efficiency = (stats.completed / stats.total) * 100;
-      stats.avgTime = calculateFacilityAvgTime(filteredEmployees.filter(e => (e.facility || e.Facility) === facility));
-    });
-
-    // Area performance with trends
-    const areaStats = filteredEmployees.reduce((acc, emp) => {
-      if (!acc[emp.area]) {
-        acc[emp.area] = { 
-          total: 0, 
-          completed: 0, 
-          inProgress: 0,
-          growth: 0,
-          potential: 0
-        };
-      }
-      acc[emp.area].total++;
-      if (emp.secureCareAwarded) {
-        acc[emp.area].completed++;
-      } else if (emp.assignedDate && !emp.secureCareAwarded) {
-        acc[emp.area].inProgress++;
-      }
-      return acc;
-    }, {} as Record<string, { total: number; completed: number; inProgress: number; growth: number; potential: number }>);
-
-    // Calculate area growth potential
-    Object.keys(areaStats).forEach(area => {
-      const stats = areaStats[area];
-      stats.growth = ((stats.completed + stats.inProgress) / stats.total) * 100;
-      stats.potential = (stats.inProgress / stats.total) * 100;
-    });
-
-    // Dynamic monthly trends based on actual data
-    const monthlyTrends = generateMonthlyTrends(filteredEmployees, timeRangeDays);
-    
-    // Certification progress with targets and efficiency
-    const certificationProgress = [
-      { 
-        level: "Level 1", 
-        completed: level1Completed, 
-        inProgress: level1InProgress, 
-        target: totalEmployees * 0.8,
-        efficiency: (level1Completed / totalEmployees) * 100,
-        avgTime: calculateLevelAvgTime(filteredEmployees, 'level1')
-      },
-      { 
-        level: "Level 2", 
-        completed: level2Completed, 
-        inProgress: level2InProgress, 
-        target: totalEmployees * 0.6,
-        efficiency: (level2Completed / totalEmployees) * 100,
-        avgTime: calculateLevelAvgTime(filteredEmployees, 'level2')
-      },
-      { 
-        level: "Level 3", 
-        completed: level3Completed, 
-        inProgress: level3InProgress, 
-        target: totalEmployees * 0.4,
-        efficiency: (level3Completed / totalEmployees) * 100,
-        avgTime: calculateLevelAvgTime(filteredEmployees, 'level3')
-      },
-      { 
-        level: "Consultant", 
-        completed: consultantCompleted, 
-        inProgress: consultantInProgress, 
-        target: totalEmployees * 0.2,
-        efficiency: (consultantCompleted / totalEmployees) * 100,
-        avgTime: calculateLevelAvgTime(filteredEmployees, 'consultant')
-      },
-      { 
-        level: "Coach", 
-        completed: coachCompleted, 
-        inProgress: coachInProgress, 
-        target: totalEmployees * 0.1,
-        efficiency: (coachCompleted / totalEmployees) * 100,
-        avgTime: calculateLevelAvgTime(filteredEmployees, 'coach')
-      },
-    ];
-
-               // Top performing facilities with efficiency metrics (always use all data, not filtered)
-      const allFacilityStats = currentEmployees.reduce((acc, emp) => {
-       const facilityName = emp.facility || emp.Facility;
-       if (!acc[facilityName]) {
-         acc[facilityName] = { 
-           total: 0, 
-           completed: 0, 
-           inProgress: 0, 
-           avgTime: 0,
-           efficiency: 0
-         };
-       }
-       acc[facilityName].total++;
-       if (emp.secureCareAwarded) {
-         acc[facilityName].completed++;
-       } else if (emp.assignedDate && !emp.secureCareAwarded) {
-         acc[facilityName].inProgress++;
-       }
-       return acc;
-     }, {} as Record<string, { total: number; completed: number; inProgress: number; avgTime: number; efficiency: number }>);
-
-     // Calculate facility efficiency for all facilities
-     Object.keys(allFacilityStats).forEach(facility => {
-       const stats = allFacilityStats[facility];
-       stats.efficiency = (stats.completed / stats.total) * 100;
-               stats.avgTime = calculateFacilityAvgTime(currentEmployees.filter(e => e.facility === facility));
-     });
-
-     const topFacilities = Object.entries(allFacilityStats)
-       .map(([facility, stats]) => ({
-                 facility,
-        completionRate: ((stats as any).completed / (stats as any).total) * 100,
-        efficiency: (stats as any).efficiency,
-        avgTime: (stats as any).avgTime,
-        total: (stats as any).total,
-        completed: (stats as any).completed
-       }))
-       .sort((a, b) => b.efficiency - a.efficiency)
-       .slice(0, 5);
-
-    // Recent activity with performance indicators
-    const recentActivity = filteredEmployees
-      .filter(e => e.secureCareAwardedDate)
-      .map(e => {
-        const achievement = e.awardType || "Level 1";
-        const timeToComplete = calculateTimeToComplete(e, achievement);
-        
-        return {
-          employee: e.name,
-          facility: e.facility,
-          achievement,
-          date: e.secureCareAwardedDate,
-          timeToComplete,
-          performance: timeToComplete < 120 ? 'Excellent' : timeToComplete < 180 ? 'Good' : 'Average'
-        };
-      })
-      .sort((a, b) => new Date(b.date!).getTime() - new Date(a.date!).getTime())
-      .slice(0, 10);
-
-    // Predictive analytics
-    const predictions = generatePredictions(filteredEmployees, timeRangeDays);
-
-    return {
-      totalEmployees,
-      completedCertifications,
-      inProgress,
-      notStarted,
-      level1Completed,
-      level2Completed,
-      level3Completed,
-      consultantCompleted,
-      coachCompleted,
-      facilityStats,
-      areaStats,
-      monthlyTrends,
-      certificationProgress,
-      topFacilities,
-      recentActivity,
-      averageCompletionTime,
-      certificationVelocity,
-      retentionRate,
-      bottleneckAnalysis,
-      predictions
-    };
-  }, [currentEmployees, timeRange, selectedFacility, selectedLevel, customStartDate, customEndDate]);
-
-  // Enhanced analytics data (simplified without real-time training data)
-  const enhancedAnalyticsData = useMemo(() => {
-    const baseData = analyticsData;
-    
-    // Add basic training metrics using employee data
-    const realTimeMetrics = {
-      activeTrainingSessions: currentEmployees.filter(e => e.assignedDate && !e.secureCareAwarded).length,
-      overdueTraining: currentEmployees.filter(e => 
-        e.assignedDate && !e.secureCareAwarded && 
-        new Date(new Date(e.assignedDate).getTime() + 30 * 24 * 60 * 60 * 1000) < new Date()
-      ).length,
-      recentCompletions: currentEmployees.filter(e => 
-        e.secureCareAwardedDate && 
-        new Date(e.secureCareAwardedDate) >= new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-      ).length,
-      trainingEfficiency: currentEmployees.length > 0 ? 
-        (currentEmployees.filter(e => e.secureCareAwarded).length / currentEmployees.length * 100).toFixed(1) : '0'
-    };
-    
-    return { ...baseData, realTimeMetrics };
-  }, [analyticsData, currentEmployees]);
+  // Use the new analytics hook
+  const { data: analyticsData, isLoading, error } = useAnalytics(analyticsFilters);
 
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
 
@@ -569,7 +95,7 @@ export default function Analytics() {
   };
 
   const handleExport = () => {
-    if (isLoadingAll) {
+    if (isLoading || !analyticsData) {
       toast.error("Please wait for data to load before exporting");
       return;
     }
@@ -595,37 +121,34 @@ export default function Analytics() {
     // Overview
     lines.push("Overview Metrics");
     lines.push(["Metric","Value"].map(csvEscape).join(","));
-    lines.push(["Total Employees", analyticsData.totalEmployees].map(csvEscape).join(","));
-    lines.push(["Completed Certifications", analyticsData.completedCertifications].map(csvEscape).join(","));
-    lines.push(["In Progress", analyticsData.inProgress].map(csvEscape).join(","));
-    lines.push(["Not Started", analyticsData.notStarted].map(csvEscape).join(","));
-    lines.push(["Avg Completion Time (days)", analyticsData.averageCompletionTime].map(csvEscape).join(","));
-    lines.push(["Certification Velocity (per day)", analyticsData.certificationVelocity].map(csvEscape).join(","));
-    lines.push(["Retention Rate (%)", analyticsData.retentionRate].map(csvEscape).join(","));
+    lines.push(["Total Employees", analyticsData.overview.totalEmployees].map(csvEscape).join(","));
+    lines.push(["Completed Certifications", analyticsData.overview.completedCertifications].map(csvEscape).join(","));
+    lines.push(["In Progress", analyticsData.overview.inProgress].map(csvEscape).join(","));
+    lines.push(["Not Started", analyticsData.overview.notStarted].map(csvEscape).join(","));
+    lines.push(["Avg Completion Time (days)", Math.round(analyticsData.overview.averageCompletionTime || 0)].map(csvEscape).join(","));
     
     // Add real-time metrics
-    const metrics = enhancedAnalyticsData.realTimeMetrics;
-    lines.push(["Active Training Sessions", metrics.activeTrainingSessions].map(csvEscape).join(","));
-    lines.push(["Overdue Training", metrics.overdueTraining].map(csvEscape).join(","));
-    lines.push(["Recent Completions (7 days)", metrics.recentCompletions].map(csvEscape).join(","));
-    lines.push(["Training Efficiency (%)", metrics.trainingEfficiency].map(csvEscape).join(","));
+    lines.push(["Active Training Sessions", analyticsData.metrics.activeTrainingSessions].map(csvEscape).join(","));
+    lines.push(["Overdue Training", analyticsData.metrics.overdueTraining].map(csvEscape).join(","));
+    lines.push(["Recent Completions (7 days)", analyticsData.metrics.recentCompletions].map(csvEscape).join(","));
+    lines.push(["Training Efficiency (%)", analyticsData.metrics.trainingEfficiency].map(csvEscape).join(","));
     
     lines.push("");
 
     // Level completions
     lines.push("Level Completions");
     lines.push(["Level","Completed"].map(csvEscape).join(","));
-    lines.push(["Level 1", analyticsData.level1Completed].map(csvEscape).join(","));
-    lines.push(["Level 2", analyticsData.level2Completed].map(csvEscape).join(","));
-    lines.push(["Level 3", analyticsData.level3Completed].map(csvEscape).join(","));
-    lines.push(["Consultant", analyticsData.consultantCompleted].map(csvEscape).join(","));
-    lines.push(["Coach", analyticsData.coachCompleted].map(csvEscape).join(","));
+    lines.push(["Level 1", analyticsData.overview.level1Completed].map(csvEscape).join(","));
+    lines.push(["Level 2", analyticsData.overview.level2Completed].map(csvEscape).join(","));
+    lines.push(["Level 3", analyticsData.overview.level3Completed].map(csvEscape).join(","));
+    lines.push(["Consultant", analyticsData.overview.consultantCompleted].map(csvEscape).join(","));
+    lines.push(["Coach", analyticsData.overview.coachCompleted].map(csvEscape).join(","));
     lines.push("");
 
-    // Top facilities (overall, already unfiltered)
+    // Top facilities
     lines.push("Top Facilities");
     lines.push(["Facility","Completion Rate (%)","Completed","Total","Avg Time (days)"].map(csvEscape).join(","));
-    analyticsData.topFacilities.forEach(f => {
+    analyticsData.facilityPerformance.slice(0, 5).forEach(f => {
       lines.push([
         f.facility,
         f.completionRate.toFixed(1),
@@ -745,12 +268,8 @@ export default function Analytics() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Facilities</SelectItem>
-                  {Object.keys(currentEmployees.reduce((acc, emp) => {
-                    const facilityName = emp.facility || emp.Facility;
-                    acc[facilityName] = true;
-                    return acc;
-                  }, {} as Record<string, boolean>)).map(facility => (
-                    <SelectItem key={facility} value={facility}>{facility}</SelectItem>
+                  {analyticsData?.facilityPerformance.map(facility => (
+                    <SelectItem key={facility.facility} value={facility.facility}>{facility.facility}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -763,12 +282,24 @@ export default function Analytics() {
         </div>
 
       {/* Loading State */}
-      {(isLoadingEmployees || isLoadingAll) && (
+      {isLoading && (
         <Card className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/50 dark:to-indigo-950/50 border-blue-200 dark:border-blue-800">
           <CardContent className="p-4 text-center">
             <div className="flex items-center justify-center gap-2">
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
               <span className="text-blue-600">Loading analytics data...</span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Error State */}
+      {error && (
+        <Card className="mb-6 bg-gradient-to-r from-red-50 to-pink-50 dark:from-red-950/50 dark:to-pink-950/50 border-red-200 dark:border-red-800">
+          <CardContent className="p-4 text-center">
+            <div className="flex items-center justify-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-red-600" />
+              <span className="text-red-600">Error loading analytics data: {error}</span>
             </div>
           </CardContent>
         </Card>
@@ -803,23 +334,23 @@ export default function Analytics() {
               </div>
             </div>
             <div className="text-right">
-              <div className="text-2xl font-bold text-blue-900 dark:text-blue-100">{analyticsData.totalEmployees}</div>
+              <div className="text-2xl font-bold text-blue-900 dark:text-blue-100">{analyticsData?.overview.totalEmployees || 0}</div>
               <div className="text-xs text-blue-700 dark:text-blue-300">Filtered Results</div>
             </div>
           </div>
           <div className="mt-3 pt-3 border-t border-blue-200 dark:border-blue-800">
             <div className="grid grid-cols-4 gap-4 text-center">
               <div>
-                <div className="text-lg font-semibold text-blue-900 dark:text-blue-100">{analyticsData.completedCertifications}</div>
+                <div className="text-lg font-semibold text-blue-900 dark:text-blue-100">{analyticsData?.overview.completedCertifications || 0}</div>
                 <div className="text-xs text-blue-700 dark:text-blue-300">Completed</div>
               </div>
               <div>
-                <div className="text-lg font-semibold text-blue-900 dark:text-blue-100">{analyticsData.inProgress}</div>
+                <div className="text-lg font-semibold text-blue-900 dark:text-blue-100">{analyticsData?.overview.inProgress || 0}</div>
                 <div className="text-xs text-blue-700 dark:text-blue-300">In Progress</div>
               </div>
               <div>
                 <div className="text-lg font-semibold text-blue-900 dark:text-blue-100">
-                  {analyticsData.totalEmployees > 0 ? Math.round((analyticsData.completedCertifications / analyticsData.totalEmployees) * 100) : 0}%
+                  {analyticsData?.overview.totalEmployees ? Math.round((analyticsData.overview.completedCertifications / analyticsData.overview.totalEmployees) * 100) : 0}%
                 </div>
                 <div className="text-xs text-blue-700 dark:text-blue-300">Completion Rate</div>
               </div>
@@ -858,7 +389,7 @@ export default function Analytics() {
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={analyticsData.certificationProgress}>
+                  <BarChart data={analyticsData?.certificationProgress || []}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="level" />
                     <YAxis />
@@ -879,14 +410,14 @@ export default function Analytics() {
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
                   <PieChart>
-                                         <Pie
-                       data={[
-                         { name: "Level 1", value: analyticsData.level1Completed },
-                         { name: "Level 2", value: analyticsData.level2Completed },
-                         { name: "Level 3", value: analyticsData.level3Completed },
-                         { name: "Consultant", value: analyticsData.consultantCompleted },
-                         { name: "Coach", value: analyticsData.coachCompleted },
-                       ].filter(item => item.value > 0)}
+                    <Pie
+                      data={[
+                        { name: "Level 1", value: analyticsData?.overview.level1Completed || 0 },
+                        { name: "Level 2", value: analyticsData?.overview.level2Completed || 0 },
+                        { name: "Level 3", value: analyticsData?.overview.level3Completed || 0 },
+                        { name: "Consultant", value: analyticsData?.overview.consultantCompleted || 0 },
+                        { name: "Coach", value: analyticsData?.overview.coachCompleted || 0 },
+                      ].filter(item => item.value > 0)}
                       cx="50%"
                       cy="50%"
                       labelLine={false}
@@ -914,7 +445,7 @@ export default function Analytics() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {analyticsData.topFacilities.map((facility, index) => (
+                {analyticsData?.facilityPerformance.slice(0, 5).map((facility, index) => (
                   <div key={facility.facility} className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <Badge variant="outline" className="w-8 h-8 flex items-center justify-center">
@@ -948,7 +479,7 @@ export default function Analytics() {
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={analyticsData.monthlyTrends}>
+                  <LineChart data={analyticsData?.monthlyTrends || []}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="month" />
                     <YAxis />
@@ -968,7 +499,7 @@ export default function Analytics() {
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={analyticsData.certificationProgress}>
+                  <BarChart data={analyticsData?.certificationProgress || []}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="level" />
                     <YAxis />
@@ -988,7 +519,7 @@ export default function Analytics() {
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={300}>
-                <AreaChart data={analyticsData.monthlyTrends}>
+                <AreaChart data={analyticsData?.monthlyTrends || []}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="month" />
                   <YAxis />
@@ -1012,11 +543,11 @@ export default function Analytics() {
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={Object.entries(analyticsData.facilityStats).map(([facility, stats]) => ({
-                    facility,
-                    completionRate: ((stats as any).completed / (stats as any).total) * 100,
-                    inProgressRate: ((stats as any).inProgress / (stats as any).total) * 100,
-                  }))}>
+                  <BarChart data={analyticsData?.facilityPerformance.map(facility => ({
+                    facility: facility.facility,
+                    completionRate: facility.completionRate,
+                    inProgressRate: (facility.inProgress / facility.total) * 100,
+                  })) || []}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="facility" />
                     <YAxis />
@@ -1036,11 +567,11 @@ export default function Analytics() {
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={Object.entries(analyticsData.areaStats).map(([area, stats]) => ({
-                    area,
-                    completionRate: ((stats as any).completed / (stats as any).total) * 100,
-                    inProgressRate: ((stats as any).inProgress / (stats as any).total) * 100,
-                  }))}>
+                  <BarChart data={analyticsData?.areaPerformance.map(area => ({
+                    area: area.area,
+                    completionRate: area.completionRate,
+                    inProgressRate: (area.inProgress / area.total) * 100,
+                  })) || []}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="area" />
                     <YAxis />

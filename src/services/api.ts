@@ -288,6 +288,167 @@ class SecureCareAPI {
   async awardTraining(employeeId: string, requirementKey: string, date: Date): Promise<TrainingData> {
     throw new Error('Awards are read-only in this version');
   }
+
+  // Analytics methods
+  async getAnalyticsOverview(filters: any = {}): Promise<any> {
+    const params = new URLSearchParams();
+    
+    if (filters.facility && filters.facility !== 'all') {
+      params.append('facility', filters.facility);
+    }
+    if (filters.area && filters.area !== 'all') {
+      params.append('area', filters.area);
+    }
+    if (filters.level && filters.level !== 'all') {
+      params.append('level', filters.level);
+    }
+    if (filters.startDate) {
+      params.append('startDate', filters.startDate);
+    }
+    if (filters.endDate) {
+      params.append('endDate', filters.endDate);
+    }
+    
+    const response = await fetch(`${this.baseURL}/securecare/analytics/overview?${params}`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch analytics overview: ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+
+  async getFacilityPerformance(filters: any = {}): Promise<any[]> {
+    const params = new URLSearchParams();
+    
+    if (filters.level && filters.level !== 'all') {
+      params.append('level', filters.level);
+    }
+    if (filters.startDate) {
+      params.append('startDate', filters.startDate);
+    }
+    if (filters.endDate) {
+      params.append('endDate', filters.endDate);
+    }
+    
+    const response = await fetch(`${this.baseURL}/securecare/analytics/facility-performance?${params}`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch facility performance: ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+
+  async getAreaPerformance(filters: any = {}): Promise<any[]> {
+    const params = new URLSearchParams();
+    
+    if (filters.level && filters.level !== 'all') {
+      params.append('level', filters.level);
+    }
+    if (filters.startDate) {
+      params.append('startDate', filters.startDate);
+    }
+    if (filters.endDate) {
+      params.append('endDate', filters.endDate);
+    }
+    
+    const response = await fetch(`${this.baseURL}/securecare/analytics/area-performance?${params}`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch area performance: ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+
+  async getMonthlyTrends(filters: any = {}): Promise<any[]> {
+    const params = new URLSearchParams();
+    
+    if (filters.facility && filters.facility !== 'all') {
+      params.append('facility', filters.facility);
+    }
+    if (filters.area && filters.area !== 'all') {
+      params.append('area', filters.area);
+    }
+    if (filters.level && filters.level !== 'all') {
+      params.append('level', filters.level);
+    }
+    
+    const response = await fetch(`${this.baseURL}/securecare/analytics/monthly-trends?${params}`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch monthly trends: ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+
+  async getCertificationProgress(filters: any = {}): Promise<any[]> {
+    const params = new URLSearchParams();
+    
+    if (filters.facility && filters.facility !== 'all') {
+      params.append('facility', filters.facility);
+    }
+    if (filters.area && filters.area !== 'all') {
+      params.append('area', filters.area);
+    }
+    if (filters.startDate) {
+      params.append('startDate', filters.startDate);
+    }
+    if (filters.endDate) {
+      params.append('endDate', filters.endDate);
+    }
+    
+    const response = await fetch(`${this.baseURL}/securecare/analytics/certification-progress?${params}`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch certification progress: ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+
+  async getRecentActivity(filters: any = {}): Promise<any[]> {
+    const params = new URLSearchParams();
+    
+    if (filters.facility && filters.facility !== 'all') {
+      params.append('facility', filters.facility);
+    }
+    if (filters.area && filters.area !== 'all') {
+      params.append('area', filters.area);
+    }
+    if (filters.level && filters.level !== 'all') {
+      params.append('level', filters.level);
+    }
+    
+    const response = await fetch(`${this.baseURL}/securecare/analytics/recent-activity?${params}`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch recent activity: ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+
+  async getAnalyticsMetrics(filters: any = {}): Promise<any> {
+    const params = new URLSearchParams();
+    
+    if (filters.facility && filters.facility !== 'all') {
+      params.append('facility', filters.facility);
+    }
+    if (filters.area && filters.area !== 'all') {
+      params.append('area', filters.area);
+    }
+    
+    const response = await fetch(`${this.baseURL}/securecare/analytics/metrics?${params}`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch analytics metrics: ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
 }
 
 // Create and export a singleton instance
