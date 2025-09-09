@@ -292,7 +292,7 @@ try {
   const serverDest = path.join(__dirname, 'server.js');
   if (fs.existsSync(serverSrc)) {
     fs.copyFileSync(serverSrc, serverDest);
-    console.log('✅ server.js copied to root');
+    console.log('✅ server.js copied to roots');  
   } else {
     console.log('❌ server.js not found in backend directory');
   }
