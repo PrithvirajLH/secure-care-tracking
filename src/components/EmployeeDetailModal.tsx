@@ -820,7 +820,8 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
         <DialogTrigger asChild>
           {children}
         </DialogTrigger>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl modal-container p-0">
+        <div className="modal-content p-6">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3">
             <User className="w-6 h-6" />
@@ -1094,6 +1095,7 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
           </div>
         </div>
         )}
+        </div>
       </DialogContent>
     </Dialog>
     </TooltipProvider>

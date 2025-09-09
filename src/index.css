@@ -4,6 +4,93 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Modal positioning fixes for better viewport handling */
+@layer utilities {
+  .modal-container {
+    max-height: 95vh;
+    max-height: 95dvh; /* Use dynamic viewport height for mobile */
+  }
+  
+  .modal-content {
+    max-height: calc(95vh - 2rem);
+    max-height: calc(95dvh - 2rem);
+    overflow-y: auto;
+  }
+  
+  /* Ensure modals don't get cut off on mobile */
+  @media (max-height: 600px) {
+    .modal-container {
+      max-height: 90vh;
+      max-height: 90dvh;
+    }
+    
+    .modal-content {
+      max-height: calc(90vh - 1rem);
+      max-height: calc(90dvh - 1rem);
+    }
+  }
+  
+  /* Enhanced dropdown positioning */
+  .dropdown-popup {
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(8px);
+    transition: all 0.2s ease-in-out;
+  }
+  
+  /* Clean dropdown styling */
+  .dropdown-container {
+    position: relative;
+    display: inline-block;
+  }
+  
+  .dropdown-menu {
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-top: 4px;
+    background: white;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    z-index: 1000;
+    overflow-y: auto;
+    max-height: 300px;
+    min-width: 180px;
+  }
+  
+  /* Advisor dropdown specific styling - shows exactly 5 options */
+  .dropdown-menu.advisor-dropdown {
+    height: 200px; /* Fixed height for exactly 5 options */
+  }
+  
+  .dropdown-menu.advisor-dropdown > div {
+    height: 40px; /* Each option is 40px tall */
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+  }
+  
+  .dropdown-menu::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  .dropdown-menu::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 3px;
+  }
+  
+  .dropdown-menu::-webkit-scrollbar-thumb {
+    background: rgba(59, 130, 246, 0.6);
+    border-radius: 3px;
+  }
+  
+  .dropdown-menu::-webkit-scrollbar-thumb:hover {
+    background: rgba(59, 130, 246, 0.8);
+  }
+}
+
 /* Make favicon round */
 link[rel="icon"], 
 link[rel="apple-touch-icon"] {
@@ -188,65 +275,6 @@ All colors MUST be HSL.
     @apply transition-transform duration-200 hover:scale-105;
   }
 
-  .aurora-background {
-    position: relative;
-    /* CSS variables for Soft Lavender & White theme - more vibrant */
-    --lavender-100: #f3f4f6;
-    --lavender-200: #e5e7eb;
-    --lavender-300: #d1d5db;
-    --lavender-400: #9ca3af;
-    --lavender-500: #6b7280;
-    --lavender-600: #4b5563;
-    --soft-lavender: #d8b4fe;
-    --light-lavender: #e9d5ff;
-    --medium-lavender: #c084fc;
-    --deep-lavender: #a855f7;
-    --white: #ffffff;
-    --transparent: transparent;
-
-    --aurora: repeating-linear-gradient(
-      100deg,
-      var(--soft-lavender) 10%,
-      var(--light-lavender) 15%,
-      var(--medium-lavender) 20%,
-      var(--deep-lavender) 25%,
-      var(--soft-lavender) 30%
-    );
-    --dark-gradient: repeating-linear-gradient(
-      100deg,
-      var(--lavender-600) 0%,
-      var(--lavender-600) 7%,
-      var(--transparent) 10%,
-      var(--transparent) 12%,
-      var(--lavender-600) 16%
-    );
-    --white-gradient: repeating-linear-gradient(
-      100deg,
-      var(--white) 0%,
-      var(--white) 7%,
-      var(--transparent) 10%,
-      var(--transparent) 12%,
-      var(--white) 16%
-    );
-    will-change: background-position;
-  }
-
-  /* Blurred, animated overlay for the streak effect */
-  .aurora-background::before {
-    content: "";
-    position: fixed;
-    inset: -10px;
-    pointer-events: none;
-    background-image: var(--white-gradient), var(--aurora);
-    background-size: 300% 200%, 200% 100%;
-    background-position: 50% 50%, 50% 50%;
-    filter: invert(1) blur(10px);
-    opacity: 0.3;
-    mix-blend-mode: difference;
-    animation: var(--animate-aurora);
-    z-index: -1;
-    will-change: background-position;
-  }
 }
 
 @layer base {

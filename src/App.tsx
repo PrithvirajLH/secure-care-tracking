@@ -15,7 +15,6 @@ const Advisors = lazy(() => import("./pages/Advisors"));
 const Analytics = lazy(() => import("./pages/Analytics"));
 
 const Settings = lazy(() => import("./pages/Settings"));
-const Landing = lazy(() => import("./pages/Landing"));
 
 // Loading component
 const PageLoader = () => (
@@ -48,7 +47,6 @@ const App = () => (
       >
         <Suspense fallback={<PageLoader />}>
           <Routes>
-            <Route path="/landing" element={<Landing />} />
             <Route path="/*" element={
               <AppLayout>
                 <Suspense fallback={<PageLoader />}>

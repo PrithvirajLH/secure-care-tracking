@@ -1,6 +1,31 @@
 const { getPool, sql } = require('../config/database');
 
+// Simple in-memory cache for analytics (for production, consider Redis)
+const analyticsCache = new Map();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 class SecureCareService {
+  
+  // Cache helper methods
+  getCacheKey(method, filters) {
+    return `${method}_${JSON.stringify(filters)}`;
+  }
+  
+  getFromCache(key) {
+    const cached = analyticsCache.get(key);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      return cached.data;
+    }
+    analyticsCache.delete(key);
+    return null;
+  }
+  
+  setCache(key, data) {
+    analyticsCache.set(key, {
+      data,
+      timestamp: Date.now()
+    });
+  }
   
   // Get employees by level (or all levels) using direct table queries
   async getEmployeesByLevel(level, filters = {}) {
@@ -16,25 +41,25 @@ class SecureCareService {
         e.area AS Area,
         e.staffRoll,
         e.awardType,
-        FORMAT(e.assignedDate, 'yyyy-MM-dd') AS assignedDate,
-        FORMAT(e.completedDate, 'yyyy-MM-dd') AS completedDate,
-        FORMAT(e.conferenceCompleted, 'yyyy-MM-dd') AS conferenceCompleted,
-        FORMAT(e.scheduleStandingVideo, 'yyyy-MM-dd') AS scheduleStandingVideo,
-        FORMAT(e.standingVideo, 'yyyy-MM-dd') AS standingVideo,
-        FORMAT(e.scheduleSleepingVideo, 'yyyy-MM-dd') AS scheduleSleepingVideo,
-        FORMAT(e.sleepingVideo, 'yyyy-MM-dd') AS sleepingVideo,
-        FORMAT(e.scheduleFeedGradVideo, 'yyyy-MM-dd') AS scheduleFeedGradVideo,
-        FORMAT(e.feedGradVideo, 'yyyy-MM-dd') AS feedGradVideo,
-        FORMAT(e.schedulenoHandnoSpeak, 'yyyy-MM-dd') AS schedulenoHandnoSpeak,
-        FORMAT(e.noHandnoSpeak, 'yyyy-MM-dd') AS noHandnoSpeak,
-        FORMAT(e.[scheduleSession#1], 'yyyy-MM-dd') AS scheduleSession1,
-        FORMAT(e.[session#1], 'yyyy-MM-dd') AS session1,
-        FORMAT(e.[scheduleSession#2], 'yyyy-MM-dd') AS scheduleSession2,
-        FORMAT(e.[session#2], 'yyyy-MM-dd') AS session2,
-        FORMAT(e.[scheduleSession#3], 'yyyy-MM-dd') AS scheduleSession3,
-        FORMAT(e.[session#3], 'yyyy-MM-dd') AS session3,
+        e.assignedDate,
+        e.completedDate,
+        e.conferenceCompleted,
+        e.scheduleStandingVideo,
+        e.standingVideo,
+        e.scheduleSleepingVideo,
+        e.sleepingVideo,
+        e.scheduleFeedGradVideo,
+        e.feedGradVideo,
+        e.schedulenoHandnoSpeak,
+        e.noHandnoSpeak,
+        e.[scheduleSession#1] AS scheduleSession1,
+        e.[session#1] AS session1,
+        e.[scheduleSession#2] AS scheduleSession2,
+        e.[session#2] AS session2,
+        e.[scheduleSession#3] AS scheduleSession3,
+        e.[session#3] AS session3,
         e.secureCareAwarded,
-        FORMAT(e.secureCareAwardedDate, 'yyyy-MM-dd') AS secureCareAwardedDate,
+        e.secureCareAwardedDate,
         e.awaiting,
         e.notes,
         e.advisorId,
@@ -124,7 +149,7 @@ class SecureCareService {
       
       // Add pagination
     const page = parseInt(filters.page) || 1;
-    const limit = parseInt(filters.limit) || 50;
+    const limit = Math.min(parseInt(filters.limit) || 50, 100); // Max 100 records per page
     const offset = (page - 1) * limit;
     
     query += ` ORDER BY e.name OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY`;
@@ -608,7 +633,7 @@ class SecureCareService {
       
       // Add pagination
     const page = parseInt(filters.page) || 1;
-    const limit = parseInt(filters.limit) || 50;
+    const limit = Math.min(parseInt(filters.limit) || 50, 100); // Max 100 records per page
     const offset = (page - 1) * limit;
     
     query += ` ORDER BY e.name OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY`;
@@ -849,8 +874,15 @@ class SecureCareService {
   // Analytics Methods
   async getAnalyticsOverview(filters = {}) {
     try {
-      const pool = await getPool();
-      const request = pool.request();
+    // Check cache first
+    const cacheKey = this.getCacheKey('analyticsOverview', filters);
+    const cached = this.getFromCache(cacheKey);
+    if (cached) {
+      return cached;
+    }
+    
+    const pool = await getPool();
+    const request = pool.request();
     
     // Build base query with filters
     let whereClause = '';
@@ -903,26 +935,14 @@ class SecureCareService {
       ${whereClause}
     `;
     
-    console.log('Analytics Overview Query:', query);
     const result = await request.query(query);
-    console.log('Analytics Overview Result:', result.recordset[0]);
     
-    // Debug query to check actual data
-    const debugQuery = `
-      SELECT 
-        COUNT(*) as total,
-        SUM(CASE WHEN e.secureCareAwarded = 1 THEN 1 ELSE 0 END) as completed,
-        SUM(CASE WHEN e.secureCareAwarded = 0 THEN 1 ELSE 0 END) as notCompleted,
-        SUM(CASE WHEN e.secureCareAwarded IS NULL THEN 1 ELSE 0 END) as nullAwarded,
-        SUM(CASE WHEN e.secureCareAwarded = 0 THEN 1 ELSE 0 END) as inProgress,
-        SUM(CASE WHEN e.awaiting = 1 THEN 1 ELSE 0 END) as awaiting,
-        SUM(CASE WHEN e.assignedDate IS NULL THEN 1 ELSE 0 END) as notStarted
-      FROM dbo.SecureCareEmployee e
-    `;
-    const debugResult = await pool.request().query(debugQuery);
-    console.log('Debug Analytics Data:', debugResult.recordset[0]);
+    const overviewData = result.recordset[0];
     
-    return result.recordset[0];
+    // Cache the result
+    this.setCache(cacheKey, overviewData);
+    
+    return overviewData;
     } catch (error) {
       console.error('Error in getAnalyticsOverview:', error);
       throw error;
@@ -1069,7 +1089,6 @@ class SecureCareService {
         ORDER BY year, month
       `;
       
-      console.log('Monthly Trends Query:', query);
       const completedResult = await request.query(query);
       
       // Query for in-progress data (assigned but not completed)
@@ -1100,7 +1119,6 @@ class SecureCareService {
         ORDER BY year, month
       `;
       
-      console.log('In Progress Query:', inProgressQuery);
       const inProgressResult = await request.query(inProgressQuery);
       
       // Generate last 6 months with data
@@ -1239,7 +1257,6 @@ class SecureCareService {
         ORDER BY e.secureCareAwardedDate DESC
       `;
       
-      console.log('Recent Activity Query:', query);
       const result = await request.query(query);
       return result.recordset.map(row => ({
         employee: row.employee,

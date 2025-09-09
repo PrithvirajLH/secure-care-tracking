@@ -1,5 +1,4 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback } from "react";
-import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -99,8 +98,6 @@ export default function Training() {
   const [tempAdvisor, setTempAdvisor] = useState<string>("");
   const [notesDropdownOpen, setNotesDropdownOpen] = useState<string | null>(null);
   const [advisorDropdownOpen, setAdvisorDropdownOpen] = useState<string | null>(null);
-  const [notesPopupPosition, setNotesPopupPosition] = useState<{x: number, y: number, positionAbove?: boolean} | null>(null);
-  const [advisorPopupPosition, setAdvisorPopupPosition] = useState<{x: number, y: number, positionAbove?: boolean} | null>(null);
   const [scheduledDates, setScheduledDates] = useState<{[key: string]: Date}>({});
   const [completedDates, setCompletedDates] = useState<{[key: string]: Date}>({});
   const [openDatePicker, setOpenDatePicker] = useState<string | null>(null);
@@ -112,18 +109,17 @@ export default function Training() {
       if (!target.closest('[data-dropdown]') && !target.closest('.date-picker-popup')) {
         setNotesDropdownOpen(null);
         setAdvisorDropdownOpen(null);
-        setNotesPopupPosition(null);
-        setAdvisorPopupPosition(null);
-        // Don't clear popupPosition if date picker is open
-        if (!openDatePicker) {
-          setPopupPosition(null);
-        }
+        // Clear all popup states when clicking outside
+        setPopupPosition(null);
+        setCurrentPopupEmployee(null);
+        setCurrentPopupFieldKey(null);
+        setOpenDatePicker(null);
       }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [openDatePicker]);
+  }, []);
   const [isApproving, setIsApproving] = useState<boolean>(false);
   const [isRejecting, setIsRejecting] = useState<boolean>(false);
   const [popupPosition, setPopupPosition] = useState<{x: number, y: number, positionAbove?: boolean} | null>(null);
@@ -1196,59 +1192,35 @@ export default function Training() {
                                    return (
                                      <TableCell key={colIndex} className="py-2 px-4 w-[12%] text-center">
                                        <div className="flex justify-center">
-                                         <div className="relative" data-dropdown>
+                                         <div className="dropdown-container" data-dropdown>
                                            <StatusBadge
                                              variant="notes"
                                              icon={MessageSquare}
                                              text={selectedNoteOption?.label || 'Add Notes'}
-                                             onClick={(e) => {
-                                               const rect = e.currentTarget.getBoundingClientRect();
-                                               const viewportHeight = window.innerHeight;
-                                               const dropdownHeight = 200; // Approximate dropdown height
-                                               const spaceBelow = viewportHeight - rect.bottom;
-                                               const spaceAbove = rect.top;
-                                               
-                                               // Position above if not enough space below, otherwise below
-                                               const shouldPositionAbove = spaceBelow < dropdownHeight && spaceAbove > dropdownHeight;
-                                               
-                                               setNotesPopupPosition({
-                                                 x: rect.left + rect.width / 2,
-                                                 y: shouldPositionAbove ? rect.top - 8 : rect.bottom + 8,
-                                                 positionAbove: shouldPositionAbove
-                                               });
+                                             onClick={() => {
                                                setNotesDropdownOpen(isNotesDropdownOpen ? null : employee.employeeId.toString());
                                              }}
                                            />
+                                           
+                                           {/* Notes Dropdown */}
+                                           {isNotesDropdownOpen && (
+                                             <div className="dropdown-menu min-w-[180px] max-h-[250px]">
+                                               {NOTES_OPTIONS.map((option) => (
+                                                 <div
+                                                   key={option.value}
+                                                   className="px-3 py-2 text-sm cursor-pointer hover:bg-cyan-50 rounded transition-colors"
+                                                   onClick={() => {
+                                                     handleSaveNotes(employee.employeeId.toString(), option.value);
+                                                     setNotesDropdownOpen(null);
+                                                   }}
+                                                 >
+                                                   {option.label}
+                                                 </div>
+                                               ))}
+                                             </div>
+                                           )}
                                          </div>
                                        </div>
-                                       
-                                       {/* Floating Notes Dropdown */}
-                                       {isNotesDropdownOpen && notesPopupPosition && createPortal(
-                                         <div 
-                                           className="fixed z-[9999] bg-white border border-cyan-200 rounded-lg shadow-xl p-1 min-w-[180px] max-h-[200px] overflow-y-auto"
-                                           style={{
-                                             left: notesPopupPosition.x - 90, // Center the dropdown
-                                             top: notesPopupPosition.positionAbove ? notesPopupPosition.y - 200 : notesPopupPosition.y,
-                                             transform: notesPopupPosition.positionAbove ? 'translateY(-100%)' : 'none'
-                                           }}
-                                           data-dropdown
-                                         >
-                                           {NOTES_OPTIONS.map((option) => (
-                                             <div
-                                               key={option.value}
-                                               className="px-3 py-2 text-sm cursor-pointer hover:bg-cyan-50 rounded transition-colors"
-                                               onClick={() => {
-                                                 handleSaveNotes(employee.employeeId.toString(), option.value);
-                                                 setNotesDropdownOpen(null);
-                                                 setNotesPopupPosition(null);
-                                               }}
-                                             >
-                                               {option.label}
-                                             </div>
-                                           ))}
-                                         </div>,
-                                         document.body
-                                       )}
                                      </TableCell>
                                    );
                                 } else if (column === 'Advisor') { // Enhanced Advisor column with badge UI and floating dropdown
@@ -1258,69 +1230,44 @@ export default function Training() {
                                    return (
                                      <TableCell key={colIndex} className="py-2 px-4 w-[12%] text-center">
                                        <div className="flex justify-center">
-                                         <div className="relative" data-dropdown>
+                                         <div className="dropdown-container" data-dropdown>
                                            <StatusBadge
                                              variant="advisor"
                                              icon={UserCheck}
                                              text={employee.advisorName || currentAdvisor?.fullName || 'Add advisor'}
-                                             onClick={(e) => {
-                                               const rect = e.currentTarget.getBoundingClientRect();
-                                               const viewportHeight = window.innerHeight;
-                                               const dropdownHeight = 250; // Approximate dropdown height (larger for advisor list)
-                                               const spaceBelow = viewportHeight - rect.bottom;
-                                               const spaceAbove = rect.top;
-                                               
-                                               // Position above if not enough space below, otherwise below
-                                               const shouldPositionAbove = spaceBelow < dropdownHeight && spaceAbove > dropdownHeight;
-                                               
-                                               setAdvisorPopupPosition({
-                                                 x: rect.left + rect.width / 2,
-                                                 y: shouldPositionAbove ? rect.top - 8 : rect.bottom + 8,
-                                                 positionAbove: shouldPositionAbove
-                                               });
+                                             onClick={() => {
                                                setAdvisorDropdownOpen(isAdvisorDropdownOpen ? null : employee.employeeId.toString());
                                              }}
                                            />
+                                           
+                                           {/* Advisor Dropdown */}
+                                           {isAdvisorDropdownOpen && (
+                                             <div className="dropdown-menu advisor-dropdown min-w-[200px]">
+                                               <div
+                                                 className="text-sm cursor-pointer hover:bg-purple-50 transition-colors"
+                                                 onClick={() => {
+                                                   handleSaveAdvisor(employee.employeeId.toString(), 'none');
+                                                   setAdvisorDropdownOpen(null);
+                                                 }}
+                                               >
+                                                 No advisor assigned
+                                               </div>
+                                               {advisors.map((advisor) => (
+                                                 <div
+                                                   key={advisor.advisorId}
+                                                   className="text-sm cursor-pointer hover:bg-purple-50 transition-colors"
+                                                   onClick={() => {
+                                                     handleSaveAdvisor(employee.employeeId.toString(), advisor.advisorId.toString());
+                                                     setAdvisorDropdownOpen(null);
+                                                   }}
+                                                 >
+                                                   {advisor.fullName}
+                                                 </div>
+                                               ))}
+                                             </div>
+                                           )}
                                          </div>
                                        </div>
-                                       
-                                       {/* Floating Advisor Dropdown */}
-                                       {isAdvisorDropdownOpen && advisorPopupPosition && createPortal(
-                                         <div 
-                                           className="fixed z-[9999] bg-white border border-purple-200 rounded-lg shadow-xl p-1 min-w-[200px] max-h-[250px] overflow-y-auto"
-                                           style={{
-                                             left: advisorPopupPosition.x - 100, // Center the dropdown
-                                             top: advisorPopupPosition.positionAbove ? advisorPopupPosition.y - 250 : advisorPopupPosition.y,
-                                             transform: advisorPopupPosition.positionAbove ? 'translateY(-100%)' : 'none'
-                                           }}
-                                           data-dropdown
-                                         >
-                                           <div
-                                             className="px-3 py-2 text-sm cursor-pointer hover:bg-purple-50 rounded transition-colors"
-                                             onClick={() => {
-                                               handleSaveAdvisor(employee.employeeId.toString(), 'none');
-                                               setAdvisorDropdownOpen(null);
-                                               setAdvisorPopupPosition(null);
-                                             }}
-                                           >
-                                             No advisor assigned
-                                           </div>
-                                           {advisors.map((advisor) => (
-                                             <div
-                                               key={advisor.advisorId}
-                                               className="px-3 py-2 text-sm cursor-pointer hover:bg-purple-50 rounded transition-colors"
-                                               onClick={() => {
-                                                 handleSaveAdvisor(employee.employeeId.toString(), advisor.advisorId.toString());
-                                                 setAdvisorDropdownOpen(null);
-                                                 setAdvisorPopupPosition(null);
-                                               }}
-                                             >
-                                               {advisor.fullName}
-                                             </div>
-                                           ))}
-                                         </div>,
-                                         document.body
-                                       )}
                                      </TableCell>
                                    );
                                 } else { // Training requirement columns
@@ -1368,12 +1315,12 @@ export default function Training() {
        </div>
        
        {/* Portal popup for conference approval */}
-       {openDatePicker && popupPosition && currentPopupEmployee && openDatePicker.includes('conferenceCompleted') && createPortal(
+       {openDatePicker && popupPosition && currentPopupEmployee && openDatePicker.includes('conferenceCompleted') && (
          <div 
-           className="fixed z-[9999] bg-white border border-gray-300 rounded-lg shadow-xl p-3 date-picker-popup"
+           className="fixed z-[9999] bg-white border border-gray-300 rounded-lg shadow-xl p-3 date-picker-popup modal-container"
            style={{
-             left: `${popupPosition.x}px`,
-             top: `${popupPosition.y}px`,
+             left: Math.max(10, Math.min(popupPosition.x, window.innerWidth - 200)), // Keep within viewport
+             top: Math.min(popupPosition.y, window.innerHeight - 150), // Keep within viewport
              transform: 'translateX(-50%)'
            }}
          >
@@ -1439,20 +1386,19 @@ export default function Training() {
                {isRejectingConference ? 'Rejecting...' : 'Reject'}
              </button>
            </div>
-         </div>,
-         document.body
+         </div>
        )}
        
        {/* Portal popup for Mark Complete/Reschedule */}
        {popupPosition && currentPopupEmployee && currentPopupFieldKey && 
         (!openDatePicker || (!openDatePicker.includes('conferenceCompleted') && !openDatePicker.startsWith('reschedule-'))) &&
         ScheduleFieldMapping[currentPopupFieldKey] && 
-        currentPopupEmployee[ScheduleFieldMapping[currentPopupFieldKey]] && createPortal(
+        currentPopupEmployee[ScheduleFieldMapping[currentPopupFieldKey]] && (
          <div 
-           className="fixed z-[9999] bg-white border border-gray-300 rounded-lg shadow-xl p-3 date-picker-popup"
+           className="fixed z-[9999] bg-white border border-gray-300 rounded-lg shadow-xl p-3 date-picker-popup modal-container"
            style={{
-             left: `${popupPosition.x}px`,
-             top: `${popupPosition.y}px`,
+             left: Math.max(10, Math.min(popupPosition.x, window.innerWidth - 200)), // Keep within viewport
+             top: Math.min(popupPosition.y, window.innerHeight - 120), // Keep within viewport - ensure "Reschedule" is visible
              transform: 'translateX(-50%)'
            }}
          >
@@ -1495,13 +1441,12 @@ export default function Training() {
                {isRescheduling ? 'Rescheduling...' : 'Reschedule'}
              </button>
            </div>
-         </div>,
-         document.body
+         </div>
        )}
        
        {/* Portal popup for Reschedule Date Picker */}
        {openDatePicker && popupPosition && currentPopupEmployee && currentPopupFieldKey && 
-        openDatePicker.startsWith('reschedule-') && createPortal(
+        openDatePicker.startsWith('reschedule-') && (
          <div 
            className="fixed z-[9999] bg-white border border-gray-300 rounded-lg shadow-xl p-3 date-picker-popup"
            style={{
@@ -1532,8 +1477,7 @@ export default function Training() {
              }}
              placeholder="Reschedule date"
            />
-         </div>,
-         document.body
+         </div>
        )}
        
        {/* Portal popup for Schedule Date Picker */}
@@ -1548,7 +1492,7 @@ export default function Training() {
          
          
          return shouldRender;
-       })() && createPortal(
+       })() && (
          <div 
            className="fixed z-[9999] bg-white border border-gray-300 rounded-lg shadow-xl p-3 date-picker-popup"
            style={{
@@ -1581,8 +1525,7 @@ export default function Training() {
              }}
              placeholder="Schedule date"
            />
-         </div>,
-         document.body
+         </div>
        )}
      </TooltipProvider>
    );

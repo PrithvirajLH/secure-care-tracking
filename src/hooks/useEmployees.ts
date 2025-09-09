@@ -32,8 +32,8 @@ export const useEmployees = (filters: EmployeeFilters, pageSize: number = 10) =>
         limit: pageSize
       });
     },
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
+    staleTime: 2 * 60 * 1000, // 2 minutes for better performance with 15k records
+    gcTime: 5 * 60 * 1000, // 5 minutes
   });
 
   const totalPages = data?.pagination?.totalPages || 0;
@@ -72,8 +72,8 @@ export const useTrainingEmployees = (filters: EmployeeFilters, pageSize: number 
         limit: pageSize
       });
     },
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
+    staleTime: 2 * 60 * 1000, // 2 minutes for better performance with 15k records
+    gcTime: 5 * 60 * 1000, // 5 minutes
   });
 
   const totalPages = data?.pagination?.totalPages || 0;
