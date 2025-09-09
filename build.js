@@ -284,6 +284,32 @@ For support, contact the SecureCare development team.
 fs.writeFileSync(path.join(backendDir, 'README.md'), productionReadme);
 console.log('✅ Production README created');
 
+// Step 8: Copy server.js and package.json to root for Azure
+console.log('📁 Copying server files to root...');
+try {
+  // Copy server.js to root
+  const serverSrc = path.join(backendDir, 'server.js');
+  const serverDest = path.join(__dirname, 'server.js');
+  if (fs.existsSync(serverSrc)) {
+    fs.copyFileSync(serverSrc, serverDest);
+    console.log('✅ server.js copied to root');
+  } else {
+    console.log('❌ server.js not found in backend directory');
+  }
+  
+  // Copy package.json to root
+  const packageSrc = path.join(backendDir, 'package.json');
+  const packageDest = path.join(__dirname, 'package.json');
+  if (fs.existsSync(packageSrc)) {
+    fs.copyFileSync(packageSrc, packageDest);
+    console.log('✅ package.json copied to root');
+  } else {
+    console.log('❌ package.json not found in backend directory');
+  }
+} catch (error) {
+  console.error('❌ Error copying files to root:', error.message);
+}
+
 console.log('\n🎉 Build completed successfully!');
 console.log('\n📁 Production files are in the "backend" directory');
 console.log('\n🚀 To run the production app:');

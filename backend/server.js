@@ -1,7 +1,6 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const performanceMiddleware = require('./middleware/performance');
 require('dotenv').config();
 
 const app = express();
@@ -11,7 +10,6 @@ const PORT = process.env.PORT || 8080;
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(performanceMiddleware); // Performance monitoring
 
 // Configure MIME types for proper static file serving
 express.static.mime.define({
