@@ -26,13 +26,14 @@ function copyFile(src, dest) {
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const backendDir = path.join(__dirname, 'backend');
 
 console.log('🚀 Building SecureCare Application...\n');
 
 // Step 1: Build Frontend (now outputs directly to backend/dist)
 console.log('📦 Building Frontend...');
 try {
-  execSync('npm run build', { stdio: 'inherit', cwd: __dirname });
+  execSync('npx vite build', { stdio: 'inherit', cwd: __dirname });
   console.log('✅ Frontend build completed (output to backend/dist)\n');
 } catch (error) {
   console.error('❌ Frontend build failed:', error.message);
