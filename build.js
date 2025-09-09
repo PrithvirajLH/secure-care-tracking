@@ -297,15 +297,30 @@ try {
     console.log('❌ server.js not found in backend directory');
   }
   
-  // Copy package.json to root
-  const packageSrc = path.join(backendDir, 'package.json');
+  // Create a production package.json for root (don't overwrite the original)
+  const productionPackage = {
+    "name": "securecare-app",
+    "version": "1.0.0",
+    "description": "SecureCare Training Management System",
+    "main": "server.js",
+    "scripts": {
+      "start": "node server.js"
+    },
+    "dependencies": {
+      "cors": "^2.8.5",
+      "dotenv": "^16.3.1",
+      "express": "^4.18.2",
+      "mssql": "^10.0.4",
+      "csv-parse": "^5.5.6"
+    },
+    "engines": {
+      "node": ">=18.0.0"
+    }
+  };
+  
   const packageDest = path.join(__dirname, 'package.json');
-  if (fs.existsSync(packageSrc)) {
-    fs.copyFileSync(packageSrc, packageDest);
-    console.log('✅ package.json copied to root');
-  } else {
-    console.log('❌ package.json not found in backend directory');
-  }
+  fs.writeFileSync(packageDest, JSON.stringify(productionPackage, null, 2));
+  console.log('✅ production package.json created in root');
 } catch (error) {
   console.error('❌ Error copying files to root:', error.message);
 }
