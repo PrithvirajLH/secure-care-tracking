@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DatePicker } from "@/components/ui/date-picker";
+import { Calendar as InlineCalendar } from "@/components/ui/calendar";
 import { CompactPagination } from "@/components/ui/compact-pagination";
 import { 
   Users, 
@@ -1455,28 +1456,24 @@ export default function Training() {
              transform: 'translateX(-50%)'
            }}
          >
-           <DatePicker
-             date={parseDate(currentPopupEmployee[ScheduleFieldMapping[currentPopupFieldKey]]) || undefined}
-             onDateChange={(date) => {
-               if (date) {
-                 // Store data before clearing state
-                 const employeeId = currentPopupEmployee?.employeeId;
-                 const requirementKey = currentPopupFieldKey;
-                 
-                 // Close the popup immediately for smooth UX
-                 setOpenDatePicker(null);
-                 setPopupPosition(null);
-                 setCurrentPopupEmployee(null);
-                 setCurrentPopupFieldKey(null);
-                 
-                 // Reschedule the training
-                 if (employeeId && requirementKey) {
-                   rescheduleTraining({ employeeId, requirementKey, date });
-                 }
-               }
-             }}
-             placeholder="Reschedule date"
-           />
+          <InlineCalendar
+            mode="single"
+            selected={parseDate(currentPopupEmployee[ScheduleFieldMapping[currentPopupFieldKey]]) || undefined}
+            onSelect={(date) => {
+              if (date) {
+                const employeeId = currentPopupEmployee?.employeeId;
+                const requirementKey = currentPopupFieldKey;
+                setOpenDatePicker(null);
+                setPopupPosition(null);
+                setCurrentPopupEmployee(null);
+                setCurrentPopupFieldKey(null);
+                if (employeeId && requirementKey) {
+                  rescheduleTraining({ employeeId, requirementKey, date });
+                }
+              }
+            }}
+            initialFocus
+          />
          </div>
        )}
        
@@ -1501,30 +1498,26 @@ export default function Training() {
              transform: 'translateX(-50%)'
            }}
          >
-           <DatePicker
-             date={undefined}
-             onDateChange={(date) => {
-               if (date) {
-                 // Store data before clearing state
-                 const employeeId = currentPopupEmployee?.employeeId;
-                 const requirementKey = currentPopupFieldKey;
-                 
-                 // Close the popup immediately for smooth UX
-                 setOpenDatePicker(null);
-                 setPopupPosition(null);
-                 setCurrentPopupEmployee(null);
-                 setCurrentPopupFieldKey(null);
-                 
-                 // Schedule the training
-                 if (employeeId && requirementKey) {
-                   scheduleTraining({ employeeId, requirementKey, date });
-                 } else {
-                   console.error('Missing data for scheduling:', { employeeId, requirementKey, date });
-                 }
-               }
-             }}
-             placeholder="Schedule date"
-           />
+          <InlineCalendar
+            mode="single"
+            selected={undefined}
+            onSelect={(date) => {
+              if (date) {
+                const employeeId = currentPopupEmployee?.employeeId;
+                const requirementKey = currentPopupFieldKey;
+                setOpenDatePicker(null);
+                setPopupPosition(null);
+                setCurrentPopupEmployee(null);
+                setCurrentPopupFieldKey(null);
+                if (employeeId && requirementKey) {
+                  scheduleTraining({ employeeId, requirementKey, date });
+                } else {
+                  console.error('Missing data for scheduling:', { employeeId, requirementKey, date });
+                }
+              }
+            }}
+            initialFocus
+          />
          </div>
        )}
      </TooltipProvider>

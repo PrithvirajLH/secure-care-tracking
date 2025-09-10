@@ -181,6 +181,10 @@ export const useTrainingData = () => {
     scheduleTraining: scheduleTrainingMutation.mutate,
     completeTraining: completeTrainingMutation.mutate,
     rescheduleTraining: rescheduleTrainingMutation.mutate,
+    // Async variants for awaiting in UI flows
+    scheduleTrainingAsync: scheduleTrainingMutation.mutateAsync,
+    completeTrainingAsync: completeTrainingMutation.mutateAsync,
+    rescheduleTrainingAsync: rescheduleTrainingMutation.mutateAsync,
     awardTraining: awardTrainingMutation.mutate,
     approveConference: approveConferenceMutation.mutate,
     rejectConference: rejectConferenceMutation.mutate,
