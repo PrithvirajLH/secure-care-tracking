@@ -40,11 +40,19 @@ const getRequirementDisplayName = (requirementKey: string): string => {
   return requirementMap[requirementKey] || requirementKey;
 };
 
+// Helper function to fix date display (adds 1 day to compensate for timezone issues)
+const formatActivityDate = (dateString: string): string => {
+  const date = new Date(dateString);
+  // Add 1 day to compensate for timezone conversion issues
+  const adjustedDate = new Date(date.getTime() + 24 * 60 * 60 * 1000);
+  return adjustedDate.toLocaleDateString();
+};
+
 export default function Dashboard() {
   const { state } = useApp();
 
   // For Dashboard, we need all employee records to calculate accurate stats
-  const { employees: apiEmployees, isLoading, error, isFetching } = useTrainingEmployees({ level: 'all' }, 100);
+  const { employees: apiEmployees, isLoading, error, isFetching, refetch } = useTrainingEmployees({ level: 'all' }, 100);
   // Note: allTrainingData not available in useTrainingData hook, using employee data instead
   const isLoadingAll = false;
 
@@ -247,7 +255,7 @@ export default function Dashboard() {
   const recentActivity = useMemo(() => {
     const activities: Array<{
       id: string;
-      type: 'awaiting' | 'scheduled' | 'completed' | 'rescheduled' | 'awarded' | 'rejected';
+      type: 'awaiting' | 'scheduled' | 'completed' | 'rescheduled' | 'awarded' | 'conference';
       employeeName: string;
       level: string;
       date: string;
@@ -260,19 +268,59 @@ export default function Dashboard() {
       const employeeName = employee.Employee || employee.name || 'Unknown Employee';
       const level = employee.awardType || 'Unknown Level';
       
-      // Awaiting approval
-      if (employee.awaiting === 1 || employee.awaiting === true) {
+
+      // Relias Training Completion
+      if (employee.completedDate) {
         activities.push({
-          id: `${employee.employeeId}-awaiting`,
-          type: 'awaiting',
+          id: `${employee.employeeId}-relias-completed`,
+          type: 'completed',
           employeeName,
           level,
-          date: employee.conferenceCompleted || new Date().toISOString().split('T')[0],
-          description: `Awaiting approval for ${level}`,
-          icon: AlertCircle,
-          color: 'text-amber-600'
+          date: employee.completedDate,
+          description: `Completed Relias training for ${level}`,
+          icon: CheckCircle,
+          color: 'text-green-600'
         });
       }
+
+      // Conference Completion Activities
+      if (employee.conferenceCompleted) {
+        if (employee.awaiting === 1 || employee.awaiting === true) {
+          activities.push({
+            id: `${employee.employeeId}-conference-awaiting`,
+            type: 'awaiting',
+            employeeName,
+            level,
+            date: employee.conferenceCompleted,
+            description: `Conference completed, awaiting approval for ${level}`,
+            icon: AlertCircle,
+            color: 'text-amber-600'
+          });
+        } else if (employee.awaiting === false || employee.awaiting === 0) {
+          activities.push({
+            id: `${employee.employeeId}-conference-approved`,
+            type: 'conference',
+            employeeName,
+            level,
+            date: employee.conferenceCompleted,
+            description: `Conference approved for ${level}`,
+            icon: CheckCircle,
+            color: 'text-green-600'
+          });
+        } else if (employee.awaiting === null) {
+          activities.push({
+            id: `${employee.employeeId}-conference-rejected`,
+            type: 'rejected',
+            employeeName,
+            level,
+            date: employee.conferenceCompleted,
+            description: `Conference rejected for ${level}`,
+            icon: AlertCircle,
+            color: 'text-red-600'
+          });
+        }
+      }
+
 
       // Scheduled activities
       const scheduledFields = [
@@ -339,26 +387,14 @@ export default function Dashboard() {
           color: 'text-purple-600'
         });
       }
-
-      // Rejected
-      if (employee.awaiting === null) {
-        activities.push({
-          id: `${employee.employeeId}-rejected`,
-          type: 'rejected',
-          employeeName,
-          level,
-          date: employee.conferenceCompleted || new Date().toISOString().split('T')[0],
-          description: `Conference rejected for ${level}`,
-          icon: AlertCircle,
-          color: 'text-red-600'
-        });
-      }
     });
 
-    // Sort by date (most recent first) and take top 5
-    return activities
+    // Sort by date (most recent first) and take top 50 to ensure we have enough for each group
+    const sortedActivities = activities
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-      .slice(0, 5);
+      .slice(0, 50);
+
+    return sortedActivities;
   }, [employees]);
 
   // Loading state
@@ -621,7 +657,7 @@ export default function Dashboard() {
             Recent Activity
           </CardTitle>
           <p className="text-sm text-gray-600 mt-1">
-            Latest 5 activities across all training levels
+            Latest activities grouped by type across all training levels
           </p>
         </CardHeader>
         <CardContent>
@@ -633,30 +669,117 @@ export default function Dashboard() {
               </div>
             </div>
           ) : (
-            <div className="space-y-3">
-              {recentActivity.map((activity, index) => {
-                const IconComponent = activity.icon;
+            <div className="space-y-4">
+              {/* Group activities by type - Horizontal Layout */}
+              {(() => {
+                const groupedActivities = recentActivity.reduce((acc, activity) => {
+                  if (!acc[activity.type]) {
+                    acc[activity.type] = [];
+                  }
+                  acc[activity.type].push(activity);
+                  return acc;
+                }, {} as Record<string, typeof recentActivity>);
+
+                // Sort each group by date (most recent first) and take latest 5
+                Object.keys(groupedActivities).forEach(type => {
+                  groupedActivities[type] = groupedActivities[type]
+                    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                    .slice(0, 5);
+                });
+
+                const groupConfig = {
+                  scheduled: { title: 'Scheduled', icon: Calendar, color: 'blue', bgColor: 'from-blue-50 to-blue-100', borderColor: 'border-blue-200', textColor: 'text-blue-700' },
+                  completed: { title: 'Completed', icon: CheckCircle, color: 'green', bgColor: 'from-green-50 to-green-100', borderColor: 'border-green-200', textColor: 'text-green-700' },
+                  conference: { title: 'Conference Approved', icon: CheckCircle, color: 'emerald', bgColor: 'from-emerald-50 to-emerald-100', borderColor: 'border-emerald-200', textColor: 'text-emerald-700' },
+                  awaiting: { title: 'Awaiting Approval', icon: AlertCircle, color: 'amber', bgColor: 'from-amber-50 to-amber-100', borderColor: 'border-amber-200', textColor: 'text-amber-700' },
+                  awarded: { title: 'Awarded', icon: Award, color: 'purple', bgColor: 'from-purple-50 to-purple-100', borderColor: 'border-purple-200', textColor: 'text-purple-700' }
+                };
+
+                // Show all groups, even if empty
+                const allGroupTypes = ['scheduled', 'completed', 'conference', 'awaiting', 'awarded'];
+                const activityGroups = allGroupTypes.map(type => {
+                  const activities = groupedActivities[type] || [];
+                  const config = groupConfig[type as keyof typeof groupConfig];
+                  return { type, activities, config };
+                });
+
                 return (
-                  <div key={activity.id} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                    <div className={`flex-shrink-0 w-8 h-8 rounded-full bg-white flex items-center justify-center border-2 ${activity.color.replace('text-', 'border-')}`}>
-                      <IconComponent className={`w-4 h-4 ${activity.color}`} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium text-gray-900 truncate">
-                          {activity.employeeName}
-                        </p>
-                        <span className="text-xs text-gray-500 flex-shrink-0 ml-2">
-                          {new Date(activity.date).toLocaleDateString()}
-                        </span>
-                      </div>
-                      <p className="text-sm text-gray-600 mt-1">
-                        {activity.description}
-                      </p>
-                    </div>
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+                    {activityGroups.map(({ type, activities, config }, groupIndex) => {
+                      const IconComponent = config.icon;
+                      
+                      return (
+                        <motion.div
+                          key={type}
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.3, delay: groupIndex * 0.1 }}
+                          className={`bg-gradient-to-br ${config.bgColor} ${config.borderColor} border rounded-xl p-4 h-fit`}
+                        >
+                          <div className="flex items-center gap-3 mb-4">
+                            <div className={`w-10 h-10 rounded-full bg-white flex items-center justify-center border-2 border-${config.color}-300 shadow-sm`}>
+                              <IconComponent className={`w-5 h-5 text-${config.color}-600`} />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <h3 className={`font-semibold ${config.textColor} text-sm`}>{config.title}</h3>
+                              <p className="text-xs text-gray-600">{activities.length} {activities.length === 1 ? 'item' : 'items'}</p>
+                            </div>
+                          </div>
+                          
+                          <div className="space-y-2">
+                            {activities.length === 0 ? (
+                              <div className="text-center py-4">
+                                <div className={`w-8 h-8 rounded-full bg-${config.color}-100 flex items-center justify-center mx-auto mb-2`}>
+                                  <IconComponent className={`w-4 h-4 text-${config.color}-400`} />
+                                </div>
+                                <p className="text-xs text-gray-500">No recent activities</p>
+                              </div>
+                            ) : (
+                              activities.slice(0, 5).map((activity, index) => {
+                                const ActivityIcon = activity.icon;
+                                return (
+                                  <motion.div
+                                    key={activity.id}
+                                    initial={{ opacity: 0, scale: 0.95 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    transition={{ duration: 0.2, delay: index * 0.05 }}
+                                    className="bg-white/70 backdrop-blur-sm rounded-lg p-2.5 shadow-sm hover:shadow-md transition-all duration-200 border border-white/50"
+                                  >
+                                    <div className="flex items-start gap-2">
+                                      <div className={`flex-shrink-0 w-5 h-5 rounded-full bg-${config.color}-100 flex items-center justify-center`}>
+                                        <ActivityIcon className={`w-2.5 h-2.5 text-${config.color}-600`} />
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-xs font-medium text-gray-900 truncate">
+                                          {activity.employeeName}
+                                        </p>
+                                        <p className="text-xs text-gray-600 mt-0.5">
+                                          {activity.description}
+                                        </p>
+                                        <p className="text-xs text-gray-500 mt-0.5">
+                                          {formatActivityDate(activity.date)}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </motion.div>
+                                );
+                              })
+                            )}
+                          </div>
+                          
+                          {activities.length > 5 && (
+                            <div className="mt-3 text-center">
+                              <span className="text-xs text-gray-500">
+                                +{activities.length - 5} more {activities.length - 5 === 1 ? 'item' : 'items'}
+                              </span>
+                            </div>
+                          )}
+                        </motion.div>
+                      );
+                    })}
                   </div>
                 );
-              })}
+              })()}
             </div>
           )}
         </CardContent>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { fmt, parseDate } from "@/config/awardTypes";
+import { fmt, parseDate, NOTES_OPTIONS } from "@/config/awardTypes";
 import { motion, AnimatePresence } from "framer-motion";
 import { ShineBorder } from "@/components/magicui/shine-border";
 import { 
@@ -160,12 +160,15 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
   };
 
   // Handle notes update
-  const handleNotesUpdate = async () => {
-    if (notes === (currentEmployee.notes || "")) return; // No changes
+  const handleNotesUpdate = async (newNotes: string) => {
+    const currentNotes = currentEmployee.notes || "";
     
+    if (newNotes === currentNotes) return; // No changes
+    
+    setNotes(newNotes); // Update UI immediately
     setIsUpdatingNotes(true);
     try {
-      await trainingAPI.updateEmployeeNotes(currentEmployee.employeeId.toString(), notes);
+      await trainingAPI.updateEmployeeNotes(currentEmployee.employeeId.toString(), newNotes);
       
       // Invalidate relevant queries to refresh data
       queryClient.invalidateQueries({ queryKey: trainingKeys.employee(currentEmployee.employeeId.toString()) });
@@ -177,7 +180,7 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
     } catch (error) {
       console.error('Failed to update notes:', error);
       toast.error('Failed to update notes');
-      setNotes(currentEmployee.notes || ""); // Revert on error
+      setNotes(currentNotes); // Revert on error
     } finally {
       setIsUpdatingNotes(false);
     }
@@ -830,264 +833,493 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
         <DialogTrigger asChild>
           {children}
         </DialogTrigger>
-        <DialogContent className="max-w-4xl modal-container p-0">
-        <div className="modal-content p-6">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-3">
-            <User className="w-6 h-6" />
-            Employee Details
-          </DialogTitle>
+        <DialogContent className="max-w-5xl modal-container p-0 overflow-hidden">
+        <div className="modal-content p-0">
+        <DialogHeader className="relative bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-600 p-6 text-white">
+          <div className="absolute inset-0 bg-black/10"></div>
+          <div className="relative z-10">
+            <DialogTitle className="flex items-center gap-3 text-2xl font-bold">
+              <motion.div
+                initial={{ scale: 0, rotate: -180 }}
+                animate={{ scale: 1, rotate: 0 }}
+                transition={{ 
+                  type: "spring", 
+                  bounce: 0.4, 
+                  duration: 0.8,
+                  delay: 0.2
+                }}
+                className="p-2 bg-white/20 rounded-full backdrop-blur-sm"
+              >
+                <User className="w-6 h-6" />
+              </motion.div>
+              <motion.span
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.4, duration: 0.6 }}
+              >
+                Employee Details
+              </motion.span>
+            </DialogTitle>
+            <DialogDescription asChild>
+              <motion.p
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.6, duration: 0.6 }}
+                className="text-white/90 mt-2"
+              >
+                View and manage employee training progress and assignments
+              </motion.p>
+            </DialogDescription>
+          </div>
         </DialogHeader>
         
         {isLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto mb-4"></div>
-              <p className="text-muted-foreground">Loading employee data...</p>
-            </div>
+          <div className="flex items-center justify-center py-16">
+            <motion.div 
+              className="text-center"
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.5 }}
+            >
+              <motion.div 
+                className="relative"
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+              >
+                <div className="w-16 h-16 border-4 border-purple-200 rounded-full"></div>
+                <div className="absolute top-0 left-0 w-16 h-16 border-4 border-transparent border-t-purple-600 rounded-full"></div>
+              </motion.div>
+              <motion.p 
+                className="text-muted-foreground mt-4 text-lg"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.3 }}
+              >
+                Loading employee data...
+              </motion.p>
+            </motion.div>
           </div>
         ) : (
-        <div className="space-y-6">
+        <motion.div 
+          className="space-y-6 p-6"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2, duration: 0.6 }}
+        >
           {/* Employee Info */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span>{currentEmployee.name || (employee as any).Employee}</span>
-                <Badge variant="outline">{(employee as any).staffRoll || (employee as any).staffRoles || 'N/A'}</Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="flex items-center gap-2">
-                <Building className="w-4 h-4 text-muted-foreground" />
-                <span className="text-sm">{currentEmployee.facility || (employee as any).Facility}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-muted-foreground" />
-                <span className="text-sm">{currentEmployee.area || (employee as any).Area}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <User className="w-4 h-4 text-muted-foreground" />
-                <span className="text-sm">{(employee as any).employeeNumber || currentEmployee.employeeId}</span>
-              </div>
-            </CardContent>
-          </Card>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3, duration: 0.6 }}
+          >
+            <Card className="relative overflow-hidden border-0 shadow-xl bg-gradient-to-br from-white to-gray-50">
+              <div className="absolute inset-0 bg-gradient-to-r from-purple-500/5 via-blue-500/5 to-cyan-500/5"></div>
+              <CardHeader className="relative z-10 pb-4">
+                <CardTitle className="flex items-center justify-between">
+                  <motion.div
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.4, duration: 0.6 }}
+                    className="flex items-center gap-3"
+                  >
+                    <div className="p-2 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full">
+                      <User className="w-5 h-5 text-white" />
+                    </div>
+                    <span className="text-xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
+                      {currentEmployee.name || (employee as any).Employee}
+                    </span>
+                  </motion.div>
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.5, duration: 0.6 }}
+                  >
+                    <Badge className="bg-gradient-to-r from-purple-500 to-blue-500 text-white border-0 px-3 py-1">
+                      {(employee as any).staffRoll || (employee as any).staffRoles || 'N/A'}
+                    </Badge>
+                  </motion.div>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="relative z-10 grid grid-cols-1 md:grid-cols-3 gap-6">
+                <motion.div 
+                  className="flex items-center gap-3 p-3 rounded-lg bg-white/50 backdrop-blur-sm border border-white/20"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.6, duration: 0.6 }}
+                  whileHover={{ scale: 1.02, backgroundColor: "rgba(255, 255, 255, 0.8)" }}
+                >
+                  <div className="p-2 bg-blue-100 rounded-full">
+                    <Building className="w-4 h-4 text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground font-medium">Facility</p>
+                    <p className="text-sm font-semibold">{currentEmployee.facility || (employee as any).Facility}</p>
+                  </div>
+                </motion.div>
+                <motion.div 
+                  className="flex items-center gap-3 p-3 rounded-lg bg-white/50 backdrop-blur-sm border border-white/20"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.7, duration: 0.6 }}
+                  whileHover={{ scale: 1.02, backgroundColor: "rgba(255, 255, 255, 0.8)" }}
+                >
+                  <div className="p-2 bg-green-100 rounded-full">
+                    <MapPin className="w-4 h-4 text-green-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground font-medium">Area</p>
+                    <p className="text-sm font-semibold">{currentEmployee.area || (employee as any).Area}</p>
+                  </div>
+                </motion.div>
+                <motion.div 
+                  className="flex items-center gap-3 p-3 rounded-lg bg-white/50 backdrop-blur-sm border border-white/20"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.8, duration: 0.6 }}
+                  whileHover={{ scale: 1.02, backgroundColor: "rgba(255, 255, 255, 0.8)" }}
+                >
+                  <div className="p-2 bg-purple-100 rounded-full">
+                    <User className="w-4 h-4 text-purple-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground font-medium">Employee ID</p>
+                    <p className="text-sm font-semibold">{(employee as any).employeeNumber || currentEmployee.employeeId}</p>
+                  </div>
+                </motion.div>
+              </CardContent>
+            </Card>
+          </motion.div>
 
           {/* Advisor and Notes Section */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <motion.div 
+            className="grid grid-cols-1 lg:grid-cols-2 gap-6"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.9, duration: 0.6 }}
+          >
             {/* Advisor Assignment */}
-            <Card className="relative">
-              <ShineBorder
-                borderWidth={1}
-                duration={20}
-                shineColor={["#8b5cf6", "#a855f7", "#c084fc"]}
-                className="rounded-lg"
-              />
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <UserCheck className="w-5 h-5 text-purple-600" />
-                  Advisor Assignment
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="advisor-select" className="text-sm font-medium">
-                    Assigned Advisor
-                  </Label>
-                  <Select
-                    value={selectedAdvisorId}
-                    onValueChange={handleAdvisorUpdate}
-                    disabled={isUpdatingAdvisor}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select an advisor" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">No advisor assigned</SelectItem>
-                      {advisors.map((advisor) => (
-                        <SelectItem key={advisor.advisorId} value={advisor.advisorId.toString()}>
-                          {advisor.fullName}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                {isUpdatingAdvisor && (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <div className="w-4 h-4 border-2 border-purple-600 border-t-transparent rounded-full animate-spin" />
-                    Updating advisor...
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 1.0, duration: 0.6 }}
+            >
+              <Card className="relative overflow-hidden border-0 shadow-xl bg-gradient-to-br from-white to-purple-50">
+                <ShineBorder
+                  borderWidth={2}
+                  duration={25}
+                  shineColor={["#8b5cf6", "#a855f7", "#c084fc"]}
+                  className="rounded-lg"
+                />
+                <CardHeader className="relative z-10">
+                  <CardTitle className="flex items-center gap-3">
+                    <motion.div
+                      initial={{ scale: 0, rotate: -180 }}
+                      animate={{ scale: 1, rotate: 0 }}
+                      transition={{ delay: 1.1, duration: 0.6 }}
+                      className="p-2 bg-gradient-to-r from-purple-500 to-purple-600 rounded-full"
+                    >
+                      <UserCheck className="w-5 h-5 text-white" />
+                    </motion.div>
+                    <span className="text-lg font-bold bg-gradient-to-r from-purple-600 to-purple-700 bg-clip-text text-transparent">
+                      Advisor Assignment
+                    </span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="relative z-10 space-y-4">
+                  <div className="space-y-3">
+                    <Label htmlFor="advisor-select" className="text-sm font-semibold text-gray-700">
+                      Assigned Advisor
+                    </Label>
+                    <Select
+                      value={selectedAdvisorId}
+                      onValueChange={handleAdvisorUpdate}
+                      disabled={isUpdatingAdvisor}
+                    >
+                      <SelectTrigger className="w-full border-2 border-purple-200 focus:border-purple-500 transition-colors">
+                        <SelectValue placeholder="Select an advisor" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No advisor assigned</SelectItem>
+                        {advisors.map((advisor) => (
+                          <SelectItem key={advisor.advisorId} value={advisor.advisorId.toString()}>
+                            {advisor.fullName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
-                )}
-              </CardContent>
-            </Card>
+                  {isUpdatingAdvisor && (
+                    <motion.div 
+                      className="flex items-center gap-3 p-3 rounded-lg bg-purple-50 border border-purple-200"
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.3 }}
+                    >
+                      <motion.div 
+                        className="w-5 h-5 border-2 border-purple-600 border-t-transparent rounded-full"
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                      />
+                      <span className="text-sm text-purple-700 font-medium">Updating advisor...</span>
+                    </motion.div>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
 
             {/* Notes Section */}
-            <Card className="relative">
-              <ShineBorder
-                borderWidth={1}
-                duration={20}
-                shineColor={["#06b6d4", "#0891b2", "#0e7490"]}
-                className="rounded-lg"
-              />
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <MessageSquare className="w-5 h-5 text-cyan-600" />
-                  Notes
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="notes-textarea" className="text-sm font-medium">
-                    Employee Notes
-                  </Label>
-                  <Textarea
-                    id="notes-textarea"
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    placeholder="Add notes about this currentEmployee..."
-                    className="min-h-[100px] resize-none"
-                    disabled={isUpdatingNotes}
-                  />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="text-xs text-muted-foreground">
-                    {notes.length} characters
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 1.1, duration: 0.6 }}
+            >
+              <Card className="relative overflow-hidden border-0 shadow-xl bg-gradient-to-br from-white to-cyan-50">
+                <ShineBorder
+                  borderWidth={2}
+                  duration={25}
+                  shineColor={["#06b6d4", "#0891b2", "#0e7490"]}
+                  className="rounded-lg"
+                />
+                <CardHeader className="relative z-10">
+                  <CardTitle className="flex items-center gap-3">
+                    <motion.div
+                      initial={{ scale: 0, rotate: -180 }}
+                      animate={{ scale: 1, rotate: 0 }}
+                      transition={{ delay: 1.2, duration: 0.6 }}
+                      className="p-2 bg-gradient-to-r from-cyan-500 to-cyan-600 rounded-full"
+                    >
+                      <MessageSquare className="w-5 h-5 text-white" />
+                    </motion.div>
+                    <span className="text-lg font-bold bg-gradient-to-r from-cyan-600 to-cyan-700 bg-clip-text text-transparent">
+                      Notes
+                    </span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="relative z-10 space-y-4">
+                  <div className="space-y-3">
+                    <Label htmlFor="notes-select" className="text-sm font-semibold text-gray-700">
+                      Employee Notes
+                    </Label>
+                    <Select
+                      value={notes}
+                      onValueChange={handleNotesUpdate}
+                      disabled={isUpdatingNotes}
+                    >
+                      <SelectTrigger className="w-full border-2 border-cyan-200 focus:border-cyan-500 transition-colors">
+                        <SelectValue placeholder="Select a note..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {NOTES_OPTIONS.filter(option => option.value !== '').map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
-                  <Button
-                    size="sm"
-                    onClick={handleNotesUpdate}
-                    disabled={isUpdatingNotes || notes === (currentEmployee.notes || "")}
-                    className="bg-cyan-600 hover:bg-cyan-700"
-                  >
-                    {isUpdatingNotes ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                        Saving...
-                      </>
-                    ) : (
-                      <>
-                        <Save className="w-4 h-4 mr-2" />
-                        Save Notes
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+                  {isUpdatingNotes && (
+                    <motion.div 
+                      className="flex items-center gap-3 p-3 rounded-lg bg-cyan-50 border border-cyan-200"
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.3 }}
+                    >
+                      <motion.div 
+                        className="w-5 h-5 border-2 border-cyan-600 border-t-transparent rounded-full"
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                      />
+                      <span className="text-sm text-cyan-700 font-medium">Updating notes...</span>
+                    </motion.div>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
+          </motion.div>
 
           {/* Training Progress */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Training Progress</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Tabs value={currentLevel} onValueChange={setCurrentLevel} className="space-y-4">
-                <div className="flex max-w-fit mx-auto border border-transparent rounded-full bg-white shadow-[0px_2px_3px_-1px_rgba(0,0,0,0.1),0px_1px_0px_0px_rgba(25,28,33,0.02),0px_0px_0px_1px_rgba(25,28,33,0.08)] px-6 py-3 items-center justify-center space-x-6 mb-6">
-                  {levels.map((level, idx) => {
-                    const isActive = currentLevel === level.key;
-                    return (
-                      <button
-                        key={`level-${idx}`}
-                        onClick={() => setCurrentLevel(level.key)}
-                        className="relative items-center flex space-x-2 transition-all duration-300 group"
-                      >
-                        <motion.div
-                          className={cn(
-                            "relative p-2 rounded-lg",
-                            isActive 
-                              ? "bg-purple-100 shadow-sm" 
-                              : "hover:bg-purple-50"
-                          )}
-                          initial={{ scale: 1 }}
-                          animate={{ 
-                            scale: isActive ? 1.05 : 1,
-                            backgroundColor: isActive ? "#f3e8ff" : "rgba(0, 0, 0, 0)"
-                          }}
-                          whileHover={{ scale: isActive ? 1.15 : 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                          transition={{ 
-                            type: "spring", 
-                            bounce: 0.2, 
-                            duration: 0.4,
-                            ease: "easeInOut"
-                          }}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 1.3, duration: 0.6 }}
+          >
+            <Card className="relative overflow-hidden border-0 shadow-xl bg-gradient-to-br from-white to-gray-50">
+              <div className="absolute inset-0 bg-gradient-to-r from-purple-500/5 via-blue-500/5 to-cyan-500/5"></div>
+              <CardHeader className="relative z-10">
+                <CardTitle className="flex items-center gap-3">
+                  <motion.div
+                    initial={{ scale: 0, rotate: -180 }}
+                    animate={{ scale: 1, rotate: 0 }}
+                    transition={{ delay: 1.4, duration: 0.6 }}
+                    className="p-2 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full"
+                  >
+                    <GraduationCap className="w-5 h-5 text-white" />
+                  </motion.div>
+                  <span className="text-xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
+                    Training Progress
+                  </span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="relative z-10">
+                <Tabs value={currentLevel} onValueChange={setCurrentLevel} className="space-y-6">
+                  <motion.div 
+                    className="flex max-w-fit mx-auto border border-transparent rounded-full bg-white shadow-[0px_8px_30px_rgb(0,0,0,0.12)] px-8 py-4 items-center justify-center space-x-8 mb-8"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 1.5, duration: 0.6 }}
+                  >
+                    {levels.map((level, idx) => {
+                      const isActive = currentLevel === level.key;
+                      return (
+                        <motion.button
+                          key={`level-${idx}`}
+                          onClick={() => setCurrentLevel(level.key)}
+                          className="relative items-center flex space-x-2 transition-all duration-300 group"
+                          initial={{ opacity: 0, scale: 0.8 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          transition={{ delay: 1.6 + (idx * 0.1), duration: 0.4 }}
                         >
-                          <motion.span className={cn(
-                            "block sm:hidden transition-colors duration-300",
-                            isActive ? "text-purple-700" : "text-neutral-900"
-                          )}>
-                            <level.progress.icon className="w-4 h-4" />
-                          </motion.span>
-                          <motion.span className={cn(
-                            "hidden sm:block text-sm font-medium transition-colors duration-300",
-                            isActive ? "text-purple-700" : "text-neutral-900"
-                          )}>
-                            {level.name}
-                          </motion.span>
-                          
-                          {/* Active indicator */}
-                          {isActive && (
-                            <motion.div
-                              className="absolute inset-0 bg-purple-200/30 rounded-lg"
-                              layoutId="activeTab"
-                              initial={{ opacity: 0, scale: 0.8 }}
-                              animate={{ opacity: 1, scale: 1 }}
-                              exit={{ opacity: 0, scale: 0.8 }}
-                              transition={{ 
-                                type: "spring", 
-                                bounce: 0.3, 
-                                duration: 0.5,
-                                ease: "easeInOut"
-                              }}
-                            />
-                          )}
-                          
-                          {/* Hover glow effect */}
                           <motion.div
-                            className="absolute inset-0 bg-purple-100/50 rounded-lg opacity-0 group-hover:opacity-100"
-                            initial={{ opacity: 0 }}
-                            whileHover={{ opacity: 1 }}
-                            transition={{ duration: 0.2 }}
-                          />
-                        </motion.div>
-                      </button>
-                    );
-                  })}
-                </div>
+                            className={cn(
+                              "relative p-3 rounded-xl border-2 transition-all duration-300",
+                              isActive 
+                                ? "bg-gradient-to-r from-purple-500 to-blue-500 text-white shadow-lg shadow-purple-500/25" 
+                                : "bg-white hover:bg-purple-50 border-purple-200 hover:border-purple-300"
+                            )}
+                            initial={{ scale: 1 }}
+                            animate={{ 
+                              scale: isActive ? 1.05 : 1,
+                            }}
+                            whileHover={{ scale: isActive ? 1.1 : 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            transition={{ 
+                              type: "spring", 
+                              bounce: 0.3, 
+                              duration: 0.4,
+                              ease: "easeInOut"
+                            }}
+                          >
+                            <motion.span className={cn(
+                              "block sm:hidden transition-colors duration-300",
+                              isActive ? "text-white" : "text-purple-600"
+                            )}>
+                              <level.progress.icon className="w-5 h-5" />
+                            </motion.span>
+                            <motion.span className={cn(
+                              "hidden sm:block text-sm font-semibold transition-colors duration-300",
+                              isActive ? "text-white" : "text-purple-700"
+                            )}>
+                              {level.name}
+                            </motion.span>
+                            
+                            {/* Active indicator */}
+                            {isActive && (
+                              <motion.div
+                                className="absolute inset-0 bg-white/20 rounded-xl"
+                                layoutId="activeTab"
+                                initial={{ opacity: 0, scale: 0.8 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.8 }}
+                                transition={{ 
+                                  type: "spring", 
+                                  bounce: 0.4, 
+                                  duration: 0.6,
+                                  ease: "easeInOut"
+                                }}
+                              />
+                            )}
+                            
+                            {/* Progress indicator */}
+                            <motion.div
+                              className="absolute -top-1 -right-1 w-3 h-3 bg-gradient-to-r from-green-400 to-emerald-500 rounded-full border-2 border-white"
+                              initial={{ scale: 0 }}
+                              animate={{ scale: level.progress.completed === level.progress.total ? 1 : 0 }}
+                              transition={{ delay: 1.8 + (idx * 0.1), duration: 0.3 }}
+                            />
+                          </motion.div>
+                        </motion.button>
+                      );
+                    })}
+                  </motion.div>
 
                 {levels.map((level) => (
-                  <TabsContent key={level.key} value={level.key} className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <level.progress.icon className={`w-6 h-6 ${level.progress.color}`} />
+                  <TabsContent key={level.key} value={level.key} className="space-y-6">
+                    <motion.div 
+                      className="flex items-center justify-between p-6 rounded-xl bg-gradient-to-r from-white to-gray-50 border border-gray-200"
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.2, duration: 0.6 }}
+                    >
+                      <div className="flex items-center gap-4">
+                        <motion.div
+                          className="p-3 rounded-full bg-gradient-to-r from-purple-100 to-blue-100"
+                          whileHover={{ scale: 1.1, rotate: 5 }}
+                          transition={{ type: "spring", bounce: 0.3 }}
+                        >
+                          <level.progress.icon className={`w-6 h-6 ${level.progress.color}`} />
+                        </motion.div>
                         <div>
-                          <h3 className="font-semibold">{level.name} Level</h3>
-                          <p className="text-sm text-muted-foreground">
+                          <h3 className="text-lg font-bold text-gray-800">{level.name} Level</h3>
+                          <p className="text-sm text-gray-600">
                             {level.progress.completed} of {level.progress.total} requirements completed
                           </p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Progress value={(level.progress.completed / level.progress.total) * 100} className="w-24" />
-                        <span className="text-sm font-medium">
+                      <div className="flex items-center gap-3">
+                        <div className="w-32">
+                          <Progress 
+                            value={(level.progress.completed / level.progress.total) * 100} 
+                            className="h-3 bg-gray-200"
+                          />
+                        </div>
+                        <motion.span 
+                          className="text-lg font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent"
+                          initial={{ scale: 0.8 }}
+                          animate={{ scale: 1 }}
+                          transition={{ delay: 0.4, duration: 0.3 }}
+                        >
                           {Math.round((level.progress.completed / level.progress.total) * 100)}%
-                        </span>
+                        </motion.span>
                       </div>
-                    </div>
+                    </motion.div>
 
-                    <div className="space-y-3">
+                    <div className="space-y-4">
                       {level.progress.total === 0 ? (
-                        <div className="text-sm text-muted-foreground">No data for this level.</div>
+                        <motion.div 
+                          className="text-center py-8 text-gray-500"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          transition={{ delay: 0.3, duration: 0.6 }}
+                        >
+                          <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+                            <AlertCircle className="w-8 h-8 text-gray-400" />
+                          </div>
+                          <p className="text-lg font-medium">No data for this level</p>
+                          <p className="text-sm">Requirements will appear here once data is available</p>
+                        </motion.div>
                       ) : (
                         level.progress.requirements.map((req, index) => (
-                          <div key={index} className="flex items-center justify-between p-3 rounded-lg border">
-                            <div className="flex items-center gap-3">
-                              <span className="font-medium">{req.name}</span>
+                          <motion.div 
+                            key={index} 
+                            className="flex items-center justify-between p-4 rounded-xl border border-gray-200 bg-white hover:shadow-md transition-all duration-300"
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: 0.1 * index, duration: 0.4 }}
+                            whileHover={{ scale: 1.02, backgroundColor: "#f8fafc" }}
+                          >
+                            <div className="flex items-center gap-4">
+                              <motion.div
+                                className="w-2 h-2 rounded-full bg-gradient-to-r from-purple-400 to-blue-400"
+                                initial={{ scale: 0 }}
+                                animate={{ scale: 1 }}
+                                transition={{ delay: 0.2 + (0.1 * index), duration: 0.3 }}
+                              />
+                              <span className="font-semibold text-gray-800">{req.name}</span>
                             </div>
                             <div className="flex items-center gap-2">
                               {getStatusBadge(req)}
                             </div>
-                          </div>
+                          </motion.div>
                         ))
                       )}
                     </div>
@@ -1096,14 +1328,29 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
               </Tabs>
             </CardContent>
           </Card>
+          </motion.div>
 
           {/* Action Buttons */}
-          <div className="flex gap-2 justify-end">
-            <Button variant="outline" onClick={() => setOpen(false)}>
-              Close
-            </Button>
-          </div>
-        </div>
+          <motion.div 
+            className="flex gap-3 justify-end pt-6 border-t border-gray-200"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 1.7, duration: 0.6 }}
+          >
+            <motion.div
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              <Button 
+                variant="outline" 
+                onClick={() => setOpen(false)}
+                className="px-6 py-2 border-2 border-gray-300 hover:border-gray-400 transition-colors"
+              >
+                Close
+              </Button>
+            </motion.div>
+          </motion.div>
+        </motion.div>
         )}
         </div>
       </DialogContent>
