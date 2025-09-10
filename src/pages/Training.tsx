@@ -99,6 +99,8 @@ export default function Training() {
   const [tempAdvisor, setTempAdvisor] = useState<string>("");
   const [notesDropdownOpen, setNotesDropdownOpen] = useState<string | null>(null);
   const [advisorDropdownOpen, setAdvisorDropdownOpen] = useState<string | null>(null);
+  const [notesDropdownPosition, setNotesDropdownPosition] = useState<{x: number, y: number} | null>(null);
+  const [advisorDropdownPosition, setAdvisorDropdownPosition] = useState<{x: number, y: number} | null>(null);
   const [scheduledDates, setScheduledDates] = useState<{[key: string]: Date}>({});
   const [completedDates, setCompletedDates] = useState<{[key: string]: Date}>({});
   const [openDatePicker, setOpenDatePicker] = useState<string | null>(null);
@@ -110,6 +112,8 @@ export default function Training() {
       if (!target.closest('[data-dropdown]') && !target.closest('.date-picker-popup')) {
         setNotesDropdownOpen(null);
         setAdvisorDropdownOpen(null);
+        setNotesDropdownPosition(null);
+        setAdvisorDropdownPosition(null);
         // Clear all popup states when clicking outside
         setPopupPosition(null);
         setCurrentPopupEmployee(null);
@@ -1198,28 +1202,17 @@ export default function Training() {
                                              variant="notes"
                                              icon={MessageSquare}
                                              text={selectedNoteOption?.label || 'Add Notes'}
-                                             onClick={() => {
+                                             onClick={(e) => {
+                                               const rect = (e.target as HTMLElement).getBoundingClientRect();
+                                               const position = {
+                                                 x: rect.left + rect.width / 2,
+                                                 y: rect.bottom + 4 // margin-top: 4px from original CSS
+                                               };
+                                               setNotesDropdownPosition(position);
                                                setNotesDropdownOpen(isNotesDropdownOpen ? null : employee.employeeId.toString());
                                              }}
                                            />
                                            
-                                           {/* Notes Dropdown */}
-                                           {isNotesDropdownOpen && (
-                                             <div className="dropdown-menu min-w-[180px] max-h-[250px]">
-                                               {NOTES_OPTIONS.map((option) => (
-                                                 <div
-                                                   key={option.value}
-                                                   className="px-3 py-2 text-sm cursor-pointer hover:bg-cyan-50 rounded transition-colors"
-                                                   onClick={() => {
-                                                     handleSaveNotes(employee.employeeId.toString(), option.value);
-                                                     setNotesDropdownOpen(null);
-                                                   }}
-                                                 >
-                                                   {option.label}
-                                                 </div>
-                                               ))}
-                                             </div>
-                                           )}
                                          </div>
                                        </div>
                                      </TableCell>
@@ -1236,37 +1229,17 @@ export default function Training() {
                                              variant="advisor"
                                              icon={UserCheck}
                                              text={employee.advisorName || currentAdvisor?.fullName || 'Add advisor'}
-                                             onClick={() => {
+                                             onClick={(e) => {
+                                               const rect = (e.target as HTMLElement).getBoundingClientRect();
+                                               const position = {
+                                                 x: rect.left + rect.width / 2,
+                                                 y: rect.bottom + 4 // margin-top: 4px from original CSS
+                                               };
+                                               setAdvisorDropdownPosition(position);
                                                setAdvisorDropdownOpen(isAdvisorDropdownOpen ? null : employee.employeeId.toString());
                                              }}
                                            />
                                            
-                                           {/* Advisor Dropdown */}
-                                           {isAdvisorDropdownOpen && (
-                                             <div className="dropdown-menu advisor-dropdown min-w-[200px]">
-                                               <div
-                                                 className="text-sm cursor-pointer hover:bg-purple-50 transition-colors"
-                                                 onClick={() => {
-                                                   handleSaveAdvisor(employee.employeeId.toString(), 'none');
-                                                   setAdvisorDropdownOpen(null);
-                                                 }}
-                                               >
-                                                 No advisor assigned
-                                               </div>
-                                               {advisors.map((advisor) => (
-                                                 <div
-                                                   key={advisor.advisorId}
-                                                   className="text-sm cursor-pointer hover:bg-purple-50 transition-colors"
-                                                   onClick={() => {
-                                                     handleSaveAdvisor(employee.employeeId.toString(), advisor.advisorId.toString());
-                                                     setAdvisorDropdownOpen(null);
-                                                   }}
-                                                 >
-                                                   {advisor.fullName}
-                                                 </div>
-                                               ))}
-                                             </div>
-                                           )}
                                          </div>
                                        </div>
                                      </TableCell>
@@ -1451,8 +1424,8 @@ export default function Training() {
          <div 
            className="fixed z-[9999] bg-white border border-gray-300 rounded-lg shadow-xl p-3 date-picker-popup"
            style={{
-             left: `${popupPosition.x}px`,
-             top: `${popupPosition.y}px`,
+             left: Math.max(10, Math.min(popupPosition.x, window.innerWidth - 200)), // Keep within viewport
+             top: Math.min(popupPosition.y, window.innerHeight - 300), // Keep within viewport - ensure calendar is visible
              transform: 'translateX(-50%)'
            }}
          >
@@ -1493,8 +1466,8 @@ export default function Training() {
          <div 
            className="fixed z-[9999] bg-white border border-gray-300 rounded-lg shadow-xl p-3 date-picker-popup"
            style={{
-             left: `${popupPosition.x}px`,
-             top: `${popupPosition.y}px`,
+             left: Math.max(10, Math.min(popupPosition.x, window.innerWidth - 200)), // Keep within viewport
+             top: Math.min(popupPosition.y, window.innerHeight - 300), // Keep within viewport - ensure calendar is visible
              transform: 'translateX(-50%)'
            }}
          >
@@ -1518,6 +1491,71 @@ export default function Training() {
             }}
             initialFocus
           />
+         </div>
+       )}
+       
+       {/* Fixed positioned Notes dropdown */}
+       {notesDropdownOpen && notesDropdownPosition && (
+         <div 
+           className="fixed z-[9999] bg-white border border-gray-300 rounded-lg shadow-xl dropdown-menu min-w-[180px] max-h-[250px]"
+           style={{
+             left: notesDropdownPosition.x,
+             top: Math.min(notesDropdownPosition.y, window.innerHeight - 300), // Prevent going off bottom of viewport
+             transform: 'translateX(-50%)'
+           }}
+         >
+           {NOTES_OPTIONS.map((option) => (
+             <div
+               key={option.value}
+               className="px-3 py-2 text-sm cursor-pointer hover:bg-cyan-50 rounded transition-colors"
+               onClick={() => {
+                 const employeeId = notesDropdownOpen;
+                 handleSaveNotes(employeeId, option.value);
+                 setNotesDropdownOpen(null);
+                 setNotesDropdownPosition(null);
+               }}
+             >
+               {option.label}
+             </div>
+           ))}
+         </div>
+       )}
+       
+       {/* Fixed positioned Advisor dropdown */}
+       {advisorDropdownOpen && advisorDropdownPosition && (
+         <div 
+           className="fixed z-[9999] bg-white border border-gray-300 rounded-lg shadow-xl dropdown-menu advisor-dropdown min-w-[200px]"
+           style={{
+             left: advisorDropdownPosition.x,
+             top: Math.min(advisorDropdownPosition.y, window.innerHeight - 250), // Prevent going off bottom of viewport
+             transform: 'translateX(-50%)'
+           }}
+         >
+           <div
+             className="text-sm cursor-pointer hover:bg-purple-50 transition-colors px-3 py-2"
+             onClick={() => {
+               const employeeId = advisorDropdownOpen;
+               handleSaveAdvisor(employeeId, 'none');
+               setAdvisorDropdownOpen(null);
+               setAdvisorDropdownPosition(null);
+             }}
+           >
+             No advisor assigned
+           </div>
+           {advisors.map((advisor) => (
+             <div
+               key={advisor.advisorId}
+               className="text-sm cursor-pointer hover:bg-purple-50 transition-colors px-3 py-2"
+               onClick={() => {
+                 const employeeId = advisorDropdownOpen;
+                 handleSaveAdvisor(employeeId, advisor.advisorId.toString());
+                 setAdvisorDropdownOpen(null);
+                 setAdvisorDropdownPosition(null);
+               }}
+             >
+               {advisor.fullName}
+             </div>
+           ))}
          </div>
        )}
      </TooltipProvider>
