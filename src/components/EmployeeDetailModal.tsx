@@ -213,6 +213,10 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
     scheduleTraining,
     completeTraining,
     rescheduleTraining,
+    // Async variants
+    scheduleTrainingAsync,
+    completeTrainingAsync,
+    rescheduleTrainingAsync,
     awardTraining,
     approveConference,
     rejectConference,
@@ -498,9 +502,13 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
   // Scheduling functions
   const handleScheduleDate = async (employeeId: string, requirementKey: string, date: Date | undefined) => {
     const key = `${employeeId}-${requirementKey}`;
-    if (date && scheduleTraining) {
+    if (date && (scheduleTrainingAsync || scheduleTraining)) {
       try {
-        scheduleTraining({ employeeId, requirementKey, date });
+        if (scheduleTrainingAsync) {
+          await scheduleTrainingAsync({ employeeId, requirementKey, date });
+        } else {
+          scheduleTraining({ employeeId, requirementKey, date });
+        }
         
         // Show success message
         toast.success('Training scheduled successfully!', {
@@ -521,10 +529,14 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
   };
 
   const handleMarkComplete = async (employeeId: string, requirementKey: string) => {
-    if (completeTraining) {
+    if (completeTrainingAsync || completeTraining) {
       try {
         // Backend will handle copying scheduled date to completion date
-        completeTraining({ employeeId, requirementKey });
+        if (completeTrainingAsync) {
+          await completeTrainingAsync({ employeeId, requirementKey });
+        } else {
+          completeTraining({ employeeId, requirementKey });
+        }
         
         toast.success('Training marked as complete!', {
           description: 'Completed using scheduled date',
@@ -551,9 +563,13 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
   };
 
   const handleReschedule = async (employeeId: string, requirementKey: string, date: Date | undefined) => {
-    if (date && rescheduleTraining) {
+    if (date && (rescheduleTrainingAsync || rescheduleTraining)) {
       try {
-        rescheduleTraining({ employeeId, requirementKey, date });
+        if (rescheduleTrainingAsync) {
+          await rescheduleTrainingAsync({ employeeId, requirementKey, date });
+        } else {
+          rescheduleTraining({ employeeId, requirementKey, date });
+        }
         toast.success('Training rescheduled successfully!', {
           description: `Rescheduled for ${date.toLocaleDateString()}`,
         });
@@ -784,12 +800,6 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
                 date={undefined}
                 onDateChange={(date) => handleScheduleDate(String(record.employeeId), requirement.key, date)}
                 placeholder="Select date"
-                open={isInlineDatePickerOpen}
-                onOpenChange={(open) => {
-                  if (!open) {
-                    setInlineDatePicker(null);
-                  }
-                }}
               />
             </div>
             <Button
