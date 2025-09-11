@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { fmt, parseDate, NOTES_OPTIONS } from "@/config/awardTypes";
-import { motion, AnimatePresence } from "framer-motion";
+// import { motion, AnimatePresence } from "framer-motion"; // Removed for faster loading
 import { ShineBorder } from "@/components/magicui/shine-border";
 import { 
   Calendar, 
@@ -40,6 +40,7 @@ import { format } from "date-fns";
 import { useTrainingData, trainingKeys } from "@/hooks/useTrainingData";
 import { trainingAPI } from "@/services/api";
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAdvisors } from '@/hooks/useEmployees';
 
 interface EmployeeDetailModalProps {
   employee: Employee;
@@ -49,9 +50,8 @@ interface EmployeeDetailModalProps {
 
 export default function EmployeeDetailModal({ employee, children, onModalOpenChange }: EmployeeDetailModalProps) {
   const [open, setOpen] = useState(false);
-  const [advisors, setAdvisors] = useState<any[]>([]);
-  const [isUpdatingNotes, setIsUpdatingNotes] = useState(false);
-  const [isUpdatingAdvisor, setIsUpdatingAdvisor] = useState(false);
+  // Use React Query for advisors data
+  const { data: advisors = [] } = useAdvisors();
   const queryClient = useQueryClient();
 
   // Check if employee has required fields
@@ -68,10 +68,13 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
   });
 
   // Also fetch all SecureCareEmployee records (all award types) for this employee
-  const { data: levelRecords = [], error: levelsError } = useQuery({
+  const { data: levelRecords = [], error: levelsError, isLoading: isLoadingLevels } = useQuery({
     queryKey: ['employee-levels', String(employee.employeeId)],
-    queryFn: () => {
-      return trainingAPI.getEmployeeLevels(String(employee.employeeId));
+    queryFn: async () => {
+      console.log('🔍 Fetching employee levels for ID:', employee.employeeId);
+      const result = await trainingAPI.getEmployeeLevels(String(employee.employeeId));
+      console.log('🔍 Employee levels API result:', result);
+      return result;
     },
     enabled: open && hasValidEmployeeId,
     staleTime: 0,
@@ -85,7 +88,7 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
   // Check if we have complete data from API
   const hasCompleteApiData = !employeeError && !levelsError && levelRecords.length > 0;
   const shouldUseFallback = !hasCompleteApiData && employee;
-  const isLoading = isLoadingEmployee || (open && hasValidEmployeeId && levelRecords.length === 0 && !levelsError);
+  const isLoading = isLoadingEmployee || isLoadingLevels || (open && hasValidEmployeeId && levelRecords.length === 0 && !levelsError);
   
   // Map between awardType and level key used in tabs
   const levelKeyToAwardType: Record<string, string> = {
@@ -117,20 +120,58 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
     return map;
   }, [levelRecords, employee]);
 
-  // Debug logging (can be removed in production)
+  // Debug logging to investigate querying issues
   useEffect(() => {
     if (open) {
-      // Debug logging removed
+      console.log('🔍 Employee Detail Modal Debug:');
+      console.log('Employee ID:', employee.employeeId);
+      console.log('Level Records:', levelRecords);
+      console.log('AwardType to Record Map:', awardTypeToRecord);
+      console.log('Current Employee:', currentEmployee);
+      console.log('Levels Error:', levelsError);
+      console.log('Is Loading Levels:', isLoadingLevels);
     }
-  }, [open, levelRecords, employee, awardTypeToRecord, currentEmployee, freshEmployeeData, isLoadingEmployee]);
+  }, [open, levelRecords, employee, awardTypeToRecord, currentEmployee, freshEmployeeData, isLoadingEmployee, levelsError]);
   
-  const [notes, setNotes] = useState(employee.notes || "");
-  const [selectedAdvisorId, setSelectedAdvisorId] = useState<string>(employee.advisorId?.toString() || "none");
+  // Level-specific state for advisor and notes
+  const [levelStates, setLevelStates] = useState<Record<string, {
+    advisorId: string;
+    notes: string;
+    isUpdatingAdvisor: boolean;
+    isUpdatingNotes: boolean;
+  }>>({});
 
-  // Update notes and level when currentEmployee changes
+  // Initialize level states when levelRecords change
   useEffect(() => {
-    setNotes(currentEmployee.notes || "");
-    setSelectedAdvisorId(currentEmployee.advisorId?.toString() || "none");
+    if (levelRecords && levelRecords.length > 0) {
+      const newLevelStates: Record<string, {
+        advisorId: string;
+        notes: string;
+        isUpdatingAdvisor: boolean;
+        isUpdatingNotes: boolean;
+      }> = {};
+      
+      levelRecords.forEach((record: any) => {
+        if (record.awardType) {
+          const levelKey = Object.keys(levelKeyToAwardType).find(
+            key => levelKeyToAwardType[key] === record.awardType
+          ) || record.awardType.toLowerCase().replace(' ', '-');
+          
+          newLevelStates[levelKey] = {
+            advisorId: record.advisorId?.toString() || "none",
+            notes: record.notes || "",
+            isUpdatingAdvisor: false,
+            isUpdatingNotes: false,
+          };
+        }
+      });
+      
+      setLevelStates(newLevelStates);
+    }
+  }, [levelRecords]);
+
+  // Update current level when currentEmployee changes
+  useEffect(() => {
     setCurrentLevel(getEmployeeLevel(currentEmployee));
   }, [currentEmployee]);
 
@@ -141,34 +182,31 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
     }
   }, [open, onModalOpenChange]);
 
-  // Load advisors when modal opens
-  useEffect(() => {
-    if (open) {
-      loadAdvisors();
-    }
-  }, [open]);
+  // Advisors are automatically loaded via React Query useAdvisors hook
 
-  // Load advisors from API
-  const loadAdvisors = async () => {
-    try {
-      const advisorList = await trainingAPI.getAdvisors();
-      setAdvisors(advisorList);
-    } catch (error) {
-      console.error('Failed to load advisors:', error);
-      toast.error('Failed to load advisors');
-    }
-  };
-
-  // Handle notes update
-  const handleNotesUpdate = async (newNotes: string) => {
-    const currentNotes = currentEmployee.notes || "";
+  // Handle level-specific notes update
+  const handleLevelNotesUpdate = async (levelKey: string, newNotes: string) => {
+    const currentLevelState = levelStates[levelKey];
+    if (!currentLevelState) return;
     
+    const currentNotes = currentLevelState.notes;
     if (newNotes === currentNotes) return; // No changes
     
-    setNotes(newNotes); // Update UI immediately
-    setIsUpdatingNotes(true);
+    // Update UI immediately
+    setLevelStates(prev => ({
+      ...prev,
+      [levelKey]: { ...prev[levelKey], notes: newNotes, isUpdatingNotes: true }
+    }));
+    
     try {
-      await trainingAPI.updateEmployeeNotes(currentEmployee.employeeId.toString(), newNotes);
+      // Get the awardType for this level
+      const awardType = levelKeyToAwardType[levelKey];
+      if (!awardType) {
+        throw new Error('Invalid level key');
+      }
+      
+      // Update notes for the specific level/awardType
+      await trainingAPI.updateEmployeeNotesForLevel(currentEmployee.employeeId.toString(), awardType, newNotes);
       
       // Invalidate relevant queries to refresh data
       queryClient.invalidateQueries({ queryKey: trainingKeys.employee(currentEmployee.employeeId.toString()) });
@@ -176,24 +214,48 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
       queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === 'employees-unique' });
       queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === 'employees-training' });
       
-      toast.success('Notes updated successfully');
+      toast.success(`Notes updated successfully for ${awardType}`);
     } catch (error) {
       console.error('Failed to update notes:', error);
       toast.error('Failed to update notes');
-      setNotes(currentNotes); // Revert on error
+      // Revert on error
+      setLevelStates(prev => ({
+        ...prev,
+        [levelKey]: { ...prev[levelKey], notes: currentNotes, isUpdatingNotes: false }
+      }));
     } finally {
-      setIsUpdatingNotes(false);
+      setLevelStates(prev => ({
+        ...prev,
+        [levelKey]: { ...prev[levelKey], isUpdatingNotes: false }
+      }));
     }
   };
 
-  // Handle advisor update
-  const handleAdvisorUpdate = async (advisorId: string) => {
-    const newAdvisorId = advisorId === "none" ? null : parseInt(advisorId);
-    if (newAdvisorId === currentEmployee.advisorId) return; // No changes
+  // Handle level-specific advisor update
+  const handleLevelAdvisorUpdate = async (levelKey: string, advisorId: string) => {
+    const currentLevelState = levelStates[levelKey];
+    if (!currentLevelState) return;
     
-    setIsUpdatingAdvisor(true);
+    const currentAdvisorId = currentLevelState.advisorId;
+    if (advisorId === currentAdvisorId) return; // No changes
+    
+    // Update UI immediately
+    setLevelStates(prev => ({
+      ...prev,
+      [levelKey]: { ...prev[levelKey], advisorId: advisorId, isUpdatingAdvisor: true }
+    }));
+    
     try {
-      await trainingAPI.updateEmployeeAdvisor(currentEmployee.employeeId.toString(), newAdvisorId);
+      // Get the awardType for this level
+      const awardType = levelKeyToAwardType[levelKey];
+      if (!awardType) {
+        throw new Error('Invalid level key');
+      }
+      
+      const newAdvisorId = advisorId === "none" ? null : parseInt(advisorId);
+      
+      // Update advisor for the specific level/awardType
+      await trainingAPI.updateEmployeeAdvisorForLevel(currentEmployee.employeeId.toString(), awardType, newAdvisorId);
       
       // Invalidate relevant queries to refresh data
       queryClient.invalidateQueries({ queryKey: trainingKeys.employee(currentEmployee.employeeId.toString()) });
@@ -201,14 +263,20 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
       queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === 'employees-unique' });
       queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === 'employees-training' });
       
-      setSelectedAdvisorId(advisorId);
-      toast.success('Advisor updated successfully');
+      toast.success(`Advisor updated successfully for ${awardType}`);
     } catch (error) {
       console.error('Failed to update advisor:', error);
       toast.error('Failed to update advisor');
-      setSelectedAdvisorId(currentEmployee.advisorId?.toString() || "none"); // Revert on error
+      // Revert on error
+      setLevelStates(prev => ({
+        ...prev,
+        [levelKey]: { ...prev[levelKey], advisorId: currentAdvisorId, isUpdatingAdvisor: false }
+      }));
     } finally {
-      setIsUpdatingAdvisor(false);
+      setLevelStates(prev => ({
+        ...prev,
+        [levelKey]: { ...prev[levelKey], isUpdatingAdvisor: false }
+      }));
     }
   };
   // Use the training data hook for API operations
@@ -328,141 +396,266 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
   };
 
   const getLevelProgress = (level: string) => {
-    // For each level, we need to find the best record that shows the completion status for that level
-    // This could be the specific awardType record OR a higher level record that shows completion of lower levels
-    
+    // Query database by awardType for each level
     const awardTypeForLevel = levelKeyToAwardType[level];
-    let recordForLevel: any | undefined = awardTypeToRecord[awardTypeForLevel];
+    const recordForLevel: any | undefined = awardTypeToRecord[awardTypeForLevel];
     
-    // Debug logging removed
+    // Debug logging for level progress
+    console.log(`🔍 Level Progress Debug for ${level}:`);
+    console.log(`  - AwardType: ${awardTypeForLevel}`);
+    console.log(`  - Record Found:`, recordForLevel);
+    console.log(`  - AwardTypeToRecord Map:`, awardTypeToRecord);
     
-    // If we don't have the specific awardType record, look for higher level records that might show completion
-    if (!recordForLevel && levelRecords.length > 0) {
-      // Find the highest level record that could contain data for this level
-      const sortedRecords = levelRecords.sort((a, b) => {
-        const levelOrder = { 'Level 1': 1, 'Level 2': 2, 'Level 3': 3, 'Consultant': 4, 'Coach': 5 };
-        return (levelOrder[b.awardType] || 99) - (levelOrder[a.awardType] || 99);
-      });
-      
-      // Use the highest level record as it will have the most complete data
-      recordForLevel = sortedRecords[0];
-    }
-    
-    // If still no record, try to use the current employee data as fallback
-    if (!recordForLevel && currentEmployee) {
-      recordForLevel = currentEmployee;
-    }
-    
-    // If still no record, return empty progress
+    // If no record exists for this awardType, return empty progress (no data)
     if (!recordForLevel) {
-      return { requirements: [], total: 0, completed: 0, color: "", icon: Users } as any;
+      console.log(`  - No record found for ${awardTypeForLevel}, returning empty progress`);
+      return { 
+        requirements: [], 
+        total: 0, 
+        completed: 0, 
+        color: "", 
+        icon: Users,
+        isAwarded: false,
+        hasData: false
+      } as any;
     }
+
+    // Helper function to check if a level is completed (either directly or through higher level)
+    const isLevelCompleted = (targetLevel: string) => {
+      const targetAwardType = levelKeyToAwardType[targetLevel];
+      const levelOrder = { 'Level 1': 1, 'Level 2': 2, 'Level 3': 3, 'Consultant': 4, 'Coach': 5 };
+      const targetOrder = levelOrder[targetAwardType] || 0;
+      
+      // Check if we have a direct record for this level
+      const directRecord = awardTypeToRecord[targetAwardType];
+      if (directRecord && directRecord.secureCareAwarded) {
+        return true;
+      }
+      
+      // Check if we have a higher level record that implies this level is completed
+      for (const record of levelRecords) {
+        const recordOrder = levelOrder[record.awardType] || 0;
+        if (recordOrder > targetOrder && record.secureCareAwarded) {
+          return true;
+        }
+      }
+      
+      return false;
+    };
     switch (level) {
       case "care-partner":
-        // For Level 1, check if employee has completed Level 1 or higher
-        const hasLevel1Record = awardTypeToRecord['Level 1'];
-        const level1Completed = hasLevel1Record ? !!hasLevel1Record.secureCareAwarded : (recordForLevel.awardType === 'Level 1' && !!recordForLevel.secureCareAwarded);
-        const level1AwardedDate = hasLevel1Record ? hasLevel1Record.secureCareAwardedDate : (recordForLevel.awardType === 'Level 1' ? recordForLevel.secureCareAwardedDate : null);
+        // For Level 1, check if this specific awardType is awarded
+        const isLevel1Awarded = !!recordForLevel.secureCareAwarded;
+        const level1AwardedDate = recordForLevel.secureCareAwardedDate;
         
+        // If awarded, show 100% progress
+        if (isLevel1Awarded) {
+          return {
+            requirements: [
+              { name: "Relias Training Assigned", key: "assignedDate", completed: true, date: recordForLevel.assignedDate },
+              { name: "Relias Training Completed", key: "completedDate", completed: true, date: recordForLevel.completedDate },
+              { name: "Level 1 Awarded", key: "secureCareAwarded", completed: true, date: level1AwardedDate }
+            ],
+            total: 3,
+            completed: 3,
+            color: "text-blue-600",
+            icon: Users,
+            isAwarded: true,
+            hasData: true
+          };
+        }
+        
+        // If not awarded, calculate actual progress
         return {
           requirements: [
             { name: "Relias Training Assigned", key: "assignedDate", completed: !!recordForLevel.assignedDate, date: recordForLevel.assignedDate },
             { name: "Relias Training Completed", key: "completedDate", completed: !!recordForLevel.completedDate, date: recordForLevel.completedDate },
-            { name: "Level 1 Awarded", key: "secureCareAwarded", completed: level1Completed, date: level1AwardedDate }
+            { name: "Level 1 Awarded", key: "secureCareAwarded", completed: false, date: null }
           ],
           total: 3,
-          completed: [!!recordForLevel.assignedDate, !!recordForLevel.completedDate, level1Completed].filter(Boolean).length,
+          completed: [!!recordForLevel.assignedDate, !!recordForLevel.completedDate].filter(Boolean).length,
           color: "text-blue-600",
-          icon: Users
+          icon: Users,
+          isAwarded: false,
+          hasData: true
         };
       case "associate":
-        // For Level 2, check if employee has completed Level 2 or higher
-        const hasLevel2Record = awardTypeToRecord['Level 2'];
-        const level2Completed = hasLevel2Record ? !!hasLevel2Record.secureCareAwarded : (recordForLevel.awardType === 'Level 2' && !!recordForLevel.secureCareAwarded);
-        const level2AwardedDate = hasLevel2Record ? hasLevel2Record.secureCareAwardedDate : (recordForLevel.awardType === 'Level 2' ? recordForLevel.secureCareAwardedDate : null);
+        // For Level 2, check if this specific awardType is awarded
+        const isLevel2Awarded = !!recordForLevel.secureCareAwarded;
+        const level2AwardedDate = recordForLevel.secureCareAwardedDate;
         
+        // If awarded, show 100% progress
+        if (isLevel2Awarded) {
+          return {
+            requirements: [
+              { name: "Conference Completed", key: "conferenceCompleted", completed: true, date: recordForLevel.conferenceCompleted },
+              { name: "Standing Video", key: "standingVideo", completed: true, date: recordForLevel.standingVideo },
+              { name: "Sleeping/Sitting Video", key: "sleepingVideo", completed: true, date: recordForLevel.sleepingVideo },
+              { name: "Feeding Video", key: "feedGradVideo", completed: true, date: recordForLevel.feedGradVideo },
+              { name: "Level 2 Awarded", key: "secureCareAwarded", completed: true, date: level2AwardedDate }
+            ],
+            total: 5,
+            completed: 5,
+            color: "text-green-600",
+            icon: Award,
+            isAwarded: true,
+            hasData: true
+          };
+        }
+        
+        // If not awarded, calculate actual progress
         return {
           requirements: [
             { name: "Conference Completed", key: "conferenceCompleted", completed: !!recordForLevel.conferenceCompleted, date: recordForLevel.conferenceCompleted },
             { name: "Standing Video", key: "standingVideo", completed: !!recordForLevel.standingVideo, scheduled: !!recordForLevel.scheduleStandingVideo, date: recordForLevel.standingVideo || recordForLevel.scheduleStandingVideo },
             { name: "Sleeping/Sitting Video", key: "sleepingVideo", completed: !!recordForLevel.sleepingVideo, scheduled: !!recordForLevel.scheduleSleepingVideo, date: recordForLevel.sleepingVideo || recordForLevel.scheduleSleepingVideo },
             { name: "Feeding Video", key: "feedGradVideo", completed: !!recordForLevel.feedGradVideo, scheduled: !!recordForLevel.scheduleFeedGradVideo, date: recordForLevel.feedGradVideo || recordForLevel.scheduleFeedGradVideo },
-            { name: "Level 2 Awarded", key: "secureCareAwarded", completed: level2Completed, date: level2AwardedDate }
+            { name: "Level 2 Awarded", key: "secureCareAwarded", completed: false, date: null }
           ],
           total: 5,
-          completed: [!!recordForLevel.conferenceCompleted, !!recordForLevel.standingVideo, !!recordForLevel.sleepingVideo, !!recordForLevel.feedGradVideo, level2Completed].filter(Boolean).length,
+          completed: [!!recordForLevel.conferenceCompleted, !!recordForLevel.standingVideo, !!recordForLevel.sleepingVideo, !!recordForLevel.feedGradVideo].filter(Boolean).length,
           color: "text-green-600",
-          icon: Award
+          icon: Award,
+          isAwarded: false,
+          hasData: true
         };
       case "champion":
-        // For Level 3, check if employee has completed Level 3 or higher
-        const hasLevel3Record = awardTypeToRecord['Level 3'];
-        const level3Completed = hasLevel3Record ? !!hasLevel3Record.secureCareAwarded : (recordForLevel.awardType === 'Level 3' && !!recordForLevel.secureCareAwarded);
-        const level3AwardedDate = hasLevel3Record ? hasLevel3Record.secureCareAwardedDate : (recordForLevel.awardType === 'Level 3' ? recordForLevel.secureCareAwardedDate : null);
+        // For Level 3, check if this specific awardType is awarded
+        const isLevel3Awarded = !!recordForLevel.secureCareAwarded;
+        const level3AwardedDate = recordForLevel.secureCareAwardedDate;
         
+        // If awarded, show 100% progress
+        if (isLevel3Awarded) {
+          return {
+            requirements: [
+              { name: "Conference Completed", key: "conferenceCompleted", completed: true, date: recordForLevel.conferenceCompleted },
+              { name: "Sitting/Standing/Approaching", key: "standingVideo", completed: true, date: recordForLevel.standingVideo },
+              { name: "No Hand/No Speak", key: "noHandnoSpeak", completed: true, date: recordForLevel.noHandnoSpeak },
+              { name: "Challenge Sleeping", key: "sleepingVideo", completed: true, date: recordForLevel.sleepingVideo },
+              { name: "Level 3 Awarded", key: "secureCareAwarded", completed: true, date: level3AwardedDate }
+            ],
+            total: 5,
+            completed: 5,
+            color: "text-purple-600",
+            icon: Star,
+            isAwarded: true,
+            hasData: true
+          };
+        }
+        
+        // If not awarded, calculate actual progress
         return {
           requirements: [
             { name: "Conference Completed", key: "conferenceCompleted", completed: !!recordForLevel.conferenceCompleted, date: recordForLevel.conferenceCompleted },
             { name: "Sitting/Standing/Approaching", key: "standingVideo", completed: !!recordForLevel.standingVideo, scheduled: !!recordForLevel.scheduleStandingVideo, date: recordForLevel.standingVideo || recordForLevel.scheduleStandingVideo },
             { name: "No Hand/No Speak", key: "noHandnoSpeak", completed: !!recordForLevel.noHandnoSpeak, scheduled: !!recordForLevel.schedulenoHandnoSpeak, date: recordForLevel.noHandnoSpeak || recordForLevel.schedulenoHandnoSpeak },
             { name: "Challenge Sleeping", key: "sleepingVideo", completed: !!recordForLevel.sleepingVideo, scheduled: !!recordForLevel.scheduleSleepingVideo, date: recordForLevel.sleepingVideo || recordForLevel.scheduleSleepingVideo },
-            { name: "Level 3 Awarded", key: "secureCareAwarded", completed: level3Completed, date: level3AwardedDate }
+            { name: "Level 3 Awarded", key: "secureCareAwarded", completed: false, date: null }
           ],
           total: 5,
-          completed: [!!recordForLevel.conferenceCompleted, !!recordForLevel.standingVideo, !!recordForLevel.noHandnoSpeak, !!recordForLevel.sleepingVideo, level3Completed].filter(Boolean).length,
+          completed: [!!recordForLevel.conferenceCompleted, !!recordForLevel.standingVideo, !!recordForLevel.noHandnoSpeak, !!recordForLevel.sleepingVideo].filter(Boolean).length,
           color: "text-purple-600",
-          icon: Star
+          icon: Star,
+          isAwarded: false,
+          hasData: true
         };
       case "consultant":
-        // For Consultant, check if employee has completed Consultant or higher
-        const hasConsultantRecord = awardTypeToRecord['Consultant'];
-        const consultantCompleted = hasConsultantRecord ? !!hasConsultantRecord.secureCareAwarded : (recordForLevel.awardType === 'Consultant' && !!recordForLevel.secureCareAwarded);
-        const consultantAwardedDate = hasConsultantRecord ? hasConsultantRecord.secureCareAwardedDate : (recordForLevel.awardType === 'Consultant' ? recordForLevel.secureCareAwardedDate : null);
+        // For Consultant, check if this specific awardType is awarded
+        const isConsultantAwarded = !!recordForLevel.secureCareAwarded;
+        const consultantAwardedDate = recordForLevel.secureCareAwardedDate;
         
+        // If awarded, show 100% progress
+        if (isConsultantAwarded) {
+          return {
+            requirements: [
+              { name: "Conference Completed", key: "conferenceCompleted", completed: true, date: recordForLevel.conferenceCompleted },
+              { name: "Coaching Session 1", key: "session1", completed: true, date: recordForLevel.session1 },
+              { name: "Coaching Session 2", key: "session2", completed: true, date: recordForLevel.session2 },
+              { name: "Coaching Session 3", key: "session3", completed: true, date: recordForLevel.session3 },
+              { name: "Consultant Awarded", key: "secureCareAwarded", completed: true, date: consultantAwardedDate }
+            ],
+            total: 5,
+            completed: 5,
+            color: "text-orange-600",
+            icon: GraduationCap,
+            isAwarded: true,
+            hasData: true
+          };
+        }
+        
+        // If not awarded, calculate actual progress
         return {
           requirements: [
             { name: "Conference Completed", key: "conferenceCompleted", completed: !!recordForLevel.conferenceCompleted, date: recordForLevel.conferenceCompleted },
             { name: "Coaching Session 1", key: "session1", completed: !!recordForLevel.session1, scheduled: !!recordForLevel.scheduleSession1, date: recordForLevel.session1 || recordForLevel.scheduleSession1 },
             { name: "Coaching Session 2", key: "session2", completed: !!recordForLevel.session2, scheduled: !!recordForLevel.scheduleSession2, date: recordForLevel.session2 || recordForLevel.scheduleSession2 },
             { name: "Coaching Session 3", key: "session3", completed: !!recordForLevel.session3, scheduled: !!recordForLevel.scheduleSession3, date: recordForLevel.session3 || recordForLevel.scheduleSession3 },
-            { name: "Consultant Awarded", key: "secureCareAwarded", completed: consultantCompleted, date: consultantAwardedDate }
+            { name: "Consultant Awarded", key: "secureCareAwarded", completed: false, date: null }
           ],
           total: 5,
-          completed: [!!recordForLevel.conferenceCompleted, !!recordForLevel.session1, !!recordForLevel.session2, !!recordForLevel.session3, consultantCompleted].filter(Boolean).length,
+          completed: [!!recordForLevel.conferenceCompleted, !!recordForLevel.session1, !!recordForLevel.session2, !!recordForLevel.session3].filter(Boolean).length,
           color: "text-orange-600",
-          icon: GraduationCap
+          icon: GraduationCap,
+          isAwarded: false,
+          hasData: true
         };
       case "coach":
-        // For Coach, check if employee has completed Coach
-        const hasCoachRecord = awardTypeToRecord['Coach'];
-        const coachCompleted = hasCoachRecord ? !!hasCoachRecord.secureCareAwarded : (recordForLevel.awardType === 'Coach' && !!recordForLevel.secureCareAwarded);
-        const coachAwardedDate = hasCoachRecord ? hasCoachRecord.secureCareAwardedDate : (recordForLevel.awardType === 'Coach' ? recordForLevel.secureCareAwardedDate : null);
+        // For Coach, check if this specific awardType is awarded
+        const isCoachAwarded = !!recordForLevel.secureCareAwarded;
+        const coachAwardedDate = recordForLevel.secureCareAwardedDate;
         
+        // If awarded, show 100% progress
+        if (isCoachAwarded) {
+          return {
+            requirements: [
+              { name: "Conference Completed", key: "conferenceCompleted", completed: true, date: recordForLevel.conferenceCompleted },
+              { name: "Coaching Session 1", key: "session1", completed: true, date: recordForLevel.session1 },
+              { name: "Coaching Session 2", key: "session2", completed: true, date: recordForLevel.session2 },
+              { name: "Coaching Session 3", key: "session3", completed: true, date: recordForLevel.session3 },
+              { name: "Coach Awarded", key: "secureCareAwarded", completed: true, date: coachAwardedDate }
+            ],
+            total: 5,
+            completed: 5,
+            color: "text-teal-600",
+            icon: TrendingUp,
+            isAwarded: true,
+            hasData: true
+          };
+        }
+        
+        // If not awarded, calculate actual progress
         return {
           requirements: [
             { name: "Conference Completed", key: "conferenceCompleted", completed: !!recordForLevel.conferenceCompleted, date: recordForLevel.conferenceCompleted },
             { name: "Coaching Session 1", key: "session1", completed: !!recordForLevel.session1, scheduled: !!recordForLevel.scheduleSession1, date: recordForLevel.session1 || recordForLevel.scheduleSession1 },
             { name: "Coaching Session 2", key: "session2", completed: !!recordForLevel.session2, scheduled: !!recordForLevel.scheduleSession2, date: recordForLevel.session2 || recordForLevel.scheduleSession2 },
             { name: "Coaching Session 3", key: "session3", completed: !!recordForLevel.session3, scheduled: !!recordForLevel.scheduleSession3, date: recordForLevel.session3 || recordForLevel.scheduleSession3 },
-            { name: "Coach Awarded", key: "secureCareAwarded", completed: coachCompleted, date: coachAwardedDate }
+            { name: "Coach Awarded", key: "secureCareAwarded", completed: false, date: null }
           ],
           total: 5,
-          completed: [!!recordForLevel.conferenceCompleted, !!recordForLevel.session1, !!recordForLevel.session2, !!recordForLevel.session3, coachCompleted].filter(Boolean).length,
+          completed: [!!recordForLevel.conferenceCompleted, !!recordForLevel.session1, !!recordForLevel.session2, !!recordForLevel.session3].filter(Boolean).length,
           color: "text-teal-600",
-          icon: TrendingUp
+          icon: TrendingUp,
+          isAwarded: false,
+          hasData: true
         };
       default:
         return { requirements: [], total: 0, completed: 0, color: "", icon: Users };
     }
   };
 
-  const levels = useMemo(() => [
-    { key: "care-partner", name: "Level 1", progress: getLevelProgress("care-partner") },
-    { key: "associate", name: "Level 2", progress: getLevelProgress("associate") },
-    { key: "champion", name: "Level 3", progress: getLevelProgress("champion") },
-    { key: "consultant", name: "Consultant", progress: getLevelProgress("consultant") },
-    { key: "coach", name: "Coach", progress: getLevelProgress("coach") }
-  ], [employee]);
+  const levels = useMemo(() => {
+    const levelsArray = [
+      { key: "care-partner", name: "Level 1", progress: getLevelProgress("care-partner") },
+      { key: "associate", name: "Level 2", progress: getLevelProgress("associate") },
+      { key: "champion", name: "Level 3", progress: getLevelProgress("champion") },
+      { key: "consultant", name: "Consultant", progress: getLevelProgress("consultant") },
+      { key: "coach", name: "Coach", progress: getLevelProgress("coach") }
+    ];
+    
+    console.log('🔍 Levels Array:', levelsArray);
+    return levelsArray;
+  }, [awardTypeToRecord]);
 
   // Utility function to check if all previous requirements are completed
   const canAwardLevel = (levelKey: string, requirementKey: string): { canAward: boolean; missingRequirements: string[] } => {
@@ -839,115 +1032,60 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
           <div className="absolute inset-0 bg-black/10"></div>
           <div className="relative z-10">
             <DialogTitle className="flex items-center gap-3 text-2xl font-bold">
-              <motion.div
-                initial={{ scale: 0, rotate: -180 }}
-                animate={{ scale: 1, rotate: 0 }}
-                transition={{ 
-                  type: "spring", 
-                  bounce: 0.4, 
-                  duration: 0.8,
-                  delay: 0.2
-                }}
-                className="p-2 bg-white/20 rounded-full backdrop-blur-sm"
-              >
+              <div className="p-2 bg-white/20 rounded-full backdrop-blur-sm">
                 <User className="w-6 h-6" />
-              </motion.div>
-              <motion.span
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.4, duration: 0.6 }}
-              >
+              </div>
+              <span>
                 Employee Details
-              </motion.span>
+              </span>
             </DialogTitle>
             <DialogDescription asChild>
-              <motion.p
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.6, duration: 0.6 }}
-                className="text-white/90 mt-2"
-              >
-                View and manage employee training progress and assignments
-              </motion.p>
+              <p className="text-white/90 mt-2">
+                View employee training progress and assignments (Read-only)
+              </p>
             </DialogDescription>
           </div>
         </DialogHeader>
         
         {isLoading ? (
           <div className="flex items-center justify-center py-16">
-            <motion.div 
+            <div 
               className="text-center"
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.5 }}
             >
-              <motion.div 
-                className="relative"
-                animate={{ rotate: 360 }}
-                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-              >
+              <div className="relative">
                 <div className="w-16 h-16 border-4 border-purple-200 rounded-full"></div>
                 <div className="absolute top-0 left-0 w-16 h-16 border-4 border-transparent border-t-purple-600 rounded-full"></div>
-              </motion.div>
-              <motion.p 
-                className="text-muted-foreground mt-4 text-lg"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.3 }}
-              >
+              </div>
+              <p className="text-muted-foreground mt-4 text-lg">
                 Loading employee data...
-              </motion.p>
-            </motion.div>
+              </p>
+            </div>
           </div>
         ) : (
-        <motion.div 
-          className="space-y-6 p-6"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2, duration: 0.6 }}
-        >
+        <div className="space-y-6 p-6">
           {/* Employee Info */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3, duration: 0.6 }}
-          >
+          <div>
             <Card className="relative overflow-hidden border-0 shadow-xl bg-gradient-to-br from-white to-gray-50">
               <div className="absolute inset-0 bg-gradient-to-r from-purple-500/5 via-blue-500/5 to-cyan-500/5"></div>
               <CardHeader className="relative z-10 pb-4">
                 <CardTitle className="flex items-center justify-between">
-                  <motion.div
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.4, duration: 0.6 }}
-                    className="flex items-center gap-3"
-                  >
+                  <div className="flex items-center gap-3">
                     <div className="p-2 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full">
                       <User className="w-5 h-5 text-white" />
                     </div>
                     <span className="text-xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
                       {currentEmployee.name || (employee as any).Employee}
                     </span>
-                  </motion.div>
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: 0.5, duration: 0.6 }}
-                  >
+                  </div>
+                  <div>
                     <Badge className="bg-gradient-to-r from-purple-500 to-blue-500 text-white border-0 px-3 py-1">
                       {(employee as any).staffRoll || (employee as any).staffRoles || 'N/A'}
                     </Badge>
-                  </motion.div>
+                  </div>
                 </CardTitle>
               </CardHeader>
               <CardContent className="relative z-10 grid grid-cols-1 md:grid-cols-3 gap-6">
-                <motion.div 
-                  className="flex items-center gap-3 p-3 rounded-lg bg-white/50 backdrop-blur-sm border border-white/20"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.6, duration: 0.6 }}
-                  whileHover={{ scale: 1.02, backgroundColor: "rgba(255, 255, 255, 0.8)" }}
-                >
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-white/50 backdrop-blur-sm border border-white/20">
                   <div className="p-2 bg-blue-100 rounded-full">
                     <Building className="w-4 h-4 text-blue-600" />
                   </div>
@@ -955,14 +1093,8 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
                     <p className="text-xs text-muted-foreground font-medium">Facility</p>
                     <p className="text-sm font-semibold">{currentEmployee.facility || (employee as any).Facility}</p>
                   </div>
-                </motion.div>
-                <motion.div 
-                  className="flex items-center gap-3 p-3 rounded-lg bg-white/50 backdrop-blur-sm border border-white/20"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.7, duration: 0.6 }}
-                  whileHover={{ scale: 1.02, backgroundColor: "rgba(255, 255, 255, 0.8)" }}
-                >
+                </div>
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-white/50 backdrop-blur-sm border border-white/20">
                   <div className="p-2 bg-green-100 rounded-full">
                     <MapPin className="w-4 h-4 text-green-600" />
                   </div>
@@ -970,14 +1102,8 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
                     <p className="text-xs text-muted-foreground font-medium">Area</p>
                     <p className="text-sm font-semibold">{currentEmployee.area || (employee as any).Area}</p>
                   </div>
-                </motion.div>
-                <motion.div 
-                  className="flex items-center gap-3 p-3 rounded-lg bg-white/50 backdrop-blur-sm border border-white/20"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.8, duration: 0.6 }}
-                  whileHover={{ scale: 1.02, backgroundColor: "rgba(255, 255, 255, 0.8)" }}
-                >
+                </div>
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-white/50 backdrop-blur-sm border border-white/20">
                   <div className="p-2 bg-purple-100 rounded-full">
                     <User className="w-4 h-4 text-purple-600" />
                   </div>
@@ -985,176 +1111,139 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
                     <p className="text-xs text-muted-foreground font-medium">Employee ID</p>
                     <p className="text-sm font-semibold">{(employee as any).employeeNumber || currentEmployee.employeeId}</p>
                   </div>
-                </motion.div>
+                </div>
               </CardContent>
             </Card>
-          </motion.div>
+          </div>
 
-          {/* Advisor and Notes Section */}
-          <motion.div 
-            className="grid grid-cols-1 lg:grid-cols-2 gap-6"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.9, duration: 0.6 }}
-          >
-            {/* Advisor Assignment */}
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 1.0, duration: 0.6 }}
-            >
-              <Card className="relative overflow-hidden border-0 shadow-xl bg-gradient-to-br from-white to-purple-50">
-                <ShineBorder
-                  borderWidth={2}
-                  duration={25}
-                  shineColor={["#8b5cf6", "#a855f7", "#c084fc"]}
-                  className="rounded-lg"
-                />
-                <CardHeader className="relative z-10">
-                  <CardTitle className="flex items-center gap-3">
-                    <motion.div
-                      initial={{ scale: 0, rotate: -180 }}
-                      animate={{ scale: 1, rotate: 0 }}
-                      transition={{ delay: 1.1, duration: 0.6 }}
-                      className="p-2 bg-gradient-to-r from-purple-500 to-purple-600 rounded-full"
-                    >
-                      <UserCheck className="w-5 h-5 text-white" />
-                    </motion.div>
-                    <span className="text-lg font-bold bg-gradient-to-r from-purple-600 to-purple-700 bg-clip-text text-transparent">
-                      Advisor Assignment
-                    </span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="relative z-10 space-y-4">
-                  <div className="space-y-3">
-                    <Label htmlFor="advisor-select" className="text-sm font-semibold text-gray-700">
-                      Assigned Advisor
-                    </Label>
-                    <Select
-                      value={selectedAdvisorId}
-                      onValueChange={handleAdvisorUpdate}
-                      disabled={isUpdatingAdvisor}
-                    >
-                      <SelectTrigger className="w-full border-2 border-purple-200 focus:border-purple-500 transition-colors">
-                        <SelectValue placeholder="Select an advisor" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">No advisor assigned</SelectItem>
-                        {advisors.map((advisor) => (
-                          <SelectItem key={advisor.advisorId} value={advisor.advisorId.toString()}>
-                            {advisor.fullName}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {isUpdatingAdvisor && (
-                    <motion.div 
-                      className="flex items-center gap-3 p-3 rounded-lg bg-purple-50 border border-purple-200"
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ duration: 0.3 }}
-                    >
-                      <motion.div 
-                        className="w-5 h-5 border-2 border-purple-600 border-t-transparent rounded-full"
-                        animate={{ rotate: 360 }}
-                        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+          {/* Current Level Advisor and Notes Section - Only show for Level 2 and above */}
+          {currentLevel !== 'care-partner' && (() => {
+            const currentLevelState = levelStates[currentLevel];
+            if (!currentLevelState) return null;
+            
+            const currentLevelData = levels.find(level => level.key === currentLevel);
+            if (!currentLevelData) return null;
+            
+            return (
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Advisor Assignment */}
+                  <div>
+                    <Card className="relative overflow-hidden border-0 shadow-xl bg-gradient-to-br from-white to-purple-50">
+                      <ShineBorder
+                        borderWidth={2}
+                        duration={25}
+                        shineColor={["#8b5cf6", "#a855f7", "#c084fc"]}
+                        className="rounded-lg"
                       />
-                      <span className="text-sm text-purple-700 font-medium">Updating advisor...</span>
-                    </motion.div>
-                  )}
-                </CardContent>
-              </Card>
-            </motion.div>
+                      <CardHeader className="relative z-10">
+                        <CardTitle className="flex items-center gap-3">
+                          <div className="p-2 bg-gradient-to-r from-purple-500 to-purple-600 rounded-full">
+                            <UserCheck className="w-5 h-5 text-white" />
+                          </div>
+                          <span className="text-lg font-bold bg-gradient-to-r from-purple-600 to-purple-700 bg-clip-text text-transparent">
+                            Advisor Assignment
+                          </span>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="relative z-10 space-y-4">
+                        <div className="space-y-3">
+                          <Label htmlFor={`advisor-select-${currentLevel}`} className="text-sm font-semibold text-gray-700">
+                            Assigned Advisor
+                          </Label>
+                          <Select
+                            value={currentLevelState.advisorId}
+                            onValueChange={(value) => handleLevelAdvisorUpdate(currentLevel, value)}
+                            disabled={currentLevelState.isUpdatingAdvisor}
+                          >
+                            <SelectTrigger className="w-full border-2 border-purple-200 focus:border-purple-500 transition-colors">
+                              <SelectValue placeholder="Select an advisor" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">No advisor assigned</SelectItem>
+                              {advisors.map((advisor) => (
+                                <SelectItem key={advisor.advisorId} value={advisor.advisorId.toString()}>
+                                  {advisor.fullName}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {currentLevelState.isUpdatingAdvisor && (
+                            <div className="flex items-center gap-2 text-sm text-purple-600">
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600"></div>
+                              Updating advisor...
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
 
-            {/* Notes Section */}
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 1.1, duration: 0.6 }}
-            >
-              <Card className="relative overflow-hidden border-0 shadow-xl bg-gradient-to-br from-white to-cyan-50">
-                <ShineBorder
-                  borderWidth={2}
-                  duration={25}
-                  shineColor={["#06b6d4", "#0891b2", "#0e7490"]}
-                  className="rounded-lg"
-                />
-                <CardHeader className="relative z-10">
-                  <CardTitle className="flex items-center gap-3">
-                    <motion.div
-                      initial={{ scale: 0, rotate: -180 }}
-                      animate={{ scale: 1, rotate: 0 }}
-                      transition={{ delay: 1.2, duration: 0.6 }}
-                      className="p-2 bg-gradient-to-r from-cyan-500 to-cyan-600 rounded-full"
-                    >
-                      <MessageSquare className="w-5 h-5 text-white" />
-                    </motion.div>
-                    <span className="text-lg font-bold bg-gradient-to-r from-cyan-600 to-cyan-700 bg-clip-text text-transparent">
-                      Notes
-                    </span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="relative z-10 space-y-4">
-                  <div className="space-y-3">
-                    <Label htmlFor="notes-select" className="text-sm font-semibold text-gray-700">
-                      Employee Notes
-                    </Label>
-                    <Select
-                      value={notes}
-                      onValueChange={handleNotesUpdate}
-                      disabled={isUpdatingNotes}
-                    >
-                      <SelectTrigger className="w-full border-2 border-cyan-200 focus:border-cyan-500 transition-colors">
-                        <SelectValue placeholder="Select a note..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {NOTES_OPTIONS.filter(option => option.value !== '').map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {isUpdatingNotes && (
-                    <motion.div 
-                      className="flex items-center gap-3 p-3 rounded-lg bg-cyan-50 border border-cyan-200"
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ duration: 0.3 }}
-                    >
-                      <motion.div 
-                        className="w-5 h-5 border-2 border-cyan-600 border-t-transparent rounded-full"
-                        animate={{ rotate: 360 }}
-                        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                  {/* Notes Section */}
+                  <div>
+                    <Card className="relative overflow-hidden border-0 shadow-xl bg-gradient-to-br from-white to-cyan-50">
+                      <ShineBorder
+                        borderWidth={2}
+                        duration={25}
+                        shineColor={["#06b6d4", "#0891b2", "#0e7490"]}
+                        className="rounded-lg"
                       />
-                      <span className="text-sm text-cyan-700 font-medium">Updating notes...</span>
-                    </motion.div>
-                  )}
-                </CardContent>
-              </Card>
-            </motion.div>
-          </motion.div>
+                      <CardHeader className="relative z-10">
+                        <CardTitle className="flex items-center gap-3">
+                          <div className="p-2 bg-gradient-to-r from-cyan-500 to-cyan-600 rounded-full">
+                            <MessageSquare className="w-5 h-5 text-white" />
+                          </div>
+                          <span className="text-lg font-bold bg-gradient-to-r from-cyan-600 to-cyan-700 bg-clip-text text-transparent">
+                            Notes
+                          </span>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="relative z-10 space-y-4">
+                        <div className="space-y-3">
+                          <Label htmlFor={`notes-select-${currentLevel}`} className="text-sm font-semibold text-gray-700">
+                            Employee Notes
+                          </Label>
+                          <Select
+                            value={currentLevelState.notes}
+                            onValueChange={(value) => handleLevelNotesUpdate(currentLevel, value)}
+                            disabled={currentLevelState.isUpdatingNotes}
+                          >
+                            <SelectTrigger className="w-full border-2 border-cyan-200 focus:border-cyan-500 transition-colors">
+                              <SelectValue placeholder="Select a note..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {NOTES_OPTIONS.filter(option => option.value !== '').map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {currentLevelState.isUpdatingNotes && (
+                            <div className="flex items-center gap-2 text-sm text-cyan-600">
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-cyan-600"></div>
+                              Updating notes...
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Training Progress */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 1.3, duration: 0.6 }}
+          <div
           >
             <Card className="relative overflow-hidden border-0 shadow-xl bg-gradient-to-br from-white to-gray-50">
               <div className="absolute inset-0 bg-gradient-to-r from-purple-500/5 via-blue-500/5 to-cyan-500/5"></div>
               <CardHeader className="relative z-10">
                 <CardTitle className="flex items-center gap-3">
-                  <motion.div
-                    initial={{ scale: 0, rotate: -180 }}
-                    animate={{ scale: 1, rotate: 0 }}
-                    transition={{ delay: 1.4, duration: 0.6 }}
-                    className="p-2 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full"
-                  >
+                  <div className="p-2 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full">
                     <GraduationCap className="w-5 h-5 text-white" />
-                  </motion.div>
+                  </div>
                   <span className="text-xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
                     Training Progress
                   </span>
@@ -1162,102 +1251,64 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
               </CardHeader>
               <CardContent className="relative z-10">
                 <Tabs value={currentLevel} onValueChange={setCurrentLevel} className="space-y-6">
-                  <motion.div 
-                    className="flex max-w-fit mx-auto border border-transparent rounded-full bg-white shadow-[0px_8px_30px_rgb(0,0,0,0.12)] px-8 py-4 items-center justify-center space-x-8 mb-8"
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 1.5, duration: 0.6 }}
-                  >
+                  <div className="flex max-w-fit mx-auto border border-transparent rounded-full bg-white shadow-[0px_8px_30px_rgb(0,0,0,0.12)] px-8 py-4 items-center justify-center space-x-8 mb-8">
                     {levels.map((level, idx) => {
                       const isActive = currentLevel === level.key;
                       return (
-                        <motion.button
+                        <button
                           key={`level-${idx}`}
                           onClick={() => setCurrentLevel(level.key)}
                           className="relative items-center flex space-x-2 transition-all duration-300 group"
-                          initial={{ opacity: 0, scale: 0.8 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          transition={{ delay: 1.6 + (idx * 0.1), duration: 0.4 }}
                         >
-                          <motion.div
+                          <div
                             className={cn(
                               "relative p-3 rounded-xl border-2 transition-all duration-300",
                               isActive 
                                 ? "bg-gradient-to-r from-purple-500 to-blue-500 text-white shadow-lg shadow-purple-500/25" 
                                 : "bg-white hover:bg-purple-50 border-purple-200 hover:border-purple-300"
                             )}
-                            initial={{ scale: 1 }}
-                            animate={{ 
-                              scale: isActive ? 1.05 : 1,
-                            }}
-                            whileHover={{ scale: isActive ? 1.1 : 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                            transition={{ 
-                              type: "spring", 
-                              bounce: 0.3, 
-                              duration: 0.4,
-                              ease: "easeInOut"
-                            }}
                           >
-                            <motion.span className={cn(
+                            <span className={cn(
                               "block sm:hidden transition-colors duration-300",
                               isActive ? "text-white" : "text-purple-600"
                             )}>
                               <level.progress.icon className="w-5 h-5" />
-                            </motion.span>
-                            <motion.span className={cn(
+                            </span>
+                            <span className={cn(
                               "hidden sm:block text-sm font-semibold transition-colors duration-300",
                               isActive ? "text-white" : "text-purple-700"
                             )}>
                               {level.name}
-                            </motion.span>
+                            </span>
                             
                             {/* Active indicator */}
                             {isActive && (
-                              <motion.div
-                                className="absolute inset-0 bg-white/20 rounded-xl"
-                                layoutId="activeTab"
-                                initial={{ opacity: 0, scale: 0.8 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                exit={{ opacity: 0, scale: 0.8 }}
-                                transition={{ 
-                                  type: "spring", 
-                                  bounce: 0.4, 
-                                  duration: 0.6,
-                                  ease: "easeInOut"
-                                }}
-                              />
+                              <div className="absolute inset-0 bg-white/20 rounded-xl" />
                             )}
                             
-                            {/* Progress indicator */}
-                            <motion.div
-                              className="absolute -top-1 -right-1 w-3 h-3 bg-gradient-to-r from-green-400 to-emerald-500 rounded-full border-2 border-white"
-                              initial={{ scale: 0 }}
-                              animate={{ scale: level.progress.completed === level.progress.total ? 1 : 0 }}
-                              transition={{ delay: 1.8 + (idx * 0.1), duration: 0.3 }}
-                            />
-                          </motion.div>
-                        </motion.button>
+                            {/* Progress indicator - only show if level is awarded */}
+                            {level.progress.isAwarded && (
+                              <div
+                                className="absolute -top-1 -right-1 w-3 h-3 bg-gradient-to-r from-green-400 to-emerald-500 rounded-full border-2 border-white"
+                              />
+                            )}
+                          </div>
+                        </button>
                       );
                     })}
-                  </motion.div>
+                  </div>
 
                 {levels.map((level) => (
                   <TabsContent key={level.key} value={level.key} className="space-y-6">
-                    <motion.div 
+                    <div 
                       className="flex items-center justify-between p-6 rounded-xl bg-gradient-to-r from-white to-gray-50 border border-gray-200"
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.2, duration: 0.6 }}
                     >
                       <div className="flex items-center gap-4">
-                        <motion.div
+                        <div
                           className="p-3 rounded-full bg-gradient-to-r from-purple-100 to-blue-100"
-                          whileHover={{ scale: 1.1, rotate: 5 }}
-                          transition={{ type: "spring", bounce: 0.3 }}
                         >
                           <level.progress.icon className={`w-6 h-6 ${level.progress.color}`} />
-                        </motion.div>
+                        </div>
                         <div>
                           <h3 className="text-lg font-bold text-gray-800">{level.name} Level</h3>
                           <p className="text-sm text-gray-600">
@@ -1272,54 +1323,41 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
                             className="h-3 bg-gray-200"
                           />
                         </div>
-                        <motion.span 
+                        <span 
                           className="text-lg font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent"
-                          initial={{ scale: 0.8 }}
-                          animate={{ scale: 1 }}
-                          transition={{ delay: 0.4, duration: 0.3 }}
                         >
                           {Math.round((level.progress.completed / level.progress.total) * 100)}%
-                        </motion.span>
+                        </span>
                       </div>
-                    </motion.div>
+                    </div>
 
                     <div className="space-y-4">
-                      {level.progress.total === 0 ? (
-                        <motion.div 
+                      {!level.progress.hasData ? (
+                        <div 
                           className="text-center py-8 text-gray-500"
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          transition={{ delay: 0.3, duration: 0.6 }}
                         >
                           <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
                             <AlertCircle className="w-8 h-8 text-gray-400" />
                           </div>
                           <p className="text-lg font-medium">No data for this level</p>
-                          <p className="text-sm">Requirements will appear here once data is available</p>
-                        </motion.div>
+                          <p className="text-sm">This employee has no {levelKeyToAwardType[currentLevel]} record. Data will appear here once the employee progresses to this level.</p>
+                        </div>
                       ) : (
                         level.progress.requirements.map((req, index) => (
-                          <motion.div 
+                          <div 
                             key={index} 
                             className="flex items-center justify-between p-4 rounded-xl border border-gray-200 bg-white hover:shadow-md transition-all duration-300"
-                            initial={{ opacity: 0, x: -20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: 0.1 * index, duration: 0.4 }}
-                            whileHover={{ scale: 1.02, backgroundColor: "#f8fafc" }}
                           >
                             <div className="flex items-center gap-4">
-                              <motion.div
+                              <div
                                 className="w-2 h-2 rounded-full bg-gradient-to-r from-purple-400 to-blue-400"
-                                initial={{ scale: 0 }}
-                                animate={{ scale: 1 }}
-                                transition={{ delay: 0.2 + (0.1 * index), duration: 0.3 }}
                               />
                               <span className="font-semibold text-gray-800">{req.name}</span>
                             </div>
                             <div className="flex items-center gap-2">
                               {getStatusBadge(req)}
                             </div>
-                          </motion.div>
+                          </div>
                         ))
                       )}
                     </div>
@@ -1328,18 +1366,13 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
               </Tabs>
             </CardContent>
           </Card>
-          </motion.div>
+          </div>
 
           {/* Action Buttons */}
-          <motion.div 
+          <div 
             className="flex gap-3 justify-end pt-6 border-t border-gray-200"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 1.7, duration: 0.6 }}
           >
-            <motion.div
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
+            <div
             >
               <Button 
                 variant="outline" 
@@ -1348,9 +1381,9 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
               >
                 Close
               </Button>
-            </motion.div>
-          </motion.div>
-        </motion.div>
+            </div>
+          </div>
+        </div>
         )}
         </div>
       </DialogContent>

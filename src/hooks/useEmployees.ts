@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Employee } from '@/context/AppContext';
-import { trainingAPI } from '@/services/api';
+import { trainingAPI, type EmployeeResponse } from '@/services/api';
 import { getLevelFromTabKey } from '@/config/awardTypes';
 
 interface EmployeeFilters {
@@ -11,6 +11,9 @@ interface EmployeeFilters {
   status?: string;
   jobTitle?: string;
   search?: string;
+  // Server-side date filtering
+  dateField?: string;
+  date?: string; // YYYY-MM-DD
 }
 
 // Hook for paginated employee data using new view-based approach (unique employees only)
@@ -22,7 +25,8 @@ export const useEmployees = (filters: EmployeeFilters, pageSize: number = 10) =>
     setCurrentPage(1);
   }, [filters.level, filters.facility, filters.area, filters.status, filters.jobTitle]);
 
-  const { data, isLoading, error, refetch, isFetching } = useQuery({
+  const queryClient = useQueryClient();
+  const { data, isLoading, error, refetch, isFetching } = useQuery<EmployeeResponse>({
     queryKey: ['employees-unique', filters.level, currentPage, JSON.stringify(filters)],
     queryFn: async () => {
       const level = filters.level && filters.level !== 'all' ? getLevelFromTabKey(filters.level) : 'all';
@@ -32,12 +36,27 @@ export const useEmployees = (filters: EmployeeFilters, pageSize: number = 10) =>
         limit: pageSize
       });
     },
-    staleTime: 2 * 60 * 1000, // 2 minutes for better performance with 15k records
-    gcTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 3 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    placeholderData: (prev) => prev,
   });
 
   const totalPages = data?.pagination?.totalPages || 0;
   const totalEmployees = data?.pagination?.totalEmployees || 0;
+
+  // Prefetch next page for smoother UX
+  useEffect(() => {
+    if (!data?.pagination) return;
+    if (currentPage < (data.pagination.totalPages || 0)) {
+      const nextPage = currentPage + 1;
+      const level = filters.level && filters.level !== 'all' ? getLevelFromTabKey(filters.level) : 'all';
+      queryClient.prefetchQuery({
+        queryKey: ['employees-unique', filters.level, nextPage, JSON.stringify(filters)],
+        queryFn: () => trainingAPI.getUniqueEmployeesByLevel(level, { ...filters, page: nextPage, limit: pageSize }),
+        staleTime: 3 * 60 * 1000,
+      });
+    }
+  }, [data?.pagination, currentPage, filters, pageSize, queryClient]);
 
   return {
     employees: data?.employees || [],
@@ -62,7 +81,8 @@ export const useTrainingEmployees = (filters: EmployeeFilters, pageSize: number 
     setCurrentPage(1);
   }, [filters.level, filters.facility, filters.area, filters.status, filters.jobTitle]);
 
-  const { data, isLoading, error, refetch, isFetching } = useQuery({
+  const queryClient = useQueryClient();
+  const { data, isLoading, error, refetch, isFetching } = useQuery<EmployeeResponse>({
     queryKey: ['employees-training', filters.level, currentPage, JSON.stringify(filters)],
     queryFn: async () => {
       const level = filters.level && filters.level !== 'all' ? getLevelFromTabKey(filters.level) : 'all';
@@ -72,12 +92,27 @@ export const useTrainingEmployees = (filters: EmployeeFilters, pageSize: number 
         limit: pageSize
       });
     },
-    staleTime: 2 * 60 * 1000, // 2 minutes for better performance with 15k records
-    gcTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 3 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+    placeholderData: (prev) => prev,
   });
 
   const totalPages = data?.pagination?.totalPages || 0;
   const totalEmployees = data?.pagination?.totalEmployees || 0;
+
+  // Prefetch next page
+  useEffect(() => {
+    if (!data?.pagination) return;
+    if (currentPage < (data.pagination.totalPages || 0)) {
+      const nextPage = currentPage + 1;
+      const level = filters.level && filters.level !== 'all' ? getLevelFromTabKey(filters.level) : 'all';
+      queryClient.prefetchQuery({
+        queryKey: ['employees-training', filters.level, nextPage, JSON.stringify(filters)],
+        queryFn: () => trainingAPI.getEmployeesByLevel(level, { ...filters, page: nextPage, limit: pageSize }),
+        staleTime: 3 * 60 * 1000,
+      });
+    }
+  }, [data?.pagination, currentPage, filters, pageSize, queryClient]);
 
   return {
     employees: data?.employees || [],
@@ -110,5 +145,15 @@ export const useEmployeeStats = (level?: string) => {
     },
     staleTime: 10 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
+  });
+};
+
+// Hook for advisors data
+export const useAdvisors = () => {
+  return useQuery({
+    queryKey: ['advisors'],
+    queryFn: () => trainingAPI.getAdvisors(),
+    staleTime: 2 * 60 * 1000, // 2 minutes
+    gcTime: 5 * 60 * 1000, // 5 minutes
   });
 };

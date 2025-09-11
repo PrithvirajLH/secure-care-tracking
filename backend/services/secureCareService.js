@@ -98,6 +98,36 @@ class SecureCareService {
         request.input('jobTitle', sql.VarChar, filters.jobTitle);
       }
       
+      // Server-side date filter (exact match on specified field)
+      if (filters.dateField && filters.date) {
+        const df = String(filters.dateField);
+        const date = filters.date; // YYYY-MM-DD
+        const fieldMap = {
+          completedDate: 'e.completedDate',
+          standingVideo: 'e.standingVideo',
+          sleepingVideo: 'e.sleepingVideo',
+          feedGradVideo: 'e.feedGradVideo',
+          noHandnoSpeak: 'e.noHandnoSpeak',
+          session1: 'e.[session#1]',
+          session2: 'e.[session#2]',
+          session3: 'e.[session#3]',
+          conferenceCompleted: 'e.conferenceCompleted',
+          secureCareAwardedDate: 'e.secureCareAwardedDate',
+          scheduleStandingVideo: 'e.scheduleStandingVideo',
+          scheduleSleepingVideo: 'e.scheduleSleepingVideo',
+          scheduleFeedGradVideo: 'e.scheduleFeedGradVideo',
+          schedulenoHandnoSpeak: 'e.schedulenoHandnoSpeak',
+          scheduleSession1: 'e.[scheduleSession#1]',
+          scheduleSession2: 'e.[scheduleSession#2]',
+          scheduleSession3: 'e.[scheduleSession#3]'
+        };
+        const column = fieldMap[df];
+        if (column) {
+          query += ` ${query.includes('WHERE') ? 'AND' : 'WHERE'} CAST(${column} AS DATE) = @filterDate`;
+          request.input('filterDate', sql.Date, date);
+        }
+      }
+
       // Status filter - this is complex as it depends on awardType and completion status
       if (filters.status && filters.status !== 'all') {
         let statusCondition = '';
@@ -152,7 +182,31 @@ class SecureCareService {
     const limit = Math.min(parseInt(filters.limit) || 50, 100); // Max 100 records per page
     const offset = (page - 1) * limit;
     
-    query += ` ORDER BY e.name OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY`;
+    // Add sorting support with level-specific defaults
+    const sortBy = filters.sortBy || (filters.level === 'Level 1' ? 'latest' : 'conference');
+    const sortOrder = filters.sortOrder || 'desc';
+    
+    let orderClause = '';
+    switch (sortBy) {
+      case 'latest':
+        orderClause = `ORDER BY e.assignedDate DESC, e.employeeId DESC`;
+        break;
+      case 'conference':
+        orderClause = `ORDER BY e.conferenceCompleted DESC, e.employeeId DESC`;
+        break;
+      case 'name':
+        orderClause = `ORDER BY e.name ASC`;
+        break;
+      case 'facility':
+        orderClause = `ORDER BY e.facility ASC`;
+        break;
+      default:
+        orderClause = filters.level === 'Level 1' 
+          ? `ORDER BY e.assignedDate DESC, e.employeeId DESC`
+          : `ORDER BY e.conferenceCompleted DESC, e.employeeId DESC`;
+    }
+    
+    query += ` ${orderClause} OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY`;
     
     const result = await request.query(query);
     
@@ -188,6 +242,36 @@ class SecureCareService {
         countRequest.input('jobTitle', sql.VarChar, filters.jobTitle);
       }
       
+      // Server-side date filter for count query
+      if (filters.dateField && filters.date) {
+        const df = String(filters.dateField);
+        const date = filters.date; // YYYY-MM-DD
+        const fieldMap = {
+          completedDate: 'e.completedDate',
+          standingVideo: 'e.standingVideo',
+          sleepingVideo: 'e.sleepingVideo',
+          feedGradVideo: 'e.feedGradVideo',
+          noHandnoSpeak: 'e.noHandnoSpeak',
+          session1: 'e.[session#1]',
+          session2: 'e.[session#2]',
+          session3: 'e.[session#3]',
+          conferenceCompleted: 'e.conferenceCompleted',
+          secureCareAwardedDate: 'e.secureCareAwardedDate',
+          scheduleStandingVideo: 'e.scheduleStandingVideo',
+          scheduleSleepingVideo: 'e.scheduleSleepingVideo',
+          scheduleFeedGradVideo: 'e.scheduleFeedGradVideo',
+          schedulenoHandnoSpeak: 'e.schedulenoHandnoSpeak',
+          scheduleSession1: 'e.[scheduleSession#1]',
+          scheduleSession2: 'e.[scheduleSession#2]',
+          scheduleSession3: 'e.[scheduleSession#3]'
+        };
+        const column = fieldMap[df];
+        if (column) {
+          countQuery += ` ${countQuery.includes('WHERE') ? 'AND' : 'WHERE'} CAST(${column} AS DATE) = @filterDate`;
+          countRequest.input('filterDate', sql.Date, date);
+        }
+      }
+
       // Status filter for count query
       if (filters.status && filters.status !== 'all') {
         let statusCondition = '';
@@ -404,6 +488,27 @@ class SecureCareService {
     
     return result.recordset;
   }
+
+  // Add new advisor
+  async addAdvisor(firstName, lastName) {
+    const pool = await getPool();
+    const request = pool.request();
+    request.input('firstName', sql.NVarChar, firstName);
+    request.input('lastName', sql.NVarChar, lastName);
+    
+    const result = await request.query(`
+      INSERT INTO dbo.Advisor (firstName, lastName)
+      OUTPUT INSERTED.advisorId, INSERTED.firstName, INSERTED.lastName, 
+             INSERTED.firstName + ' ' + ISNULL(INSERTED.lastName, '') as fullName
+      VALUES (@firstName, @lastName)
+    `);
+    
+    if (result.recordset.length === 0) {
+      throw new Error('Failed to create advisor');
+    }
+    
+    return result.recordset[0];
+  }
   
   // Update employee notes
   async updateEmployeeNotes(employeeId, notes) {
@@ -443,6 +548,48 @@ class SecureCareService {
     }
     
     return { success: true, message: 'Advisor updated successfully' };
+  }
+
+  // Update employee notes for specific level/awardType
+  async updateEmployeeNotesForLevel(employeeId, awardType, notes) {
+    const pool = await getPool();
+    const request = pool.request();
+    request.input('employeeId', sql.Int, employeeId);
+    request.input('awardType', sql.VarChar, awardType);
+    request.input('notes', sql.VarChar, notes || null);
+    
+    const result = await request.query(`
+      UPDATE dbo.SecureCareEmployee 
+      SET notes = @notes 
+      WHERE employeeId = @employeeId AND awardType = @awardType
+    `);
+    
+    if (result.rowsAffected[0] === 0) {
+      throw new Error('Employee level record not found');
+    }
+    
+    return { success: true, message: `Notes updated successfully for ${awardType}` };
+  }
+
+  // Update employee advisor for specific level/awardType
+  async updateEmployeeAdvisorForLevel(employeeId, awardType, advisorId) {
+    const pool = await getPool();
+    const request = pool.request();
+    request.input('employeeId', sql.Int, employeeId);
+    request.input('awardType', sql.VarChar, awardType);
+    request.input('advisorId', sql.Int, advisorId || null);
+    
+    const result = await request.query(`
+      UPDATE dbo.SecureCareEmployee 
+      SET advisorId = @advisorId 
+      WHERE employeeId = @employeeId AND awardType = @awardType
+    `);
+    
+    if (result.rowsAffected[0] === 0) {
+      throw new Error('Employee level record not found');
+    }
+    
+    return { success: true, message: `Advisor updated successfully for ${awardType}` };
   }
 
   // Get employee by ID
@@ -636,7 +783,31 @@ class SecureCareService {
     const limit = Math.min(parseInt(filters.limit) || 50, 100); // Max 100 records per page
     const offset = (page - 1) * limit;
     
-    query += ` ORDER BY e.name OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY`;
+    // Add sorting support with level-specific defaults
+    const sortBy = filters.sortBy || (filters.level === 'Level 1' ? 'latest' : 'conference');
+    const sortOrder = filters.sortOrder || 'desc';
+    
+    let orderClause = '';
+    switch (sortBy) {
+      case 'latest':
+        orderClause = `ORDER BY e.assignedDate DESC, e.employeeId DESC`;
+        break;
+      case 'conference':
+        orderClause = `ORDER BY e.conferenceCompleted DESC, e.employeeId DESC`;
+        break;
+      case 'name':
+        orderClause = `ORDER BY e.name ASC`;
+        break;
+      case 'facility':
+        orderClause = `ORDER BY e.facility ASC`;
+        break;
+      default:
+        orderClause = filters.level === 'Level 1' 
+          ? `ORDER BY e.assignedDate DESC, e.employeeId DESC`
+          : `ORDER BY e.conferenceCompleted DESC, e.employeeId DESC`;
+    }
+    
+    query += ` ${orderClause} OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY`;
     
     const result = await request.query(query);
     
@@ -1321,6 +1492,104 @@ class SecureCareService {
       overdueTraining: data.overdueTraining,
       recentCompletions: data.recentCompletions,
       trainingEfficiency: data.totalEmployees > 0 ? ((data.completedCertifications / data.totalEmployees) * 100).toFixed(1) : '0'
+    };
+  }
+
+  // Aggregates for Completions & Counts page
+  async getCompletionsAggregates(filters = {}) {
+    const pool = await getPool();
+    const request = pool.request();
+
+    const conditions = [];
+    if (filters.facility && filters.facility !== 'all') {
+      conditions.push('e.facility = @facility');
+      request.input('facility', sql.VarChar, filters.facility);
+    }
+    if (filters.area && filters.area !== 'all') {
+      conditions.push('e.area = @area');
+      request.input('area', sql.VarChar, filters.area);
+    }
+    if (filters.level && filters.level !== 'all') {
+      conditions.push('e.awardType = @level');
+      request.input('level', sql.VarChar, filters.level);
+    }
+    // Always define date params (nullable) so SQL can reference them
+    request.input('startDate', sql.Date, filters.startDate || null);
+    request.input('endDate', sql.Date, filters.endDate || null);
+
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const query = `
+      SELECT 
+        -- completed: awarded within range (or awarded with no range specified)
+        SUM(CASE WHEN e.secureCareAwarded = 1 AND (
+          (@startDate IS NULL AND @endDate IS NULL) OR
+          (e.secureCareAwardedDate BETWEEN @startDate AND @endDate)
+        ) THEN 1 ELSE 0 END) AS completed,
+
+        -- scheduled: any schedule date within range and not completed
+        SUM(CASE WHEN e.secureCareAwarded = 0 AND (
+          (@startDate IS NULL AND @endDate IS NULL) OR
+          (e.scheduleStandingVideo BETWEEN @startDate AND @endDate) OR
+          (e.scheduleSleepingVideo BETWEEN @startDate AND @endDate) OR
+          (e.scheduleFeedGradVideo BETWEEN @startDate AND @endDate) OR
+          (e.schedulenoHandnoSpeak BETWEEN @startDate AND @endDate) OR
+          (e.[scheduleSession#1] BETWEEN @startDate AND @endDate) OR
+          (e.[scheduleSession#2] BETWEEN @startDate AND @endDate) OR
+          (e.[scheduleSession#3] BETWEEN @startDate AND @endDate)
+        ) THEN 1 ELSE 0 END) AS scheduled,
+
+        -- inProgress: assigned in range and not awarded
+        SUM(CASE WHEN e.secureCareAwarded = 0 AND (
+          (@startDate IS NULL AND @endDate IS NULL) OR
+          (e.assignedDate BETWEEN @startDate AND @endDate)
+        ) THEN 1 ELSE 0 END) AS inProgress,
+
+        -- awaiting: conference completed in range and awaiting=1
+        SUM(CASE WHEN e.awaiting = 1 AND (
+          (@startDate IS NULL AND @endDate IS NULL) OR
+          (e.conferenceCompleted BETWEEN @startDate AND @endDate)
+        ) THEN 1 ELSE 0 END) AS awaiting,
+
+        -- rejected: conference completed in range and awaiting IS NULL
+        SUM(CASE WHEN e.awaiting IS NULL AND (
+          (@startDate IS NULL AND @endDate IS NULL) OR
+          (e.conferenceCompleted BETWEEN @startDate AND @endDate)
+        ) THEN 1 ELSE 0 END) AS rejected
+      FROM dbo.SecureCareEmployee e
+      ${where}
+    `;
+
+    const result = await request.query(query);
+
+    // Breakdown by level
+    const breakdownQuery = `
+      SELECT e.awardType as level,
+        SUM(CASE WHEN e.secureCareAwarded = 1 AND (
+          (@startDate IS NULL AND @endDate IS NULL) OR
+          (e.secureCareAwardedDate BETWEEN @startDate AND @endDate)
+        ) THEN 1 ELSE 0 END) AS completed,
+        SUM(CASE WHEN e.secureCareAwarded = 0 AND (
+          (@startDate IS NULL AND @endDate IS NULL) OR
+          (e.assignedDate BETWEEN @startDate AND @endDate)
+        ) THEN 1 ELSE 0 END) AS inProgress
+      FROM dbo.SecureCareEmployee e
+      ${where}
+      GROUP BY e.awardType
+    `;
+
+    const breakdownReq = pool.request();
+    if (filters.facility && filters.facility !== 'all') breakdownReq.input('facility', sql.VarChar, filters.facility);
+    if (filters.area && filters.area !== 'all') breakdownReq.input('area', sql.VarChar, filters.area);
+    if (filters.level && filters.level !== 'all') breakdownReq.input('level', sql.VarChar, filters.level);
+    breakdownReq.input('startDate', sql.Date, filters.startDate || null);
+    breakdownReq.input('endDate', sql.Date, filters.endDate || null);
+
+    const byLevel = await breakdownReq.query(breakdownQuery);
+
+    return {
+      totals: result.recordset[0] || { completed: 0, scheduled: 0, inProgress: 0, awaiting: 0, rejected: 0 },
+      byLevel: byLevel.recordset || []
     };
   }
 }
