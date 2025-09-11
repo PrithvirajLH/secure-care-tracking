@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { useApp } from "@/context/AppContext";
-import { useEmployees } from "@/hooks/useEmployees";
+import { useEmployees, useAdvisors } from "@/hooks/useEmployees";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -58,8 +58,8 @@ export default function AdvisorManagement() {
   const { state, dispatch } = useApp();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedAdvisor, setSelectedAdvisor] = useState<string>("all");
-  const [apiAdvisors, setApiAdvisors] = useState<any[]>([]);
-  const [loadingAdvisors, setLoadingAdvisors] = useState<boolean>(false);
+  // Use React Query for advisors data
+  const { data: apiAdvisors = [], isLoading: loadingAdvisors, error: advisorsError, refetch: refetchAdvisors } = useAdvisors();
   const [isAddAdvisorOpen, setIsAddAdvisorOpen] = useState(false);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [isNotesOpen, setIsNotesOpen] = useState(false);
@@ -76,22 +76,7 @@ export default function AdvisorManagement() {
   // Use currentEmployees if available, otherwise fall back to state.employees
   const employees = currentEmployees && currentEmployees.length > 0 ? currentEmployees : state.employees;
 
-  // Load advisors from the backend to ensure we show all advisors
-  useEffect(() => {
-    const load = async () => {
-      setLoadingAdvisors(true);
-      try {
-        const list = await trainingAPI.getAdvisors();
-        setApiAdvisors(list);
-      } catch (e) {
-        console.error('Failed to load advisors', e);
-        toast.error('Failed to load advisors');
-      } finally {
-        setLoadingAdvisors(false);
-      }
-    };
-    load();
-  }, []);
+  // Advisors are automatically loaded via React Query useAdvisors hook
 
   // Merge advisors from API with employee stats
   const advisors = useMemo(() => {

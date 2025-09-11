@@ -200,8 +200,8 @@ export default function Dashboard() {
     { name: "Coach", value: enhancedStats.completion.coach, count: enhancedStats.counts.coach.completed },
   ].filter(item => item.value > 0); // Only show levels with completions
 
-  // Generate facility data from actual employee data using correct database fields
-  const facilityData = useMemo(() => {
+  // Generate facility rankings (top and bottom) from actual employee data
+  const facilityRankings = useMemo(() => {
     // Filter out employees with null/undefined facility names
     // Handle both 'facility' and 'Facility' field names (case sensitivity)
     const validEmployees = employees.filter(employee => {
@@ -213,7 +213,7 @@ export default function Dashboard() {
     });
 
     if (validEmployees.length === 0) {
-      return []; // Return empty array if no valid facilities
+      return { top: [], bottom: [] };
     }
 
     const facilityStats = validEmployees.reduce((acc, employee) => {
@@ -245,10 +245,12 @@ export default function Dashboard() {
           awaitingCount: typedStats.awaiting
         };
       })
-      .sort((a, b) => b.completed - a.completed)
-      .slice(0, 5); // Top 5 facilities
+      .sort((a, b) => b.completed - a.completed);
 
-    return facilityDataArray;
+    const top = facilityDataArray.slice(0, 5);
+    const bottom = facilityDataArray.slice(-5).reverse();
+
+    return { top, bottom };
   }, [employees]);
 
   // Generate recent activity data
@@ -584,66 +586,82 @@ export default function Dashboard() {
             </div>
           </CardContent>
         </Card>
-
         <Card className="shadow-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Award className="w-5 h-5 text-green-600" />
-              Top Facilities
+              Facility Performance (Top & Bottom 5)
             </CardTitle>
             <p className="text-sm text-gray-600 mt-1">
               Completion rates by facility (all training records)
             </p>
           </CardHeader>
           <CardContent>
-            <div className="h-64">
-              {facilityData.length === 0 ? (
-                <div className="flex items-center justify-center h-full text-gray-500">
-                  <div className="text-center">
-                    <Award className="w-8 h-8 mx-auto mb-2 text-gray-400" />
-                    <p className="text-sm">No facility data available</p>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="h-72">
+                {facilityRankings.top.length === 0 ? (
+                  <div className="flex items-center justify-center h-full text-gray-500">
+                    <div className="text-center">
+                      <Award className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+                      <p className="text-sm">No facility data available</p>
+                    </div>
                   </div>
-                </div>
-              ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={facilityData}>
-                    <XAxis 
-                      dataKey="name" 
-                      tick={{ fontSize: 12 }}
-                      angle={-45}
-                      textAnchor="end"
-                      height={60}
-                    />
-                    <YAxis 
-                      domain={[0, 100]} 
-                      tick={{ fontSize: 12 }}
-                      label={{ value: 'Completion %', angle: -90, position: 'insideLeft' }}
-                    />
-                    <Tooltip 
-                      formatter={(value, name, props) => [
-                        `${value}% (${props.payload.completedCount}/${props.payload.totalCount} records)`,
-                        'Completion Rate'
-                      ]}
-                      labelFormatter={(label, payload) => {
-                        const fullName = payload?.[0]?.payload?.fullName || label;
-                        return `Facility: ${fullName}`;
-                      }}
-                      contentStyle={{ 
-                        backgroundColor: '#f9fafb', 
-                        border: '1px solid #e5e7eb',
-                        borderRadius: '8px',
-                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                      }}
-                    />
-                    <Bar 
-                      dataKey="completed" 
-                      fill="#10b981" 
-                      radius={[6, 6, 0, 0]}
-                      name="Completion Rate"
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={[...facilityRankings.top].reverse()} layout="vertical" margin={{ left: 24, right: 16, top: 8, bottom: 8 }}>
+                      <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 12 }} hide={false} />
+                      <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} width={140} />
+                      <Tooltip 
+                        formatter={(value, name, props) => [
+                          `${value}% (${props.payload.completedCount}/${props.payload.totalCount} records)`,
+                          'Completion %'
+                        ]}
+                        contentStyle={{ 
+                          backgroundColor: '#f9fafb', 
+                          border: '1px solid #e5e7eb',
+                          borderRadius: '8px',
+                          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                        }}
+                      />
+                      <Bar dataKey="completed" fill="#10b981" radius={[0, 6, 6, 0]} name="Completion %">
+                        <LabelList dataKey="completed" position="right" formatter={(v) => `${v}%`} style={{ fill: '#374151', fontSize: 12 }} />
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+              <div className="h-72">
+                {facilityRankings.bottom.length === 0 ? (
+                  <div className="flex items-center justify-center h-full text-gray-500">
+                    <div className="text-center">
+                      <Award className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+                      <p className="text-sm">No facility data available</p>
+                    </div>
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={[...facilityRankings.bottom]} layout="vertical" margin={{ left: 24, right: 16, top: 8, bottom: 8 }}>
+                      <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 12 }} hide={false} />
+                      <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} width={140} />
+                      <Tooltip 
+                        formatter={(value, name, props) => [
+                          `${value}% (${props.payload.completedCount}/${props.payload.totalCount} records)`,
+                          'Completion %'
+                        ]}
+                        contentStyle={{ 
+                          backgroundColor: '#f9fafb', 
+                          border: '1px solid #e5e7eb',
+                          borderRadius: '8px',
+                          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                        }}
+                      />
+                      <Bar dataKey="completed" fill="#ef4444" radius={[0, 6, 6, 0]} name="Completion %">
+                        <LabelList dataKey="completed" position="right" formatter={(v) => `${v}%`} style={{ fill: '#374151', fontSize: 12 }} />
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -721,8 +739,8 @@ export default function Dashboard() {
                               <IconComponent className={`w-5 h-5 text-${config.color}-600`} />
                             </div>
                             <div className="min-w-0 flex-1">
-                              <h3 className={`font-semibold ${config.textColor} text-sm`}>{config.title}</h3>
-                              <p className="text-xs text-gray-600">{activities.length} {activities.length === 1 ? 'item' : 'items'}</p>
+                              <h3 className={`font-semibold ${config.textColor} text-base`}>{config.title}</h3>
+                              <p className="text-sm text-gray-600">{activities.length} {activities.length === 1 ? 'item' : 'items'}</p>
                             </div>
                           </div>
                           
@@ -732,7 +750,7 @@ export default function Dashboard() {
                                 <div className={`w-8 h-8 rounded-full bg-${config.color}-100 flex items-center justify-center mx-auto mb-2`}>
                                   <IconComponent className={`w-4 h-4 text-${config.color}-400`} />
                                 </div>
-                                <p className="text-xs text-gray-500">No recent activities</p>
+                                <p className="text-sm text-gray-500">No recent activities</p>
                               </div>
                             ) : (
                               activities.slice(0, 5).map((activity, index) => {
@@ -750,13 +768,13 @@ export default function Dashboard() {
                                         <ActivityIcon className={`w-2.5 h-2.5 text-${config.color}-600`} />
                                       </div>
                                       <div className="flex-1 min-w-0">
-                                        <p className="text-xs font-medium text-gray-900 truncate">
+                                        <p className="text-sm font-medium text-gray-900 truncate">
                                           {activity.employeeName}
                                         </p>
-                                        <p className="text-xs text-gray-600 mt-0.5">
+                                        <p className="text-sm text-gray-600 mt-0.5">
                                           {activity.description}
                                         </p>
-                                        <p className="text-xs text-gray-500 mt-0.5">
+                                        <p className="text-sm text-gray-500 mt-0.5">
                                           {formatActivityDate(activity.date)}
                                         </p>
                                       </div>
@@ -769,7 +787,7 @@ export default function Dashboard() {
                           
                           {activities.length > 5 && (
                             <div className="mt-3 text-center">
-                              <span className="text-xs text-gray-500">
+                              <span className="text-sm text-gray-500">
                                 +{activities.length - 5} more {activities.length - 5 === 1 ? 'item' : 'items'}
                               </span>
                             </div>

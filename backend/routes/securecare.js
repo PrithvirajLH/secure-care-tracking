@@ -12,6 +12,10 @@ router.get('/employees/:level', async (req, res) => {
       search: req.query.search,
       status: req.query.status,
       jobTitle: req.query.jobTitle,
+      dateField: req.query.dateField,
+      date: req.query.date,
+      sortBy: req.query.sortBy,
+      sortOrder: req.query.sortOrder,
       page: req.query.page || 1,
       limit: req.query.limit || 50
     };
@@ -38,6 +42,10 @@ router.get('/employees-unique/:level', async (req, res) => {
       search: req.query.search,
       status: req.query.status,
       jobTitle: req.query.jobTitle,
+      dateField: req.query.dateField,
+      date: req.query.date,
+      sortBy: req.query.sortBy,
+      sortOrder: req.query.sortOrder,
       page: req.query.page || 1,
       limit: req.query.limit || 50
     };
@@ -193,6 +201,29 @@ router.get('/advisors', async (req, res) => {
   }
 });
 
+// Add new advisor
+router.post('/advisors', async (req, res) => {
+  try {
+    const { firstName, lastName } = req.body;
+    
+    if (!firstName || !lastName) {
+      return res.status(400).json({ 
+        error: 'Both firstName and lastName are required' 
+      });
+    }
+    
+    const advisor = await secureCareService.addAdvisor(firstName, lastName);
+    res.status(201).json(advisor);
+    
+  } catch (error) {
+    console.error('Add advisor error:', error);
+    res.status(500).json({ 
+      error: 'Failed to add advisor',
+      message: error.message 
+    });
+  }
+});
+
 // Get filter options (facilities, areas, job titles)
 router.get('/filter-options', async (req, res) => {
   try {
@@ -245,6 +276,48 @@ router.post('/update-advisor', async (req, res) => {
     console.error('Update advisor error:', error);
     res.status(500).json({ 
       error: 'Failed to update advisor',
+      message: error.message 
+    });
+  }
+});
+
+// Update employee notes for specific level/awardType
+router.post('/update-notes-level', async (req, res) => {
+  try {
+    const { employeeId, awardType, notes } = req.body;
+    
+    if (!employeeId || !awardType) {
+      return res.status(400).json({ error: 'employeeId and awardType are required' });
+    }
+    
+    const result = await secureCareService.updateEmployeeNotesForLevel(employeeId, awardType, notes);
+    res.json(result);
+    
+  } catch (error) {
+    console.error('Update notes for level error:', error);
+    res.status(500).json({ 
+      error: 'Failed to update notes for level',
+      message: error.message 
+    });
+  }
+});
+
+// Update employee advisor for specific level/awardType
+router.post('/update-advisor-level', async (req, res) => {
+  try {
+    const { employeeId, awardType, advisorId } = req.body;
+    
+    if (!employeeId || !awardType) {
+      return res.status(400).json({ error: 'employeeId and awardType are required' });
+    }
+    
+    const result = await secureCareService.updateEmployeeAdvisorForLevel(employeeId, awardType, advisorId);
+    res.json(result);
+    
+  } catch (error) {
+    console.error('Update advisor for level error:', error);
+    res.status(500).json({ 
+      error: 'Failed to update advisor for level',
       message: error.message 
     });
   }
@@ -389,6 +462,28 @@ router.get('/analytics/metrics', async (req, res) => {
     res.status(500).json({ 
       error: 'Failed to get analytics metrics',
       message: error.message 
+    });
+  }
+});
+
+// Aggregates: Completions & Counts (date-range + filters)
+router.get('/aggregates/completions', async (req, res) => {
+  try {
+    const filters = {
+      startDate: req.query.startDate,
+      endDate: req.query.endDate,
+      level: req.query.level, // optional awardType
+      facility: req.query.facility,
+      area: req.query.area
+    };
+
+    const result = await secureCareService.getCompletionsAggregates(filters);
+    res.json(result);
+  } catch (error) {
+    console.error('Get completions aggregates error:', error);
+    res.status(500).json({
+      error: 'Failed to get aggregates',
+      message: error.message
     });
   }
 });

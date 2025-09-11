@@ -1,12 +1,18 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { useApp } from "@/context/AppContext";
-import { useEmployees } from "@/hooks/useEmployees";
+import { useEmployees, useAdvisors } from "@/hooks/useEmployees";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { CalendarClock, Users, UserCheck, Award } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { CalendarClock, Users, UserCheck, Award, Plus } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
+import { ShimmerButton } from "@/components/magicui/shimmer-button";
+import { MagicCard } from "@/components/magicui/magic-card";
 import { trainingAPI } from "@/services/api";
 import { toast } from "sonner";
 
@@ -33,29 +39,37 @@ interface Advisor {
 
 export default function Advisors() {
   const { state } = useApp();
-  const [apiAdvisors, setApiAdvisors] = useState<any[]>([]);
-  const [loadingAdvisors, setLoadingAdvisors] = useState<boolean>(false);
+  const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
+  const [newAdvisor, setNewAdvisor] = useState({ firstName: '', lastName: '' });
+  const [isAdding, setIsAdding] = useState<boolean>(false);
 
-  // Use the same data source as other components for consistency
-  const { employees: currentEmployees, isLoading, error } = useEmployees({}, 50);
+  // Use React Query for both employees and advisors data
+  const { employees: currentEmployees, isLoading: employeesLoading, error: employeesError } = useEmployees({}, 50);
+  const { data: apiAdvisors = [], isLoading: advisorsLoading, error: advisorsError, refetch: refetchAdvisors } = useAdvisors();
   const employees = currentEmployees && currentEmployees.length > 0 ? currentEmployees : state.employees;
 
-  // Load advisors from the backend
-  useEffect(() => {
-    const load = async () => {
-      setLoadingAdvisors(true);
-      try {
-        const list = await trainingAPI.getAdvisors();
-        setApiAdvisors(list);
-      } catch (e) {
-        console.error('Failed to load advisors', e);
-        toast.error('Failed to load advisors');
-      } finally {
-        setLoadingAdvisors(false);
-      }
-    };
-    load();
-  }, []);
+  // Handle adding new advisor
+  const handleAddAdvisor = async () => {
+    if (!newAdvisor.firstName.trim() || !newAdvisor.lastName.trim()) {
+      toast.error('Please enter both first name and last name');
+      return;
+    }
+
+    setIsAdding(true);
+    try {
+      const advisor = await trainingAPI.addAdvisor(newAdvisor.firstName.trim(), newAdvisor.lastName.trim());
+      setNewAdvisor({ firstName: '', lastName: '' });
+      setIsAddModalOpen(false);
+      toast.success(`Advisor ${advisor.fullName} added successfully`);
+      // Refetch advisors data to include the new advisor
+      refetchAdvisors();
+    } catch (error) {
+      console.error('Failed to add advisor:', error);
+      toast.error('Failed to add advisor');
+    } finally {
+      setIsAdding(false);
+    }
+  };
 
   // Process advisors with their assignments grouped by level using actual database data
   const advisors = useMemo(() => {
@@ -152,7 +166,7 @@ export default function Advisors() {
     return colors[level as keyof typeof colors] || 'bg-gray-100 text-gray-800 border-gray-200';
   };
 
-  if (isLoading || loadingAdvisors) {
+  if (employeesLoading || advisorsLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
@@ -163,7 +177,7 @@ export default function Advisors() {
     );
   }
 
-  if (error) {
+  if (employeesError || advisorsError) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
@@ -180,10 +194,84 @@ export default function Advisors() {
         icon={CalendarClock}
         title="Advisor Management"
         description="View advisors and their assigned employees by training level"
-      />
+      >
+        <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
+          <DialogTrigger asChild>
+            <ShimmerButton
+              shimmerColor="#8b5cf6"
+              shimmerSize="0.05em"
+              shimmerDuration="3s"
+              borderRadius="8px"
+              background="linear-gradient(45deg, #8b5cf6, #a855f7, #c084fc)"
+              className="text-white font-medium"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Advisor
+            </ShimmerButton>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[425px] p-0 border-0 bg-transparent">
+            <MagicCard
+              className="p-6"
+              gradientSize={200}
+              gradientColor="#8b5cf6"
+              gradientOpacity={0.1}
+              gradientFrom="#8b5cf6"
+              gradientTo="#a855f7"
+            >
+              <DialogHeader className="mb-4">
+                <DialogTitle className="text-xl font-semibold text-gray-900">Add New Advisor</DialogTitle>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="firstName" className="text-right text-gray-700">
+                    First Name
+                  </Label>
+                  <Input
+                    id="firstName"
+                    value={newAdvisor.firstName}
+                    onChange={(e) => setNewAdvisor(prev => ({ ...prev, firstName: e.target.value }))}
+                    className="col-span-3"
+                    placeholder="Enter first name"
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="lastName" className="text-right text-gray-700">
+                    Last Name
+                  </Label>
+                  <Input
+                    id="lastName"
+                    value={newAdvisor.lastName}
+                    onChange={(e) => setNewAdvisor(prev => ({ ...prev, lastName: e.target.value }))}
+                    className="col-span-3"
+                    placeholder="Enter last name"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setIsAddModalOpen(false);
+                    setNewAdvisor({ firstName: '', lastName: '' });
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleAddAdvisor}
+                  disabled={isAdding || !newAdvisor.firstName.trim() || !newAdvisor.lastName.trim()}
+                  className="bg-purple-600 hover:bg-purple-700 text-white"
+                >
+                  {isAdding ? 'Adding...' : 'Add Advisor'}
+                </Button>
+              </div>
+            </MagicCard>
+          </DialogContent>
+        </Dialog>
+      </PageHeader>
       
       {/* Overview Stats */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-3">
         <Card className="border-2 border-purple-200 hover:border-purple-400 transition-colors shadow-lg hover:shadow-xl">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Advisors</CardTitle>
@@ -218,21 +306,6 @@ export default function Advisors() {
               {advisors.reduce((sum, a) => sum + a.completedAssignments, 0)}
             </div>
             <p className="text-xs text-muted-foreground">Completed assignments</p>
-          </CardContent>
-        </Card>
-        
-        <Card className="border-2 border-purple-200 hover:border-purple-400 transition-colors shadow-lg hover:shadow-xl">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Avg Success Rate</CardTitle>
-            <Award className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {advisors.length > 0 
-                ? Math.round(advisors.reduce((sum, a) => sum + a.successRate, 0) / advisors.length)
-                : 0}%
-            </div>
-            <p className="text-xs text-muted-foreground">Average completion rate</p>
           </CardContent>
         </Card>
       </div>

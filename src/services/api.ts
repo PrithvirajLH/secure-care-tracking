@@ -1,5 +1,5 @@
 // API service for SecureCare operations using new configuration
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
 export interface TrainingUpdate {
   employeeId: string;
@@ -60,6 +60,21 @@ class SecureCareAPI {
     if (filters.jobTitle && filters.jobTitle !== 'all') {
       params.append('jobTitle', filters.jobTitle);
     }
+
+    // Add optional server-side date filtering
+    if (filters.dateField && filters.date) {
+      params.append('dateField', filters.dateField);
+      params.append('date', filters.date); // expected YYYY-MM-DD
+    }
+    
+    // Add sorting parameters
+    if (filters.sortBy) {
+      params.append('sortBy', filters.sortBy);
+    }
+    
+    if (filters.sortOrder) {
+      params.append('sortOrder', filters.sortOrder);
+    }
     
     const response = await fetch(`${this.baseURL}/securecare/employees/${encodeURIComponent(level)}?${params}`);
     
@@ -95,6 +110,20 @@ class SecureCareAPI {
     
     if (filters.jobTitle && filters.jobTitle !== 'all') {
       params.append('jobTitle', filters.jobTitle);
+    }
+
+    if (filters.dateField && filters.date) {
+      params.append('dateField', filters.dateField);
+      params.append('date', filters.date);
+    }
+    
+    // Add sorting parameters
+    if (filters.sortBy) {
+      params.append('sortBy', filters.sortBy);
+    }
+    
+    if (filters.sortOrder) {
+      params.append('sortOrder', filters.sortOrder);
     }
     
     const response = await fetch(`${this.baseURL}/securecare/employees-unique/${encodeURIComponent(level)}?${params}`);
@@ -212,6 +241,26 @@ class SecureCareAPI {
     return response.json();
   }
 
+  // Add new advisor
+  async addAdvisor(firstName: string, lastName: string): Promise<any> {
+    const response = await fetch(`${this.baseURL}/securecare/advisors`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        firstName,
+        lastName
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to add advisor: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
   // Get filter options
   async getFilterOptions(): Promise<{ facilities: string[]; areas: string[]; jobTitles: string[] }> {
     const response = await fetch(`${this.baseURL}/securecare/filter-options`);
@@ -255,9 +304,51 @@ class SecureCareAPI {
         advisorId
       }),
     });
-
+    
     if (!response.ok) {
       throw new Error(`Failed to update advisor: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  // Update employee notes for specific level/awardType
+  async updateEmployeeNotesForLevel(employeeId: string, awardType: string, notes: string): Promise<{ success: boolean; message: string }> {
+    const response = await fetch(`${this.baseURL}/securecare/update-notes-level`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        employeeId,
+        awardType,
+        notes
+      }),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to update notes for level: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  // Update employee advisor for specific level/awardType
+  async updateEmployeeAdvisorForLevel(employeeId: string, awardType: string, advisorId: number | null): Promise<{ success: boolean; message: string }> {
+    const response = await fetch(`${this.baseURL}/securecare/update-advisor-level`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        employeeId,
+        awardType,
+        advisorId
+      }),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to update advisor for level: ${response.statusText}`);
     }
 
     return response.json();
@@ -267,6 +358,22 @@ class SecureCareAPI {
   async getAllTrainingData(): Promise<TrainingData[]> {
     // This would need to be implemented if still needed
     return [];
+  }
+
+  // Aggregates: completions & counts
+  async getCompletionsAggregates(filters: { startDate?: string; endDate?: string; level?: string; facility?: string; area?: string } = {}): Promise<any> {
+    const params = new URLSearchParams();
+    if (filters.startDate) params.append('startDate', filters.startDate);
+    if (filters.endDate) params.append('endDate', filters.endDate);
+    if (filters.level && filters.level !== 'all') params.append('level', filters.level);
+    if (filters.facility && filters.facility !== 'all') params.append('facility', filters.facility);
+    if (filters.area && filters.area !== 'all') params.append('area', filters.area);
+
+    const response = await fetch(`${this.baseURL}/securecare/aggregates/completions?${params}`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch aggregates: ${response.statusText}`);
+    }
+    return response.json();
   }
 
   async getEmployeeTrainingData(employeeId: string): Promise<TrainingData[]> {
@@ -289,166 +396,6 @@ class SecureCareAPI {
     throw new Error('Awards are read-only in this version');
   }
 
-  // Analytics methods
-  async getAnalyticsOverview(filters: any = {}): Promise<any> {
-    const params = new URLSearchParams();
-    
-    if (filters.facility && filters.facility !== 'all') {
-      params.append('facility', filters.facility);
-    }
-    if (filters.area && filters.area !== 'all') {
-      params.append('area', filters.area);
-    }
-    if (filters.level && filters.level !== 'all') {
-      params.append('level', filters.level);
-    }
-    if (filters.startDate) {
-      params.append('startDate', filters.startDate);
-    }
-    if (filters.endDate) {
-      params.append('endDate', filters.endDate);
-    }
-    
-    const response = await fetch(`${this.baseURL}/securecare/analytics/overview?${params}`);
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch analytics overview: ${response.statusText}`);
-    }
-    
-    return response.json();
-  }
-
-  async getFacilityPerformance(filters: any = {}): Promise<any[]> {
-    const params = new URLSearchParams();
-    
-    if (filters.level && filters.level !== 'all') {
-      params.append('level', filters.level);
-    }
-    if (filters.startDate) {
-      params.append('startDate', filters.startDate);
-    }
-    if (filters.endDate) {
-      params.append('endDate', filters.endDate);
-    }
-    
-    const response = await fetch(`${this.baseURL}/securecare/analytics/facility-performance?${params}`);
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch facility performance: ${response.statusText}`);
-    }
-    
-    return response.json();
-  }
-
-  async getAreaPerformance(filters: any = {}): Promise<any[]> {
-    const params = new URLSearchParams();
-    
-    if (filters.level && filters.level !== 'all') {
-      params.append('level', filters.level);
-    }
-    if (filters.startDate) {
-      params.append('startDate', filters.startDate);
-    }
-    if (filters.endDate) {
-      params.append('endDate', filters.endDate);
-    }
-    
-    const response = await fetch(`${this.baseURL}/securecare/analytics/area-performance?${params}`);
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch area performance: ${response.statusText}`);
-    }
-    
-    return response.json();
-  }
-
-  async getMonthlyTrends(filters: any = {}): Promise<any[]> {
-    const params = new URLSearchParams();
-    
-    if (filters.facility && filters.facility !== 'all') {
-      params.append('facility', filters.facility);
-    }
-    if (filters.area && filters.area !== 'all') {
-      params.append('area', filters.area);
-    }
-    if (filters.level && filters.level !== 'all') {
-      params.append('level', filters.level);
-    }
-    
-    const response = await fetch(`${this.baseURL}/securecare/analytics/monthly-trends?${params}`);
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch monthly trends: ${response.statusText}`);
-    }
-    
-    return response.json();
-  }
-
-  async getCertificationProgress(filters: any = {}): Promise<any[]> {
-    const params = new URLSearchParams();
-    
-    if (filters.facility && filters.facility !== 'all') {
-      params.append('facility', filters.facility);
-    }
-    if (filters.area && filters.area !== 'all') {
-      params.append('area', filters.area);
-    }
-    if (filters.startDate) {
-      params.append('startDate', filters.startDate);
-    }
-    if (filters.endDate) {
-      params.append('endDate', filters.endDate);
-    }
-    
-    const response = await fetch(`${this.baseURL}/securecare/analytics/certification-progress?${params}`);
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch certification progress: ${response.statusText}`);
-    }
-    
-    return response.json();
-  }
-
-  async getRecentActivity(filters: any = {}): Promise<any[]> {
-    const params = new URLSearchParams();
-    
-    if (filters.facility && filters.facility !== 'all') {
-      params.append('facility', filters.facility);
-    }
-    if (filters.area && filters.area !== 'all') {
-      params.append('area', filters.area);
-    }
-    if (filters.level && filters.level !== 'all') {
-      params.append('level', filters.level);
-    }
-    
-    const response = await fetch(`${this.baseURL}/securecare/analytics/recent-activity?${params}`);
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch recent activity: ${response.statusText}`);
-    }
-    
-    return response.json();
-  }
-
-  async getAnalyticsMetrics(filters: any = {}): Promise<any> {
-    const params = new URLSearchParams();
-    
-    if (filters.facility && filters.facility !== 'all') {
-      params.append('facility', filters.facility);
-    }
-    if (filters.area && filters.area !== 'all') {
-      params.append('area', filters.area);
-    }
-    
-    const response = await fetch(`${this.baseURL}/securecare/analytics/metrics?${params}`);
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch analytics metrics: ${response.statusText}`);
-    }
-    
-    return response.json();
-  }
 }
 
 // Create and export a singleton instance

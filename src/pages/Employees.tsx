@@ -568,6 +568,8 @@ export default function Employees() {
             setSelectedArea("all");
             setSelectedStatus("all");
             setSelectedJobTitle("all");
+            dispatch({ type: "setQuery", payload: "" });
+            setApiCurrentPage(1);
           }}
           facilities={facilities}
           areas={areas}

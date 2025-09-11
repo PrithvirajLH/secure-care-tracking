@@ -318,9 +318,9 @@ try {
     }
   };
   
-  const packageDest = path.join(__dirname, 'package.json');
+  const packageDest = path.join(__dirname, 'package.production.json');
   fs.writeFileSync(packageDest, JSON.stringify(productionPackage, null, 2));
-  console.log('✅ production package.json created in root');
+  console.log('✅ production package.json created as package.production.json (not overwriting original)');
 } catch (error) {
   console.error('❌ Error copying files to root:', error.message);
 }

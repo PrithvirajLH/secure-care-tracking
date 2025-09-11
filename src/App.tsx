@@ -12,9 +12,8 @@ const Employees = lazy(() => import("./pages/Employees"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const Training = lazy(() => import("./pages/Training"));
 const Advisors = lazy(() => import("./pages/Advisors"));
-const Analytics = lazy(() => import("./pages/Analytics"));
+const Completions = lazy(() => import("./pages/Completions"));
 
-const Settings = lazy(() => import("./pages/Settings"));
 
 // Loading component
 const PageLoader = () => (
@@ -55,9 +54,8 @@ const App = () => (
                     <Route path="/employees" element={<Employees />} />
                     <Route path="/training" element={<Training />} />
                     <Route path="/advisors" element={<Advisors />} />
-                    <Route path="/analytics" element={<Analytics />} />
+                    <Route path="/completions" element={<Completions />} />
 
-                    <Route path="/settings" element={<Settings />} />
                     <Route path="*" element={<NotFound />} />
                   </Routes>
                 </Suspense>

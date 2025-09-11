@@ -1,3 +1,57 @@
+-- Date column indexes for SecureCareEmployee to accelerate server-side date filtering
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_SecureCareEmployee_completedDate' AND object_id = OBJECT_ID('dbo.SecureCareEmployee'))
+CREATE INDEX IX_SecureCareEmployee_completedDate ON dbo.SecureCareEmployee (completedDate);
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_SecureCareEmployee_assignedDate' AND object_id = OBJECT_ID('dbo.SecureCareEmployee'))
+CREATE INDEX IX_SecureCareEmployee_assignedDate ON dbo.SecureCareEmployee (assignedDate);
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_SecureCareEmployee_conferenceCompleted' AND object_id = OBJECT_ID('dbo.SecureCareEmployee'))
+CREATE INDEX IX_SecureCareEmployee_conferenceCompleted ON dbo.SecureCareEmployee (conferenceCompleted);
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_SecureCareEmployee_secureCareAwardedDate' AND object_id = OBJECT_ID('dbo.SecureCareEmployee'))
+CREATE INDEX IX_SecureCareEmployee_secureCareAwardedDate ON dbo.SecureCareEmployee (secureCareAwardedDate);
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_SecureCareEmployee_scheduleStandingVideo' AND object_id = OBJECT_ID('dbo.SecureCareEmployee'))
+CREATE INDEX IX_SecureCareEmployee_scheduleStandingVideo ON dbo.SecureCareEmployee (scheduleStandingVideo);
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_SecureCareEmployee_standingVideo' AND object_id = OBJECT_ID('dbo.SecureCareEmployee'))
+CREATE INDEX IX_SecureCareEmployee_standingVideo ON dbo.SecureCareEmployee (standingVideo);
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_SecureCareEmployee_scheduleSleepingVideo' AND object_id = OBJECT_ID('dbo.SecureCareEmployee'))
+CREATE INDEX IX_SecureCareEmployee_scheduleSleepingVideo ON dbo.SecureCareEmployee (scheduleSleepingVideo);
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_SecureCareEmployee_sleepingVideo' AND object_id = OBJECT_ID('dbo.SecureCareEmployee'))
+CREATE INDEX IX_SecureCareEmployee_sleepingVideo ON dbo.SecureCareEmployee (sleepingVideo);
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_SecureCareEmployee_scheduleFeedGradVideo' AND object_id = OBJECT_ID('dbo.SecureCareEmployee'))
+CREATE INDEX IX_SecureCareEmployee_scheduleFeedGradVideo ON dbo.SecureCareEmployee (scheduleFeedGradVideo);
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_SecureCareEmployee_feedGradVideo' AND object_id = OBJECT_ID('dbo.SecureCareEmployee'))
+CREATE INDEX IX_SecureCareEmployee_feedGradVideo ON dbo.SecureCareEmployee (feedGradVideo);
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_SecureCareEmployee_schedulenoHandnoSpeak' AND object_id = OBJECT_ID('dbo.SecureCareEmployee'))
+CREATE INDEX IX_SecureCareEmployee_schedulenoHandnoSpeak ON dbo.SecureCareEmployee (schedulenoHandnoSpeak);
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_SecureCareEmployee_noHandnoSpeak' AND object_id = OBJECT_ID('dbo.SecureCareEmployee'))
+CREATE INDEX IX_SecureCareEmployee_noHandnoSpeak ON dbo.SecureCareEmployee (noHandnoSpeak);
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_SecureCareEmployee_scheduleSession1' AND object_id = OBJECT_ID('dbo.SecureCareEmployee'))
+CREATE INDEX IX_SecureCareEmployee_scheduleSession1 ON dbo.SecureCareEmployee ([scheduleSession#1]);
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_SecureCareEmployee_session1' AND object_id = OBJECT_ID('dbo.SecureCareEmployee'))
+CREATE INDEX IX_SecureCareEmployee_session1 ON dbo.SecureCareEmployee ([session#1]);
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_SecureCareEmployee_scheduleSession2' AND object_id = OBJECT_ID('dbo.SecureCareEmployee'))
+CREATE INDEX IX_SecureCareEmployee_scheduleSession2 ON dbo.SecureCareEmployee ([scheduleSession#2]);
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_SecureCareEmployee_session2' AND object_id = OBJECT_ID('dbo.SecureCareEmployee'))
+CREATE INDEX IX_SecureCareEmployee_session2 ON dbo.SecureCareEmployee ([session#2]);
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_SecureCareEmployee_scheduleSession3' AND object_id = OBJECT_ID('dbo.SecureCareEmployee'))
+CREATE INDEX IX_SecureCareEmployee_scheduleSession3 ON dbo.SecureCareEmployee ([scheduleSession#3]);
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_SecureCareEmployee_session3' AND object_id = OBJECT_ID('dbo.SecureCareEmployee'))
+CREATE INDEX IX_SecureCareEmployee_session3 ON dbo.SecureCareEmployee ([session#3]);
 -- Performance Indexes for SecureCare Database
 -- Optimized for 15,000+ employee records
 

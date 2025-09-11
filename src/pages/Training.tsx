@@ -44,10 +44,10 @@ import { toast } from "sonner";
 import { useTrainingData } from "@/hooks/useTrainingData";
 import EmployeeDetailModal from "@/components/EmployeeDetailModal";
 import { FloatingNav } from "@/components/ui/floating-navbar";
-import { useEmployees, useEmployeeStats, useTrainingEmployees } from "@/hooks/useEmployees";
+import { useEmployees, useEmployeeStats, useTrainingEmployees, useAdvisors } from "@/hooks/useEmployees";
 import PageHeader from "@/components/PageHeader";
 import { trainingAPI } from "@/services/api";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 // Import new configuration
 import { 
@@ -73,6 +73,8 @@ interface LevelStats {
 }
 
 export default function Training() {
+  const queryClient = useQueryClient();
+  
   // URL-based tab persistence
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState(() => {
@@ -89,10 +91,12 @@ export default function Training() {
   const [facilityFilter, setFacilityFilter] = useState<string>("all");
   const [areaFilter, setAreaFilter] = useState<string>("all");
   const [reqStatusFilters, setReqStatusFilters] = useState<Record<string, string>>({});
+  const [sortBy, setSortBy] = useState<string>("latest"); // Will be updated based on level
+  const [sortOrder, setSortOrder] = useState<string>("desc");
   
   // Enhanced UI state
-  const [advisors, setAdvisors] = useState<any[]>([]);
-  const [isLoadingAdvisors, setIsLoadingAdvisors] = useState(false);
+  // Use React Query for advisors data
+  const { data: advisors = [], isLoading: isLoadingAdvisors, error: advisorsError } = useAdvisors();
   const [editingNotes, setEditingNotes] = useState<string | null>(null);
   const [editingAdvisor, setEditingAdvisor] = useState<string | null>(null);
   const [tempNotes, setTempNotes] = useState<string>("");
@@ -104,27 +108,40 @@ export default function Training() {
   const [scheduledDates, setScheduledDates] = useState<{[key: string]: Date}>({});
   const [completedDates, setCompletedDates] = useState<{[key: string]: Date}>({});
   const [openDatePicker, setOpenDatePicker] = useState<string | null>(null);
+  // Controls the "Filter by Completion Date" dropdown per column
+  const [openDateFilterColumn, setOpenDateFilterColumn] = useState<string | null>(null);
 
-  // Close dropdowns when clicking outside
+  // Individual click outside handler for Notes dropdown
   useEffect(() => {
+    if (!notesDropdownOpen) return;
+
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Element;
-      if (!target.closest('[data-dropdown]') && !target.closest('.date-picker-popup')) {
+      if (!target.closest('[data-notes-dropdown]')) {
         setNotesDropdownOpen(null);
-        setAdvisorDropdownOpen(null);
         setNotesDropdownPosition(null);
-        setAdvisorDropdownPosition(null);
-        // Clear all popup states when clicking outside
-        setPopupPosition(null);
-        setCurrentPopupEmployee(null);
-        setCurrentPopupFieldKey(null);
-        setOpenDatePicker(null);
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [notesDropdownOpen]);
+
+  // Individual click outside handler for Advisor dropdown
+  useEffect(() => {
+    if (!advisorDropdownOpen) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (!target.closest('[data-advisor-dropdown]')) {
+        setAdvisorDropdownOpen(null);
+        setAdvisorDropdownPosition(null);
+      }
+    };
+
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [advisorDropdownOpen]);
   const [isApproving, setIsApproving] = useState<boolean>(false);
   const [isRejecting, setIsRejecting] = useState<boolean>(false);
   const [popupPosition, setPopupPosition] = useState<{x: number, y: number, positionAbove?: boolean} | null>(null);
@@ -135,6 +152,15 @@ export default function Training() {
   
   // New simple search state
   const [searchQuery, setSearchQuery] = useState<string>('');
+  
+  // Date filtering state
+  const [dateFilter, setDateFilter] = useState<{
+    date: Date | null;
+    column: string | null;
+  }>({
+    date: null,
+    column: null
+  });
   
   
   // Column visibility controls with localStorage persistence
@@ -147,17 +173,13 @@ export default function Training() {
     return saved ? JSON.parse(saved) : false;
   });
   
-  // Click outside handler for date pickers
+  // Individual click outside handler for Conference approval popup
   useEffect(() => {
+    if (!openDatePicker || !openDatePicker.includes('conferenceCompleted')) return;
+
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Element;
-      if (openDatePicker && 
-          !isButtonClicking &&
-          !isMouseDownInProgress &&
-          !target.closest('.date-picker-popup') && 
-          !target.closest('[data-radix-popper-content-wrapper]') &&
-          !target.closest('input') &&
-          !target.closest('button')) { // Don't close when clicking on buttons
+      if (!target.closest('[data-conference-popup]')) {
         setOpenDatePicker(null);
         setPopupPosition(null);
         setCurrentPopupEmployee(null);
@@ -165,18 +187,65 @@ export default function Training() {
       }
     };
 
-    if (openDatePicker) {
-      // Use a longer delay to allow mousedown events to process first
-      const timeoutId = setTimeout(() => {
-        document.addEventListener('click', handleClickOutside);
-      }, 200);
-      
-      return () => {
-        clearTimeout(timeoutId);
-        document.removeEventListener('click', handleClickOutside);
-      };
-    }
-   }, [openDatePicker, isButtonClicking, isMouseDownInProgress]);
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [openDatePicker]);
+
+  // Individual click outside handler for Mark Complete/Reschedule popup
+  useEffect(() => {
+    if (!popupPosition || !currentPopupEmployee || !currentPopupFieldKey) return;
+    if (openDatePicker && (openDatePicker.includes('conferenceCompleted') || openDatePicker.startsWith('reschedule-'))) return;
+    if (!ScheduleFieldMapping[currentPopupFieldKey] || !currentPopupEmployee[ScheduleFieldMapping[currentPopupFieldKey]]) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (!target.closest('[data-complete-reschedule-popup]')) {
+        setPopupPosition(null);
+        setCurrentPopupEmployee(null);
+        setCurrentPopupFieldKey(null);
+      }
+    };
+
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [popupPosition, currentPopupEmployee, currentPopupFieldKey, openDatePicker]);
+
+  // Individual click outside handler for Reschedule Date Picker popup
+  useEffect(() => {
+    if (!openDatePicker || !openDatePicker.startsWith('reschedule-')) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (!target.closest('[data-reschedule-popup]')) {
+        setOpenDatePicker(null);
+        setPopupPosition(null);
+        setCurrentPopupEmployee(null);
+        setCurrentPopupFieldKey(null);
+      }
+    };
+
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [openDatePicker]);
+
+  // Individual click outside handler for Schedule Date Picker popup
+  useEffect(() => {
+    if (!openDatePicker || openDatePicker.includes('conferenceCompleted') || openDatePicker.startsWith('reschedule-')) return;
+    if (!popupPosition || !currentPopupEmployee || !currentPopupFieldKey) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (!target.closest('[data-schedule-popup]')) {
+        setOpenDatePicker(null);
+        setPopupPosition(null);
+        setCurrentPopupEmployee(null);
+        setCurrentPopupFieldKey(null);
+      }
+    };
+
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [openDatePicker, popupPosition, currentPopupEmployee, currentPopupFieldKey]);
   
   // Training data hook for database operations
   const {
@@ -195,21 +264,7 @@ export default function Training() {
 
 
 
-  // Load advisors when component mounts or when needed
-  const loadAdvisors = useCallback(async () => {
-    if (advisors.length > 0) return; // Already loaded
-    
-    setIsLoadingAdvisors(true);
-    try {
-      const advisorList = await trainingAPI.getAdvisors();
-      setAdvisors(advisorList);
-    } catch (error) {
-      console.error('Failed to load advisors:', error);
-      toast.error('Failed to load advisors');
-    } finally {
-      setIsLoadingAdvisors(false);
-    }
-  }, [advisors.length]);
+  // Advisors are now loaded via React Query useAdvisors hook
 
   // Enhanced notes editing handlers
   const handleEditNotes = (employeeId: string, currentNotes: string) => {
@@ -220,14 +275,24 @@ export default function Training() {
   const handleSaveNotes = async (employeeId: string, notesValue?: string) => {
     try {
       const valueToSave = notesValue !== undefined ? notesValue : tempNotes;
-      await trainingAPI.updateEmployeeNotes(employeeId, valueToSave);
+      console.log('handleSaveNotes called with:', { employeeId, notesValue, valueToSave });
+      console.log('Calling trainingAPI.updateEmployeeNotes...');
+      const result = await trainingAPI.updateEmployeeNotes(employeeId, valueToSave);
+      console.log('Notes API call result:', result);
       toast.success('Notes updated successfully');
       setEditingNotes(null);
       setTempNotes('');
       // Invalidate queries to refresh data without page reload
-      window.dispatchEvent(new CustomEvent('refreshEmployees'));
+      console.log('Invalidating React Query cache...');
+      await queryClient.invalidateQueries({ queryKey: ['employees-training'] });
+      await queryClient.invalidateQueries({ queryKey: ['employees-unique'] });
     } catch (error) {
-      console.error('Failed to update notes:', error);
+      console.error('Failed to update notes - Full error:', error);
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
       toast.error('Failed to update notes');
     }
   };
@@ -247,14 +312,25 @@ export default function Training() {
     try {
       const valueToUse = advisorValue !== undefined ? advisorValue : tempAdvisor;
       const advisorId = (valueToUse === '' || valueToUse === 'none') ? null : parseInt(valueToUse);
-      await trainingAPI.updateEmployeeAdvisor(employeeId, advisorId);
+      console.log('handleSaveAdvisor called with:', { employeeId, advisorValue, valueToUse, advisorId });
+      console.log('Calling trainingAPI.updateEmployeeAdvisor...');
+      const result = await trainingAPI.updateEmployeeAdvisor(employeeId, advisorId);
+      console.log('Advisor API call result:', result);
       toast.success('Advisor updated successfully');
       setEditingAdvisor(null);
       setTempAdvisor('');
       // Invalidate queries to refresh data without page reload
-      window.dispatchEvent(new CustomEvent('refreshEmployees'));
+      console.log('Invalidating React Query cache...');
+      await queryClient.invalidateQueries({ queryKey: ['employees-training'] });
+      await queryClient.invalidateQueries({ queryKey: ['employees-unique'] });
+      await queryClient.invalidateQueries({ queryKey: ['advisors'] });
     } catch (error) {
-      console.error('Failed to update advisor:', error);
+      console.error('Failed to update advisor - Full error:', error);
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
       toast.error('Failed to update advisor');
     }
   };
@@ -264,13 +340,16 @@ export default function Training() {
     setTempAdvisor('none');
   };
 
-  // Server-side pagination with filters
-  const filters = useMemo(() => ({
+  // Server-side pagination with filters (includes optional date filter)
+  // Note: compute after currentFieldMapping is defined
+  let filters = useMemo(() => ({
     level: activeTab,
     status: 'active',
     facility: facilityFilter !== 'all' ? facilityFilter : undefined,
-    area: areaFilter !== 'all' ? areaFilter : undefined
-  }), [activeTab, facilityFilter, areaFilter]);
+    area: areaFilter !== 'all' ? areaFilter : undefined,
+    sortBy: sortBy,
+    sortOrder: sortOrder
+  }), [activeTab, facilityFilter, areaFilter, sortBy, sortOrder]);
 
   const {
     employees: currentEmployees,
@@ -290,6 +369,13 @@ export default function Training() {
   const currentColumns = LevelColumns[currentLevel];
   const currentFieldMapping = LevelFieldMapping[currentLevel];
   
+  // Augment filters with date filter once mapping is known
+  filters = useMemo(() => ({
+    ...filters,
+    dateField: dateFilter.column ? currentFieldMapping[dateFilter.column] : undefined,
+    date: dateFilter.date ? dateFilter.date.toISOString().split('T')[0] : undefined
+  }), [filters.level, filters.status, filters.facility, filters.area, dateFilter, currentFieldMapping]);
+
   // Filter columns based on visibility settings (only for levels 2-5)
   const filteredColumns = useMemo(() => {
     if (currentLevel === 'Level 1') {
@@ -321,6 +407,24 @@ export default function Training() {
     setFacilityFilter('all');
     setAreaFilter('all');
     
+    // Set level-specific default sorting
+    const currentLevel: AwardType = getLevelFromTabKey(activeTab);
+    if (currentLevel === 'Level 1') {
+      // Level 1: only allow 'latest', 'name', 'facility'
+      if (sortBy === 'conference') {
+        setSortBy('latest'); // Switch from conference to latest for Level 1
+      } else if (!['latest', 'name', 'facility'].includes(sortBy)) {
+        setSortBy('latest'); // Default to latest for Level 1
+      }
+    } else {
+      // Other levels: only allow 'conference', 'name', 'facility'
+      if (sortBy === 'latest') {
+        setSortBy('conference'); // Switch from latest to conference for other levels
+      } else if (!['conference', 'name', 'facility'].includes(sortBy)) {
+        setSortBy('conference'); // Default to conference for other levels
+      }
+    }
+    
     const next: Record<string, string> = {};
     filteredColumns.forEach(col => {
       const fieldKey = currentFieldMapping[col];
@@ -331,10 +435,7 @@ export default function Training() {
     setReqStatusFilters(next);
   }, [activeTab, setCurrentPage, filteredColumns, currentFieldMapping]);
 
-  // Load advisors when component mounts
-  useEffect(() => {
-    loadAdvisors();
-  }, [loadAdvisors]);
+  // Advisors are automatically loaded via React Query useAdvisors hook
 
   // Persist column visibility state to localStorage
   useEffect(() => {
@@ -345,18 +446,7 @@ export default function Training() {
     localStorage.setItem('showAdvisorColumn', JSON.stringify(showAdvisorColumn));
   }, [showAdvisorColumn]);
 
-  // Listen for refresh events to update data without page reload
-  useEffect(() => {
-    const handleRefresh = () => {
-      // Trigger a refetch of the current data
-      refetch();
-    };
-
-    window.addEventListener('refreshEmployees', handleRefresh);
-    return () => {
-      window.removeEventListener('refreshEmployees', handleRefresh);
-    };
-  }, [refetch]);
+  // Note: Using React Query's invalidateQueries instead of custom events for better cache management
 
 
   // Removed old hash-based navigation - now using URL search params
@@ -463,6 +553,42 @@ export default function Training() {
       });
     }
     
+    // Apply date filter if active (covers scheduled, completed, awaiting, rejected)
+    if (dateFilter.column && dateFilter.date) {
+      const fieldKey = currentFieldMapping[dateFilter.column];
+      if (fieldKey) {
+        filtered = filtered.filter(emp => {
+          let dateSource: string | Date | null | undefined = null;
+
+          // For Awarded columns, use the awarded date field if present
+          if (fieldKey === 'secureCareAwarded') {
+            dateSource = (emp as any).secureCareAwardedDate;
+          } else if (fieldKey === 'conferenceCompleted') {
+            // Conference: use the conferenceCompleted date for completed/awaiting/rejected
+            dateSource = emp[fieldKey];
+          } else {
+            // Regular training fields: prefer completed date; if not present, use scheduled date
+            const completedDate = emp[fieldKey];
+            const scheduleField = ScheduleFieldMapping[fieldKey];
+            const scheduledDate = scheduleField ? emp[scheduleField] : null;
+            dateSource = completedDate || scheduledDate;
+          }
+
+          if (!dateSource) return false;
+
+          const empDate = parseDate(dateSource);
+          const filterDate = dateFilter.date;
+          if (!empDate || !filterDate) return false;
+
+          // Compare dates (ignore time, timezone-safe)
+          const empDateOnly = new Date(empDate.getFullYear(), empDate.getMonth(), empDate.getDate());
+          const filterDateOnly = new Date(filterDate.getFullYear(), filterDate.getMonth(), filterDate.getDate());
+
+          return empDateOnly.getTime() === filterDateOnly.getTime();
+        });
+      }
+    }
+    
     // Apply per-requirement filters
     filtered = filtered.filter(emp => {
       for (const column of filteredColumns) {
@@ -476,7 +602,8 @@ export default function Training() {
         if (column === 'Notes') {
           const noteValue = (emp.notes || '').trim();
           if (want === 'empty') {
-            if (noteValue !== '') return false;
+            // Show only records where notes are empty or NULL
+            if (noteValue !== '' && emp.notes !== null && emp.notes !== undefined) return false;
           } else {
             if (noteValue !== want) return false;
           }
@@ -486,11 +613,9 @@ export default function Training() {
         // Custom filtering for Advisor
         if (column === 'Advisor') {
           const advisorId = emp.advisorId != null ? String(emp.advisorId) : '';
-          const hasAdvisor = advisorId !== '' || (emp.advisorName && String(emp.advisorName).trim() !== '');
           if (want === 'unassigned') {
-            if (hasAdvisor) return false;
-          } else if (want === 'assigned') {
-            if (!hasAdvisor) return false;
+            // Show only records where advisor is NULL or empty
+            if (emp.advisorId !== null && emp.advisorId !== undefined && advisorId !== '') return false;
           } else {
             // Specific advisor by id
             if (advisorId !== want) return false;
@@ -505,32 +630,41 @@ export default function Training() {
     });
     
     return filtered;
-  }, [currentEmployees, searchQuery, reqStatusFilters, filteredColumns, currentFieldMapping, scheduledDates, completedDates]);
+  }, [currentEmployees, searchQuery, reqStatusFilters, filteredColumns, currentFieldMapping, scheduledDates, completedDates, dateFilter]);
 
   const isAnyFilterActive = useMemo(() => {
     if (facilityFilter !== 'all' || areaFilter !== 'all' || searchQuery.trim()) return true;
+    if (dateFilter.column && dateFilter.date) return true;
     return filteredColumns.some(col => {
       const fieldKey = currentFieldMapping[col];
       return fieldKey && (reqStatusFilters[fieldKey] || 'all') !== 'all';
     });
-  }, [facilityFilter, areaFilter, searchQuery, reqStatusFilters, filteredColumns, currentFieldMapping]);
+  }, [facilityFilter, areaFilter, searchQuery, dateFilter, reqStatusFilters, filteredColumns, currentFieldMapping]);
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (facilityFilter !== 'all') count++;
     if (areaFilter !== 'all') count++;
     if (searchQuery.trim()) count++;
+    if (dateFilter.column && dateFilter.date) count++;
     count += filteredColumns.reduce((acc, col) => {
       const fieldKey = currentFieldMapping[col];
       return acc + (fieldKey && ((reqStatusFilters[fieldKey] || 'all') !== 'all') ? 1 : 0);
     }, 0);
     return count;
-  }, [facilityFilter, areaFilter, searchQuery, reqStatusFilters, filteredColumns, currentFieldMapping]);
+  }, [facilityFilter, areaFilter, searchQuery, dateFilter, reqStatusFilters, filteredColumns, currentFieldMapping]);
 
   const clearFilters = () => {
     setFacilityFilter('all');
     setAreaFilter('all');
     setSearchQuery('');
+    // Reset to level-specific default sorting
+    const currentLevel: AwardType = getLevelFromTabKey(activeTab);
+    setSortBy(currentLevel === 'Level 1' ? 'latest' : 'conference');
+    setDateFilter({
+      date: null,
+      column: null
+    });
     
     const reset: Record<string, string> = {};
     filteredColumns.forEach(col => {
@@ -569,7 +703,10 @@ export default function Training() {
     text?: string;
     date?: string;
   }) => {
-    const baseClasses = "inline-flex items-center justify-center gap-2 px-3 py-2 rounded-full text-sm font-semibold shadow-sm min-w-[120px] h-8 transition-colors";
+    const baseClasses = variant === 'advisor' 
+      ? "inline-flex items-center justify-center gap-2 px-3 py-2 rounded-full text-sm font-semibold shadow-sm min-w-[180px] h-8 transition-colors"
+      : "inline-flex items-center justify-center gap-2 px-3 py-2 rounded-full text-sm font-semibold shadow-sm min-w-[120px] h-8 transition-colors";
+    
     
     const variantClasses = {
       default: "bg-gray-100 text-gray-600 hover:bg-gray-200",
@@ -669,7 +806,10 @@ export default function Training() {
               icon={Clock}
               text="Awaiting"
               onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
                 const rect = (e.target as HTMLElement).getBoundingClientRect();
+                console.log('Conference awaiting clicked:', { key, fieldKey, employee: employee.employeeId });
                 setPopupPosition({ x: rect.left + rect.width / 2, y: rect.bottom + 8 });
                 setCurrentPopupEmployee(employee);
                 setCurrentPopupFieldKey(fieldKey);
@@ -687,11 +827,18 @@ export default function Training() {
 
       if (status === 'Rejected') {
         return (
-          <StatusBadge
-            variant="rejected"
-            icon={AlertCircle}
-            text="Rejected"
-          />
+          <div className="flex flex-col items-center gap-1 w-full">
+            <StatusBadge
+              variant="rejected"
+              icon={AlertCircle}
+              text="Rejected"
+            />
+            <div className="inline-flex items-center justify-center gap-1 bg-red-50 border border-red-200 rounded px-3 py-1 min-w-[120px] h-6">
+              <span className="text-xs text-red-700 font-medium">
+                {fmt.date(value)}
+              </span>
+            </div>
+          </div>
         );
       }
       
@@ -902,6 +1049,32 @@ export default function Training() {
                        </button>
                      )}
                    </div>
+                   <div className="flex items-center gap-2">
+                     <div className="flex items-center gap-1">
+                       <TrendingUp className="w-4 h-4 text-purple-600" />
+                       <span className="text-sm font-medium text-purple-900">Sort:</span>
+                     </div>
+                     <Select value={sortBy} onValueChange={setSortBy}>
+                       <SelectTrigger className="h-8 w-[180px] text-sm bg-white border-purple-200 shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                         <SelectValue />
+                       </SelectTrigger>
+                       <SelectContent>
+                         {currentLevel === 'Level 1' ? (
+                           <>
+                             <SelectItem value="latest">Latest Assigned</SelectItem>
+                             <SelectItem value="name">Name A-Z</SelectItem>
+                             <SelectItem value="facility">Facility A-Z</SelectItem>
+                           </>
+                         ) : (
+                           <>
+                             <SelectItem value="conference">Latest Conference</SelectItem>
+                             <SelectItem value="name">Name A-Z</SelectItem>
+                             <SelectItem value="facility">Facility A-Z</SelectItem>
+                           </>
+                         )}
+                       </SelectContent>
+                     </Select>
+                   </div>
                  </div>
                </div>
              </div>
@@ -993,6 +1166,7 @@ export default function Training() {
                         index === 0 ? "w-[12%]" : 
                         index === 1 ? "w-[8%]" : // Facility column - reduced width
                         index === 2 ? "w-[6%]" : // Area column - reduced width
+                        column === 'Notes' ? "w-[10%]" : // Notes column - reduced width to compensate for advisor column
                         column.includes("Awarded") ? "w-[12%]" : "w-[10%]"
                       }`}
                     >
@@ -1040,93 +1214,148 @@ export default function Training() {
                       </DropdownMenu>
                         )}
                         {index > 2 && (
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="sm" className="h-6 px-1 mt-1 flex-shrink-0">
-                                <Filter className="w-4 h-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-56 max-h-[320px] overflow-y-auto">
-                              {column === 'Notes' ? (
-                                <>
-                                  <DropdownMenuLabel>Filter by Notes</DropdownMenuLabel>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuRadioGroup
-                                    value={reqStatusFilters[currentFieldMapping[column]] || 'all'}
-                                    onValueChange={(v) => {
-                                      const fieldKey = currentFieldMapping[column];
-                                      if (fieldKey) {
-                                        setReqStatusFilters(prev => ({ ...prev, [fieldKey]: v }));
-                                      }
-                                    }}
+                          <div className="flex items-center gap-1">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-6 px-1 mt-1 flex-shrink-0">
+                                  <Filter className="w-4 h-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-56 max-h-[320px] overflow-y-auto">
+                                {column === 'Notes' ? (
+                                  <>
+                                    <DropdownMenuLabel>Filter by Notes</DropdownMenuLabel>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuRadioGroup
+                                      value={reqStatusFilters[currentFieldMapping[column]] || 'all'}
+                                      onValueChange={(v) => {
+                                        const fieldKey = currentFieldMapping[column];
+                                        if (fieldKey) {
+                                          setReqStatusFilters(prev => ({ ...prev, [fieldKey]: v }));
+                                        }
+                                      }}
+                                    >
+                                      <DropdownMenuRadioItem value="all">All</DropdownMenuRadioItem>
+                                      <DropdownMenuRadioItem value="empty">Empty</DropdownMenuRadioItem>
+                                      {NOTES_OPTIONS.filter(o => o.value !== '').map(o => (
+                                        <DropdownMenuRadioItem key={o.value} value={o.value}>{o.label}</DropdownMenuRadioItem>
+                                      ))}
+                                    </DropdownMenuRadioGroup>
+                                  </>
+                                ) : column === 'Advisor' ? (
+                                  <>
+                                    <DropdownMenuLabel>Filter by Advisor</DropdownMenuLabel>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuRadioGroup
+                                      value={reqStatusFilters[currentFieldMapping[column]] || 'all'}
+                                      onValueChange={(v) => {
+                                        const fieldKey = currentFieldMapping[column];
+                                        if (fieldKey) {
+                                          setReqStatusFilters(prev => ({ ...prev, [fieldKey]: v }));
+                                        }
+                                      }}
+                                    >
+                                      <DropdownMenuRadioItem value="all">All</DropdownMenuRadioItem>
+                                      <DropdownMenuRadioItem value="unassigned">Unassigned</DropdownMenuRadioItem>
+                                      {advisors.map(a => (
+                                        <DropdownMenuRadioItem key={a.advisorId} value={String(a.advisorId)}>
+                                          {a.fullName}
+                                        </DropdownMenuRadioItem>
+                                      ))}
+                                    </DropdownMenuRadioGroup>
+                                  </>
+                                ) : (
+                                  <>
+                                    <DropdownMenuLabel>Status</DropdownMenuLabel>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuRadioGroup
+                                      value={reqStatusFilters[currentFieldMapping[column]] || 'all'}
+                                      onValueChange={(v) => {
+                                        const fieldKey = currentFieldMapping[column];
+                                        if (fieldKey) {
+                                          setReqStatusFilters(prev => ({ ...prev, [fieldKey]: v }));
+                                        }
+                                      }}
+                                    >
+                                      <DropdownMenuRadioItem value="all">All</DropdownMenuRadioItem>
+                                      {column.includes("Awarded") ? (
+                                        <>
+                                          <DropdownMenuRadioItem value="completed">Awarded</DropdownMenuRadioItem>
+                                          <DropdownMenuRadioItem value="pending">Pending</DropdownMenuRadioItem>
+                                        </>
+                                      ) : column.includes("Conference") ? (
+                                        <>
+                                          <DropdownMenuRadioItem value="completed">Completed</DropdownMenuRadioItem>
+                                          <DropdownMenuRadioItem value="pending">Awaiting</DropdownMenuRadioItem>
+                                          <DropdownMenuRadioItem value="rejected">Rejected</DropdownMenuRadioItem>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <DropdownMenuRadioItem value="completed">Completed</DropdownMenuRadioItem>
+                                          <DropdownMenuRadioItem value="scheduled">Scheduled</DropdownMenuRadioItem>
+                                          <DropdownMenuRadioItem value="pending">Pending</DropdownMenuRadioItem>
+                                        </>
+                                      )}
+                                    </DropdownMenuRadioGroup>
+                                  </>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                            
+                            {/* Date Filter Button - show for completion date columns and Conference Completed */}
+                            {(!column.includes("Awarded") || column.includes("Conference")) && !column.includes("Notes") && !column.includes("Advisor") && (
+                              <DropdownMenu open={openDateFilterColumn === column} onOpenChange={(v) => setOpenDateFilterColumn(v ? column : null)}>
+                                <DropdownMenuTrigger asChild>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    className={`h-6 px-1 mt-1 flex-shrink-0 ${
+                                      dateFilter.column === column ? 'bg-blue-100 text-blue-600' : ''
+                                    }`}
                                   >
-                                    <DropdownMenuRadioItem value="all">All</DropdownMenuRadioItem>
-                                    <DropdownMenuRadioItem value="empty">Empty</DropdownMenuRadioItem>
-                                    {NOTES_OPTIONS.filter(o => o.value !== '').map(o => (
-                                      <DropdownMenuRadioItem key={o.value} value={o.value}>{o.label}</DropdownMenuRadioItem>
-                                    ))}
-                                  </DropdownMenuRadioGroup>
-                                </>
-                              ) : column === 'Advisor' ? (
-                                <>
-                                  <DropdownMenuLabel>Filter by Advisor</DropdownMenuLabel>
+                                    <Calendar className="w-4 h-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-64 p-4">
+                                  <DropdownMenuLabel>Filter by Completion Date</DropdownMenuLabel>
                                   <DropdownMenuSeparator />
-                                  <DropdownMenuRadioGroup
-                                    value={reqStatusFilters[currentFieldMapping[column]] || 'all'}
-                                    onValueChange={(v) => {
-                                      const fieldKey = currentFieldMapping[column];
-                                      if (fieldKey) {
-                                        setReqStatusFilters(prev => ({ ...prev, [fieldKey]: v }));
-                                      }
-                                    }}
-                                  >
-                                    <DropdownMenuRadioItem value="all">All</DropdownMenuRadioItem>
-                                    <DropdownMenuRadioItem value="unassigned">Unassigned</DropdownMenuRadioItem>
-                                    <DropdownMenuRadioItem value="assigned">Assigned</DropdownMenuRadioItem>
-                                    {advisors.map(a => (
-                                      <DropdownMenuRadioItem key={a.advisorId} value={String(a.advisorId)}>
-                                        {a.fullName}
-                                      </DropdownMenuRadioItem>
-                                    ))}
-                                  </DropdownMenuRadioGroup>
-                                </>
-                              ) : (
-                                <>
-                                  <DropdownMenuLabel>Status</DropdownMenuLabel>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuRadioGroup
-                                    value={reqStatusFilters[currentFieldMapping[column]] || 'all'}
-                                    onValueChange={(v) => {
-                                      const fieldKey = currentFieldMapping[column];
-                                      if (fieldKey) {
-                                        setReqStatusFilters(prev => ({ ...prev, [fieldKey]: v }));
-                                      }
-                                    }}
-                                  >
-                                    <DropdownMenuRadioItem value="all">All</DropdownMenuRadioItem>
-                                    {column.includes("Awarded") ? (
-                                      <>
-                                        <DropdownMenuRadioItem value="completed">Awarded</DropdownMenuRadioItem>
-                                        <DropdownMenuRadioItem value="pending">Pending</DropdownMenuRadioItem>
-                                      </>
-                                    ) : column.includes("Conference") ? (
-                                      <>
-                                        <DropdownMenuRadioItem value="completed">Completed</DropdownMenuRadioItem>
-                                        <DropdownMenuRadioItem value="pending">Awaiting</DropdownMenuRadioItem>
-                                        <DropdownMenuRadioItem value="rejected">Rejected</DropdownMenuRadioItem>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <DropdownMenuRadioItem value="completed">Completed</DropdownMenuRadioItem>
-                                        <DropdownMenuRadioItem value="scheduled">Scheduled</DropdownMenuRadioItem>
-                                        <DropdownMenuRadioItem value="pending">Pending</DropdownMenuRadioItem>
-                                      </>
-                                    )}
-                                  </DropdownMenuRadioGroup>
-                                </>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                                  <div className="space-y-3">
+                                    <div className="space-y-2">
+                                      <Label className="text-sm font-medium">Select Date</Label>
+                                      <DatePicker
+                                        date={dateFilter.column === column ? dateFilter.date : null}
+                                        onDateChange={(date) => {
+                                          setDateFilter({
+                                            date: date,
+                                            column: column
+                                          });
+                                          // Close the dropdown when a date is picked
+                                          setOpenDateFilterColumn(null);
+                                        }}
+                                        placeholder="Select date"
+                                      />
+                                    </div>
+                                    <div className="flex gap-2 pt-2">
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => {
+                                          setDateFilter({
+                                            date: null,
+                                            column: null
+                                          });
+                                          setOpenDateFilterColumn(null);
+                                        }}
+                                        className="flex-1"
+                                      >
+                                        Clear
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            )}
+                          </div>
                         )}
                       </div>
                     </TableHead>
@@ -1195,7 +1424,7 @@ export default function Training() {
                                    const isNotesDropdownOpen = notesDropdownOpen === employee.employeeId.toString();
                                    
                                    return (
-                                     <TableCell key={colIndex} className="py-2 px-4 w-[12%] text-center">
+                                     <TableCell key={colIndex} className="py-2 px-4 w-[10%] text-center">
                                        <div className="flex justify-center">
                                          <div className="dropdown-container" data-dropdown>
                                            <StatusBadge
@@ -1203,6 +1432,8 @@ export default function Training() {
                                              icon={MessageSquare}
                                              text={selectedNoteOption?.label || 'Add Notes'}
                                              onClick={(e) => {
+                                               e.preventDefault();
+                                               e.stopPropagation();
                                                const rect = (e.target as HTMLElement).getBoundingClientRect();
                                                const position = {
                                                  x: rect.left + rect.width / 2,
@@ -1230,6 +1461,8 @@ export default function Training() {
                                              icon={UserCheck}
                                              text={employee.advisorName || currentAdvisor?.fullName || 'Add advisor'}
                                              onClick={(e) => {
+                                               e.preventDefault();
+                                               e.stopPropagation();
                                                const rect = (e.target as HTMLElement).getBoundingClientRect();
                                                const position = {
                                                  x: rect.left + rect.width / 2,
@@ -1289,9 +1522,20 @@ export default function Training() {
        </div>
        
        {/* Portal popup for conference approval */}
-       {openDatePicker && popupPosition && currentPopupEmployee && openDatePicker.includes('conferenceCompleted') && (
+       {(() => {
+         const shouldShow = openDatePicker && popupPosition && currentPopupEmployee && openDatePicker.includes('conferenceCompleted');
+         console.log('Conference popup render check:', { 
+           openDatePicker, 
+           hasPopupPosition: !!popupPosition, 
+           hasCurrentPopupEmployee: !!currentPopupEmployee,
+           includesConferenceCompleted: openDatePicker?.includes('conferenceCompleted'),
+           shouldShow 
+         });
+         return shouldShow;
+       })() && (
          <div 
            className="fixed z-[9999] bg-white border border-gray-300 rounded-lg shadow-xl p-3 date-picker-popup modal-container"
+           data-conference-popup
            style={{
              left: Math.max(10, Math.min(popupPosition.x, window.innerWidth - 200)), // Keep within viewport
              top: Math.min(popupPosition.y, window.innerHeight - 150), // Keep within viewport
@@ -1370,6 +1614,7 @@ export default function Training() {
         currentPopupEmployee[ScheduleFieldMapping[currentPopupFieldKey]] && (
          <div 
            className="fixed z-[9999] bg-white border border-gray-300 rounded-lg shadow-xl p-3 date-picker-popup modal-container"
+           data-complete-reschedule-popup
            style={{
              left: Math.max(10, Math.min(popupPosition.x, window.innerWidth - 200)), // Keep within viewport
              top: Math.min(popupPosition.y, window.innerHeight - 120), // Keep within viewport - ensure "Reschedule" is visible
@@ -1423,6 +1668,7 @@ export default function Training() {
         openDatePicker.startsWith('reschedule-') && (
          <div 
            className="fixed z-[9999] bg-white border border-gray-300 rounded-lg shadow-xl p-3 date-picker-popup"
+           data-reschedule-popup
            style={{
              left: Math.max(10, Math.min(popupPosition.x, window.innerWidth - 200)), // Keep within viewport
              top: Math.min(popupPosition.y, window.innerHeight - 300), // Keep within viewport - ensure calendar is visible
@@ -1430,7 +1676,6 @@ export default function Training() {
            }}
          >
           <InlineCalendar
-            mode="single"
             selected={parseDate(currentPopupEmployee[ScheduleFieldMapping[currentPopupFieldKey]]) || undefined}
             onSelect={(date) => {
               if (date) {
@@ -1445,7 +1690,6 @@ export default function Training() {
                 }
               }
             }}
-            initialFocus
           />
          </div>
        )}
@@ -1465,6 +1709,7 @@ export default function Training() {
        })() && (
          <div 
            className="fixed z-[9999] bg-white border border-gray-300 rounded-lg shadow-xl p-3 date-picker-popup"
+           data-schedule-popup
            style={{
              left: Math.max(10, Math.min(popupPosition.x, window.innerWidth - 200)), // Keep within viewport
              top: Math.min(popupPosition.y, window.innerHeight - 300), // Keep within viewport - ensure calendar is visible
@@ -1472,7 +1717,6 @@ export default function Training() {
            }}
          >
           <InlineCalendar
-            mode="single"
             selected={undefined}
             onSelect={(date) => {
               if (date) {
@@ -1489,7 +1733,6 @@ export default function Training() {
                 }
               }
             }}
-            initialFocus
           />
          </div>
        )}
@@ -1498,6 +1741,7 @@ export default function Training() {
        {notesDropdownOpen && notesDropdownPosition && (
          <div 
            className="fixed z-[9999] bg-white border border-gray-300 rounded-lg shadow-xl dropdown-menu min-w-[180px] max-h-[250px]"
+           data-notes-dropdown
            style={{
              left: notesDropdownPosition.x,
              top: Math.min(notesDropdownPosition.y, window.innerHeight - 300), // Prevent going off bottom of viewport
@@ -1508,8 +1752,11 @@ export default function Training() {
              <div
                key={option.value}
                className="px-3 py-2 text-sm cursor-pointer hover:bg-cyan-50 rounded transition-colors"
-               onClick={() => {
+               onClick={(e) => {
+                 e.preventDefault();
+                 e.stopPropagation();
                  const employeeId = notesDropdownOpen;
+                 console.log('Saving notes for employee:', employeeId, 'with value:', option.value);
                  handleSaveNotes(employeeId, option.value);
                  setNotesDropdownOpen(null);
                  setNotesDropdownPosition(null);
@@ -1525,6 +1772,7 @@ export default function Training() {
        {advisorDropdownOpen && advisorDropdownPosition && (
          <div 
            className="fixed z-[9999] bg-white border border-gray-300 rounded-lg shadow-xl dropdown-menu advisor-dropdown min-w-[200px]"
+           data-advisor-dropdown
            style={{
              left: advisorDropdownPosition.x,
              top: Math.min(advisorDropdownPosition.y, window.innerHeight - 250), // Prevent going off bottom of viewport
@@ -1533,12 +1781,15 @@ export default function Training() {
          >
            <div
              className="text-sm cursor-pointer hover:bg-purple-50 transition-colors px-3 py-2"
-             onClick={() => {
-               const employeeId = advisorDropdownOpen;
-               handleSaveAdvisor(employeeId, 'none');
-               setAdvisorDropdownOpen(null);
-               setAdvisorDropdownPosition(null);
-             }}
+               onClick={(e) => {
+                 e.preventDefault();
+                 e.stopPropagation();
+                 const employeeId = advisorDropdownOpen;
+                 console.log('Saving advisor for employee:', employeeId, 'with value: none');
+                 handleSaveAdvisor(employeeId, 'none');
+                 setAdvisorDropdownOpen(null);
+                 setAdvisorDropdownPosition(null);
+               }}
            >
              No advisor assigned
            </div>
@@ -1546,8 +1797,11 @@ export default function Training() {
              <div
                key={advisor.advisorId}
                className="text-sm cursor-pointer hover:bg-purple-50 transition-colors px-3 py-2"
-               onClick={() => {
+               onClick={(e) => {
+                 e.preventDefault();
+                 e.stopPropagation();
                  const employeeId = advisorDropdownOpen;
+                 console.log('Saving advisor for employee:', employeeId, 'with advisor ID:', advisor.advisorId);
                  handleSaveAdvisor(employeeId, advisor.advisorId.toString());
                  setAdvisorDropdownOpen(null);
                  setAdvisorDropdownPosition(null);
