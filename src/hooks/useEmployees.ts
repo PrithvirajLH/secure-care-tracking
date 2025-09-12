@@ -14,6 +14,9 @@ interface EmployeeFilters {
   // Server-side date filtering
   dateField?: string;
   date?: string; // YYYY-MM-DD
+  // Server-side sorting
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
 }
 
 // Hook for paginated employee data using new view-based approach (unique employees only)

@@ -25,7 +25,6 @@ const performanceMiddleware = (req, res, next) => {
       
       // Performance monitoring - log every 10 calls
       if (stats.count % 10 === 0) {
-        // Uncomment for debugging: console.log(`📊 Analytics Performance - ${key}: avg=${Math.round(stats.totalTime/stats.count)}ms, max=${stats.maxTime}ms, calls=${stats.count}`);
       }
     }
     

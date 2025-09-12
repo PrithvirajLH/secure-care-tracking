@@ -1,5 +1,5 @@
 // API service for SecureCare operations using new configuration
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
 
 export interface TrainingUpdate {
   employeeId: string;
@@ -125,6 +125,7 @@ class SecureCareAPI {
     if (filters.sortOrder) {
       params.append('sortOrder', filters.sortOrder);
     }
+    
     
     const response = await fetch(`${this.baseURL}/securecare/employees-unique/${encodeURIComponent(level)}?${params}`);
     

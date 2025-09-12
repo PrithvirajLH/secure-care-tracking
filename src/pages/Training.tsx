@@ -63,6 +63,20 @@ import {
   type AwardType 
 } from "@/config/awardTypes";
 
+// Helper function to get award type priority (lower number = higher priority)
+const getAwardTypePriority = (awardType: string | null | undefined): number => {
+  if (!awardType) return 99;
+  
+  switch (awardType) {
+    case 'Coach': return 1;
+    case 'Consultant': return 2;
+    case 'Level 3': return 3;
+    case 'Level 2': return 4;
+    case 'Level 1': return 5;
+    default: return 99;
+  }
+};
+
 interface LevelStats {
   total: number;
   completed: number;
@@ -92,7 +106,7 @@ export default function Training() {
   const [areaFilter, setAreaFilter] = useState<string>("all");
   const [reqStatusFilters, setReqStatusFilters] = useState<Record<string, string>>({});
   const [sortBy, setSortBy] = useState<string>("latest"); // Will be updated based on level
-  const [sortOrder, setSortOrder] = useState<string>("desc");
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>("desc");
   
   // Enhanced UI state
   // Use React Query for advisors data
@@ -275,15 +289,11 @@ export default function Training() {
   const handleSaveNotes = async (employeeId: string, notesValue?: string) => {
     try {
       const valueToSave = notesValue !== undefined ? notesValue : tempNotes;
-      console.log('handleSaveNotes called with:', { employeeId, notesValue, valueToSave });
-      console.log('Calling trainingAPI.updateEmployeeNotes...');
       const result = await trainingAPI.updateEmployeeNotes(employeeId, valueToSave);
-      console.log('Notes API call result:', result);
       toast.success('Notes updated successfully');
       setEditingNotes(null);
       setTempNotes('');
       // Invalidate queries to refresh data without page reload
-      console.log('Invalidating React Query cache...');
       await queryClient.invalidateQueries({ queryKey: ['employees-training'] });
       await queryClient.invalidateQueries({ queryKey: ['employees-unique'] });
     } catch (error) {
@@ -312,15 +322,11 @@ export default function Training() {
     try {
       const valueToUse = advisorValue !== undefined ? advisorValue : tempAdvisor;
       const advisorId = (valueToUse === '' || valueToUse === 'none') ? null : parseInt(valueToUse);
-      console.log('handleSaveAdvisor called with:', { employeeId, advisorValue, valueToUse, advisorId });
-      console.log('Calling trainingAPI.updateEmployeeAdvisor...');
       const result = await trainingAPI.updateEmployeeAdvisor(employeeId, advisorId);
-      console.log('Advisor API call result:', result);
       toast.success('Advisor updated successfully');
       setEditingAdvisor(null);
       setTempAdvisor('');
       // Invalidate queries to refresh data without page reload
-      console.log('Invalidating React Query cache...');
       await queryClient.invalidateQueries({ queryKey: ['employees-training'] });
       await queryClient.invalidateQueries({ queryKey: ['employees-unique'] });
       await queryClient.invalidateQueries({ queryKey: ['advisors'] });
@@ -340,19 +346,27 @@ export default function Training() {
     setTempAdvisor('none');
   };
 
+  // Get current level configuration first
+  const currentLevel: AwardType = getLevelFromTabKey(activeTab);
+  const currentLevelConfig = LevelConfig[currentLevel];
+  const currentColumns = LevelColumns[currentLevel];
+  const currentFieldMapping = LevelFieldMapping[currentLevel];
+
   // Server-side pagination with filters (includes optional date filter)
-  // Note: compute after currentFieldMapping is defined
-  let filters = useMemo(() => ({
+  // Consolidated filters definition to avoid circular dependency
+  const filters = useMemo(() => ({
     level: activeTab,
     status: 'active',
     facility: facilityFilter !== 'all' ? facilityFilter : undefined,
     area: areaFilter !== 'all' ? areaFilter : undefined,
     sortBy: sortBy,
-    sortOrder: sortOrder
-  }), [activeTab, facilityFilter, areaFilter, sortBy, sortOrder]);
+    sortOrder: sortOrder,
+    dateField: dateFilter.column ? currentFieldMapping[dateFilter.column] : undefined,
+    date: dateFilter.date ? dateFilter.date.toISOString().split('T')[0] : undefined
+  }), [activeTab, facilityFilter, areaFilter, sortBy, sortOrder, dateFilter, currentFieldMapping]);
 
   const {
-    employees: currentEmployees,
+    employees: allEmployees,
     isLoading,
     error,
     currentPage,
@@ -363,18 +377,33 @@ export default function Training() {
     refetch
   } = useTrainingEmployees(filters, itemsPerPage);
 
-  // Get current level configuration
-  const currentLevel: AwardType = getLevelFromTabKey(activeTab);
-  const currentLevelConfig = LevelConfig[currentLevel];
-  const currentColumns = LevelColumns[currentLevel];
-  const currentFieldMapping = LevelFieldMapping[currentLevel];
-  
-  // Augment filters with date filter once mapping is known
-  filters = useMemo(() => ({
-    ...filters,
-    dateField: dateFilter.column ? currentFieldMapping[dateFilter.column] : undefined,
-    date: dateFilter.date ? dateFilter.date.toISOString().split('T')[0] : undefined
-  }), [filters.level, filters.status, filters.facility, filters.area, filters.sortBy, filters.sortOrder, dateFilter, currentFieldMapping]);
+  // Remove duplicate employees - keep only one record per employee (the one with highest status)
+  const currentEmployees = useMemo(() => {
+    if (!allEmployees || allEmployees.length === 0) return [];
+    
+    // Group employees by employeeNumber and keep the one with highest status
+    const employeeMap = new Map();
+    
+    allEmployees.forEach(employee => {
+      const employeeNumber = employee.employeeNumber || employee.employeeId;
+      if (!employeeNumber) return;
+      
+      const existing = employeeMap.get(employeeNumber);
+      if (!existing) {
+        employeeMap.set(employeeNumber, employee);
+      } else {
+        // Keep the employee with higher status (based on awardType priority)
+        const currentPriority = getAwardTypePriority(employee.awardType);
+        const existingPriority = getAwardTypePriority(existing.awardType);
+        
+        if (currentPriority < existingPriority) {
+          employeeMap.set(employeeNumber, employee);
+        }
+      }
+    });
+    
+    return Array.from(employeeMap.values());
+  }, [allEmployees]);
 
   // Filter columns based on visibility settings (only for levels 2-5)
   const filteredColumns = useMemo(() => {
@@ -952,7 +981,6 @@ export default function Training() {
                 e.preventDefault();
                 e.stopPropagation();
                 const rect = (e.target as HTMLElement).getBoundingClientRect();
-                console.log('Conference awaiting clicked:', { key, fieldKey, employee: employee.employeeId });
                 setPopupPosition({ x: rect.left + rect.width / 2, y: rect.bottom + 8 });
                 setCurrentPopupEmployee(employee);
                 setCurrentPopupFieldKey(fieldKey);
@@ -1222,8 +1250,8 @@ export default function Training() {
                </div>
              </div>
              
-             {/* Right side - Show Columns with Clear Filters overlay */}
-             <div className="relative flex items-end pt-5">
+             {/* Right side - Show Columns section moved down */}
+             <div className="flex flex-col items-end pt-5 space-y-3">
                {/* Enhanced Column Visibility Controls (only for levels 2-5) */}
                {currentLevel !== 'Level 1' && (
                  <div className="relative">
@@ -1278,9 +1306,36 @@ export default function Training() {
                  </div>
                )}
 
-               {/* Clear filters button - positioned absolutely over the show columns */}
-               {isAnyFilterActive && (
-                 <div className="absolute -top-4 -right-2 z-10">
+               {/* Bottom row - Employee Count Indicator and Clear Filters */}
+               <div className="flex items-center gap-3">
+                 {/* Employee Count Indicator */}
+                 <div className="flex items-center space-x-2">
+                   <div className="flex items-center justify-center w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg shadow-sm">
+                     <Users className="h-4 w-4 text-white" />
+                   </div>
+                   <div className="flex flex-col">
+                     {isFetching ? (
+                       <div className="flex items-center space-x-2">
+                         <div className="w-3 h-3 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin"></div>
+                         <span className="text-xs font-medium text-slate-600">Loading...</span>
+                       </div>
+                     ) : (
+                       <div className="flex items-center space-x-1">
+                         <span className="text-sm font-bold text-slate-800">
+                           {filteredEmployees.length.toLocaleString()}
+                         </span>
+                         <span className="text-xs text-slate-500">of</span>
+                         <span className="text-sm font-bold text-slate-800">
+                           {currentEmployees.length.toLocaleString()}
+                         </span>
+                         <span className="text-xs text-slate-500">employees</span>
+                       </div>
+                     )}
+                   </div>
+                 </div>
+
+                 {/* Clear filters button */}
+                 {isAnyFilterActive && (
                    <Button
                      variant="default"
                      size="sm"
@@ -1294,8 +1349,8 @@ export default function Training() {
                        {activeFilterCount}
                      </span>
                    </Button>
-                 </div>
-               )}
+                 )}
+               </div>
              </div>
           </div>
           <div className="px-6">
@@ -1667,13 +1722,6 @@ export default function Training() {
        {/* Portal popup for conference approval */}
        {(() => {
          const shouldShow = openDatePicker && popupPosition && currentPopupEmployee && openDatePicker.includes('conferenceCompleted');
-         console.log('Conference popup render check:', { 
-           openDatePicker, 
-           hasPopupPosition: !!popupPosition, 
-           hasCurrentPopupEmployee: !!currentPopupEmployee,
-           includesConferenceCompleted: openDatePicker?.includes('conferenceCompleted'),
-           shouldShow 
-         });
          return shouldShow;
        })() && (
          <div 
@@ -1899,7 +1947,6 @@ export default function Training() {
                  e.preventDefault();
                  e.stopPropagation();
                  const employeeId = notesDropdownOpen;
-                 console.log('Saving notes for employee:', employeeId, 'with value:', option.value);
                  handleSaveNotes(employeeId, option.value);
                  setNotesDropdownOpen(null);
                  setNotesDropdownPosition(null);
@@ -1928,7 +1975,6 @@ export default function Training() {
                  e.preventDefault();
                  e.stopPropagation();
                  const employeeId = advisorDropdownOpen;
-                 console.log('Saving advisor for employee:', employeeId, 'with value: none');
                  handleSaveAdvisor(employeeId, 'none');
                  setAdvisorDropdownOpen(null);
                  setAdvisorDropdownPosition(null);
@@ -1944,7 +1990,6 @@ export default function Training() {
                  e.preventDefault();
                  e.stopPropagation();
                  const employeeId = advisorDropdownOpen;
-                 console.log('Saving advisor for employee:', employeeId, 'with advisor ID:', advisor.advisorId);
                  handleSaveAdvisor(employeeId, advisor.advisorId.toString());
                  setAdvisorDropdownOpen(null);
                  setAdvisorDropdownPosition(null);

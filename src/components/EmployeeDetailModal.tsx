@@ -8,21 +8,15 @@ import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { fmt, parseDate, NOTES_OPTIONS } from "@/config/awardTypes";
-// import { motion, AnimatePresence } from "framer-motion"; // Removed for faster loading
-import { ShineBorder } from "@/components/magicui/shine-border";
 import { 
   Calendar, 
   Clock, 
   CheckCircle, 
   AlertCircle, 
-  PlayCircle,
-  FileText,
-  Video,
   Award,
   User,
   Building,
@@ -32,8 +26,7 @@ import {
   TrendingUp,
   Users,
   UserCheck,
-  MessageSquare,
-  Save
+  MessageSquare
 } from "lucide-react";
 import { Employee } from "@/context/AppContext";
 import { format } from "date-fns";
@@ -71,9 +64,7 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
   const { data: levelRecords = [], error: levelsError, isLoading: isLoadingLevels } = useQuery({
     queryKey: ['employee-levels', String(employee.employeeId)],
     queryFn: async () => {
-      console.log('🔍 Fetching employee levels for ID:', employee.employeeId);
       const result = await trainingAPI.getEmployeeLevels(String(employee.employeeId));
-      console.log('🔍 Employee levels API result:', result);
       return result;
     },
     enabled: open && hasValidEmployeeId,
@@ -123,13 +114,6 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
   // Debug logging to investigate querying issues
   useEffect(() => {
     if (open) {
-      console.log('🔍 Employee Detail Modal Debug:');
-      console.log('Employee ID:', employee.employeeId);
-      console.log('Level Records:', levelRecords);
-      console.log('AwardType to Record Map:', awardTypeToRecord);
-      console.log('Current Employee:', currentEmployee);
-      console.log('Levels Error:', levelsError);
-      console.log('Is Loading Levels:', isLoadingLevels);
     }
   }, [open, levelRecords, employee, awardTypeToRecord, currentEmployee, freshEmployeeData, isLoadingEmployee, levelsError]);
   
@@ -400,15 +384,9 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
     const awardTypeForLevel = levelKeyToAwardType[level];
     const recordForLevel: any | undefined = awardTypeToRecord[awardTypeForLevel];
     
-    // Debug logging for level progress
-    console.log(`🔍 Level Progress Debug for ${level}:`);
-    console.log(`  - AwardType: ${awardTypeForLevel}`);
-    console.log(`  - Record Found:`, recordForLevel);
-    console.log(`  - AwardTypeToRecord Map:`, awardTypeToRecord);
     
     // If no record exists for this awardType, return empty progress (no data)
     if (!recordForLevel) {
-      console.log(`  - No record found for ${awardTypeForLevel}, returning empty progress`);
       return { 
         requirements: [], 
         total: 0, 
@@ -653,7 +631,6 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
       { key: "coach", name: "Coach", progress: getLevelProgress("coach") }
     ];
     
-    console.log('🔍 Levels Array:', levelsArray);
     return levelsArray;
   }, [awardTypeToRecord]);
 
@@ -1026,22 +1003,31 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
         <DialogTrigger asChild>
           {children}
         </DialogTrigger>
-        <DialogContent className="max-w-5xl modal-container p-0 overflow-hidden">
-        <div className="modal-content p-0">
-        <DialogHeader className="relative bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-600 p-6 text-white">
-          <div className="absolute inset-0 bg-black/10"></div>
+        <DialogContent 
+          className="max-w-5xl max-h-[90vh] p-0 bg-gradient-to-br from-white to-slate-50 border border-slate-200/60 shadow-2xl"
+          style={{ 
+            display: 'flex', 
+            flexDirection: 'column', 
+            overflow: 'hidden',
+            gridTemplateColumns: 'none',
+            gap: '0',
+            height: '90vh'
+          }}
+        >
+        <div className="flex flex-col h-full">
+        <DialogHeader className="relative bg-gradient-to-r from-purple-50 to-indigo-50 border-b border-purple-200/60 p-6">
           <div className="relative z-10">
-            <DialogTitle className="flex items-center gap-3 text-2xl font-bold">
-              <div className="p-2 bg-white/20 rounded-full backdrop-blur-sm">
-                <User className="w-6 h-6" />
+            <DialogTitle className="flex items-center gap-3 text-2xl font-bold text-slate-800">
+              <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-lg flex items-center justify-center">
+                <User className="w-5 h-5 text-white" />
               </div>
               <span>
                 Employee Details
               </span>
             </DialogTitle>
             <DialogDescription asChild>
-              <p className="text-white/90 mt-2">
-                View employee training progress and assignments (Read-only)
+              <p className="text-slate-600 mt-2 text-sm">
+                View employee training progress and assignments
               </p>
             </DialogDescription>
           </div>
@@ -1049,67 +1035,60 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
         
         {isLoading ? (
           <div className="flex items-center justify-center py-16">
-            <div 
-              className="text-center"
-            >
+            <div className="text-center">
               <div className="relative">
-                <div className="w-16 h-16 border-4 border-purple-200 rounded-full"></div>
-                <div className="absolute top-0 left-0 w-16 h-16 border-4 border-transparent border-t-purple-600 rounded-full"></div>
+                <div className="w-16 h-16 border-4 border-slate-200 rounded-full"></div>
+                <div className="absolute top-0 left-0 w-16 h-16 border-4 border-transparent border-t-purple-600 rounded-full animate-spin"></div>
               </div>
-              <p className="text-muted-foreground mt-4 text-lg">
+              <p className="text-slate-600 mt-4 text-lg font-medium">
                 Loading employee data...
               </p>
             </div>
           </div>
         ) : (
+        <div className="flex-1 overflow-y-auto min-h-0">
         <div className="space-y-6 p-6">
           {/* Employee Info */}
           <div>
-            <Card className="relative overflow-hidden border-0 shadow-xl bg-gradient-to-br from-white to-gray-50">
-              <div className="absolute inset-0 bg-gradient-to-r from-purple-500/5 via-blue-500/5 to-cyan-500/5"></div>
-              <CardHeader className="relative z-10 pb-4">
+            <Card className="shadow-lg bg-gradient-to-br from-white to-slate-50 border border-slate-200/60 overflow-hidden">
+              <CardHeader className="bg-gradient-to-r from-purple-50 to-indigo-50 border-b border-purple-200/60">
                 <CardTitle className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full">
-                      <User className="w-5 h-5 text-white" />
-                    </div>
-                    <span className="text-xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
+                    <User className="w-6 h-6 text-slate-600" />
+                    <span className="text-2xl font-bold text-slate-800">
                       {currentEmployee.name || (employee as any).Employee}
                     </span>
                   </div>
-                  <div>
-                    <Badge className="bg-gradient-to-r from-purple-500 to-blue-500 text-white border-0 px-3 py-1">
-                      {(employee as any).staffRoll || (employee as any).staffRoles || 'N/A'}
-                    </Badge>
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-gradient-to-r from-emerald-400 to-green-500 rounded-full"></div>
+                    <div className="px-4 py-2 bg-gradient-to-r from-slate-100 to-slate-200 border border-slate-300 rounded-full shadow-sm">
+                      <span className="text-sm font-semibold text-slate-700">
+                        {(employee as any).staffRoll || (employee as any).staffRoles || 'N/A'}
+                      </span>
+                    </div>
                   </div>
                 </CardTitle>
               </CardHeader>
-              <CardContent className="relative z-10 grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="flex items-center gap-3 p-3 rounded-lg bg-white/50 backdrop-blur-sm border border-white/20">
-                  <div className="p-2 bg-blue-100 rounded-full">
-                    <Building className="w-4 h-4 text-blue-600" />
-                  </div>
+              <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6 p-6">
+                <div className="flex items-center gap-3 p-4 rounded-lg bg-gradient-to-r from-blue-50 to-blue-100 border border-blue-200/60">
+                  <Building className="w-6 h-6 text-blue-600" />
                   <div>
-                    <p className="text-xs text-muted-foreground font-medium">Facility</p>
-                    <p className="text-sm font-semibold">{currentEmployee.facility || (employee as any).Facility}</p>
+                    <p className="text-sm text-blue-600 font-semibold uppercase tracking-wider">Facility</p>
+                    <p className="text-base font-bold text-slate-800">{currentEmployee.facility || (employee as any).Facility}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 p-3 rounded-lg bg-white/50 backdrop-blur-sm border border-white/20">
-                  <div className="p-2 bg-green-100 rounded-full">
-                    <MapPin className="w-4 h-4 text-green-600" />
-                  </div>
+                <div className="flex items-center gap-3 p-4 rounded-lg bg-gradient-to-r from-green-50 to-green-100 border border-green-200/60">
+                  <MapPin className="w-6 h-6 text-green-600" />
                   <div>
-                    <p className="text-xs text-muted-foreground font-medium">Area</p>
-                    <p className="text-sm font-semibold">{currentEmployee.area || (employee as any).Area}</p>
+                    <p className="text-sm text-green-600 font-semibold uppercase tracking-wider">Area</p>
+                    <p className="text-base font-bold text-slate-800">{currentEmployee.area || (employee as any).Area}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 p-3 rounded-lg bg-white/50 backdrop-blur-sm border border-white/20">
-                  <div className="p-2 bg-purple-100 rounded-full">
-                    <User className="w-4 h-4 text-purple-600" />
-                  </div>
+                <div className="flex items-center gap-3 p-4 rounded-lg bg-gradient-to-r from-purple-50 to-purple-100 border border-purple-200/60">
+                  <User className="w-6 h-6 text-purple-600" />
                   <div>
-                    <p className="text-xs text-muted-foreground font-medium">Employee ID</p>
-                    <p className="text-sm font-semibold">{(employee as any).employeeNumber || currentEmployee.employeeId}</p>
+                    <p className="text-sm text-purple-600 font-semibold uppercase tracking-wider">Employee ID</p>
+                    <p className="text-base font-bold text-slate-800">{(employee as any).employeeNumber || currentEmployee.employeeId}</p>
                   </div>
                 </div>
               </CardContent>
@@ -1129,34 +1108,23 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {/* Advisor Assignment */}
                   <div>
-                    <Card className="relative overflow-hidden border-0 shadow-xl bg-gradient-to-br from-white to-purple-50">
-                      <ShineBorder
-                        borderWidth={2}
-                        duration={25}
-                        shineColor={["#8b5cf6", "#a855f7", "#c084fc"]}
-                        className="rounded-lg"
-                      />
-                      <CardHeader className="relative z-10">
+                    <Card className="shadow-lg bg-gradient-to-br from-white to-slate-50 border border-slate-200/60 overflow-hidden">
+                      <CardHeader className="bg-gradient-to-r from-purple-50 to-indigo-50 border-b border-purple-200/60">
                         <CardTitle className="flex items-center gap-3">
-                          <div className="p-2 bg-gradient-to-r from-purple-500 to-purple-600 rounded-full">
-                            <UserCheck className="w-5 h-5 text-white" />
-                          </div>
-                          <span className="text-lg font-bold bg-gradient-to-r from-purple-600 to-purple-700 bg-clip-text text-transparent">
-                            Advisor Assignment
+                          <UserCheck className="w-6 h-6 text-slate-600" />
+                          <span className="text-xl font-bold text-slate-800">
+                            Advisor Assigned
                           </span>
                         </CardTitle>
                       </CardHeader>
-                      <CardContent className="relative z-10 space-y-4">
+                      <CardContent className="space-y-4 p-6">
                         <div className="space-y-3">
-                          <Label htmlFor={`advisor-select-${currentLevel}`} className="text-sm font-semibold text-gray-700">
-                            Assigned Advisor
-                          </Label>
                           <Select
                             value={currentLevelState.advisorId}
                             onValueChange={(value) => handleLevelAdvisorUpdate(currentLevel, value)}
                             disabled={currentLevelState.isUpdatingAdvisor}
                           >
-                            <SelectTrigger className="w-full border-2 border-purple-200 focus:border-purple-500 transition-colors">
+                            <SelectTrigger className="w-full border-2 border-slate-200 focus:border-purple-500 transition-colors">
                               <SelectValue placeholder="Select an advisor" />
                             </SelectTrigger>
                             <SelectContent>
@@ -1181,34 +1149,23 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
 
                   {/* Notes Section */}
                   <div>
-                    <Card className="relative overflow-hidden border-0 shadow-xl bg-gradient-to-br from-white to-cyan-50">
-                      <ShineBorder
-                        borderWidth={2}
-                        duration={25}
-                        shineColor={["#06b6d4", "#0891b2", "#0e7490"]}
-                        className="rounded-lg"
-                      />
-                      <CardHeader className="relative z-10">
+                    <Card className="shadow-lg bg-gradient-to-br from-white to-slate-50 border border-slate-200/60 overflow-hidden">
+                      <CardHeader className="bg-gradient-to-r from-cyan-50 to-blue-50 border-b border-cyan-200/60">
                         <CardTitle className="flex items-center gap-3">
-                          <div className="p-2 bg-gradient-to-r from-cyan-500 to-cyan-600 rounded-full">
-                            <MessageSquare className="w-5 h-5 text-white" />
-                          </div>
-                          <span className="text-lg font-bold bg-gradient-to-r from-cyan-600 to-cyan-700 bg-clip-text text-transparent">
+                          <MessageSquare className="w-6 h-6 text-slate-600" />
+                          <span className="text-xl font-bold text-slate-800">
                             Notes
                           </span>
                         </CardTitle>
                       </CardHeader>
-                      <CardContent className="relative z-10 space-y-4">
+                      <CardContent className="space-y-4 p-6">
                         <div className="space-y-3">
-                          <Label htmlFor={`notes-select-${currentLevel}`} className="text-sm font-semibold text-gray-700">
-                            Employee Notes
-                          </Label>
                           <Select
                             value={currentLevelState.notes}
                             onValueChange={(value) => handleLevelNotesUpdate(currentLevel, value)}
                             disabled={currentLevelState.isUpdatingNotes}
                           >
-                            <SelectTrigger className="w-full border-2 border-cyan-200 focus:border-cyan-500 transition-colors">
+                            <SelectTrigger className="w-full border-2 border-slate-200 focus:border-cyan-500 transition-colors">
                               <SelectValue placeholder="Select a note..." />
                             </SelectTrigger>
                             <SelectContent>
@@ -1235,23 +1192,19 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
           })()}
 
           {/* Training Progress */}
-          <div
-          >
-            <Card className="relative overflow-hidden border-0 shadow-xl bg-gradient-to-br from-white to-gray-50">
-              <div className="absolute inset-0 bg-gradient-to-r from-purple-500/5 via-blue-500/5 to-cyan-500/5"></div>
-              <CardHeader className="relative z-10">
+          <div>
+            <Card className="shadow-lg bg-gradient-to-br from-white to-slate-50 border border-slate-200/60 overflow-hidden">
+              <CardHeader className="bg-gradient-to-r from-purple-50 to-indigo-50 border-b border-purple-200/60">
                 <CardTitle className="flex items-center gap-3">
-                  <div className="p-2 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full">
-                    <GraduationCap className="w-5 h-5 text-white" />
-                  </div>
-                  <span className="text-xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
+                  <GraduationCap className="w-6 h-6 text-slate-600" />
+                  <span className="text-2xl font-bold text-slate-800">
                     Training Progress
                   </span>
                 </CardTitle>
               </CardHeader>
-              <CardContent className="relative z-10">
+              <CardContent className="p-6">
                 <Tabs value={currentLevel} onValueChange={setCurrentLevel} className="space-y-6">
-                  <div className="flex max-w-fit mx-auto border border-transparent rounded-full bg-white shadow-[0px_8px_30px_rgb(0,0,0,0.12)] px-8 py-4 items-center justify-center space-x-8 mb-8">
+                  <div className="flex max-w-fit mx-auto border border-slate-200 rounded-full bg-white shadow-lg px-8 py-4 items-center justify-center space-x-8 mb-8">
                     {levels.map((level, idx) => {
                       const isActive = currentLevel === level.key;
                       return (
@@ -1301,17 +1254,15 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
                 {levels.map((level) => (
                   <TabsContent key={level.key} value={level.key} className="space-y-6">
                     <div 
-                      className="flex items-center justify-between p-6 rounded-xl bg-gradient-to-r from-white to-gray-50 border border-gray-200"
+                      className="flex items-center justify-between p-6 rounded-xl bg-gradient-to-r from-slate-50 to-gray-50 border border-slate-200/60"
                     >
                       <div className="flex items-center gap-4">
-                        <div
-                          className="p-3 rounded-full bg-gradient-to-r from-purple-100 to-blue-100"
-                        >
+                        <div className="w-12 h-12 bg-gradient-to-br from-purple-100 to-indigo-100 rounded-lg flex items-center justify-center">
                           <level.progress.icon className={`w-6 h-6 ${level.progress.color}`} />
                         </div>
                         <div>
-                          <h3 className="text-lg font-bold text-gray-800">{level.name} Level</h3>
-                          <p className="text-sm text-gray-600">
+                          <h3 className="text-xl font-bold text-slate-800">{level.name} Level</h3>
+                          <p className="text-base text-slate-600">
                             {level.progress.completed} of {level.progress.total} requirements completed
                           </p>
                         </div>
@@ -1320,11 +1271,11 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
                         <div className="w-32">
                           <Progress 
                             value={(level.progress.completed / level.progress.total) * 100} 
-                            className="h-3 bg-gray-200"
+                            className="h-3 bg-slate-200"
                           />
                         </div>
                         <span 
-                          className="text-lg font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent"
+                          className="text-lg font-bold text-slate-800"
                         >
                           {Math.round((level.progress.completed / level.progress.total) * 100)}%
                         </span>
@@ -1334,25 +1285,23 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
                     <div className="space-y-4">
                       {!level.progress.hasData ? (
                         <div 
-                          className="text-center py-8 text-gray-500"
+                          className="text-center py-12"
                         >
-                          <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-                            <AlertCircle className="w-8 h-8 text-gray-400" />
+                          <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-slate-100 to-slate-200 rounded-full flex items-center justify-center">
+                            <AlertCircle className="w-8 h-8 text-slate-400" />
                           </div>
-                          <p className="text-lg font-medium">No data for this level</p>
-                          <p className="text-sm">This employee has no {levelKeyToAwardType[currentLevel]} record. Data will appear here once the employee progresses to this level.</p>
+                          <p className="text-lg font-medium text-slate-600">No data for this level</p>
+                          <p className="text-sm text-slate-500">This employee has no {levelKeyToAwardType[currentLevel]} record. Data will appear here once the employee progresses to this level.</p>
                         </div>
                       ) : (
                         level.progress.requirements.map((req, index) => (
                           <div 
                             key={index} 
-                            className="flex items-center justify-between p-4 rounded-xl border border-gray-200 bg-white hover:shadow-md transition-all duration-300"
+                            className="flex items-center justify-between p-4 rounded-xl border border-slate-200/60 bg-white hover:shadow-md transition-all duration-300"
                           >
                             <div className="flex items-center gap-4">
-                              <div
-                                className="w-2 h-2 rounded-full bg-gradient-to-r from-purple-400 to-blue-400"
-                              />
-                              <span className="font-semibold text-gray-800">{req.name}</span>
+                              <div className="w-2 h-2 rounded-full bg-gradient-to-r from-purple-500 to-indigo-600"></div>
+                              <span className="text-base font-semibold text-slate-800">{req.name}</span>
                             </div>
                             <div className="flex items-center gap-2">
                               {getStatusBadge(req)}
@@ -1370,19 +1319,19 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
 
           {/* Action Buttons */}
           <div 
-            className="flex gap-3 justify-end pt-6 border-t border-gray-200"
+            className="flex gap-3 justify-end pt-6 border-t border-slate-200/60"
           >
-            <div
-            >
+            <div>
               <Button 
                 variant="outline" 
                 onClick={() => setOpen(false)}
-                className="px-6 py-2 border-2 border-gray-300 hover:border-gray-400 transition-colors"
+                className="px-6 py-2 border-2 border-slate-300 hover:border-slate-400 transition-colors"
               >
                 Close
               </Button>
             </div>
           </div>
+        </div>
         </div>
         )}
         </div>

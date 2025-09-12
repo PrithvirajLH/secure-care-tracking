@@ -210,29 +210,87 @@ export default function Completions() {
         </Card>
       </div>
 
-      <Card className="shadow-sm">
-        <CardHeader><CardTitle>By Level</CardTitle></CardHeader>
-        <CardContent>
+      <Card className="shadow-lg bg-gradient-to-br from-white to-slate-50 border border-slate-200/60 overflow-hidden">
+        <CardHeader className="bg-gradient-to-r from-purple-50 to-indigo-50 border-b border-purple-200/60">
+          <CardTitle className="flex items-center gap-2 text-lg font-semibold text-slate-800">
+            <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-lg flex items-center justify-center">
+              <FileText className="h-4 w-4 text-white" />
+            </div>
+            Breakdown by Level
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <table className="min-w-full border rounded-lg overflow-hidden">
+            <table className="w-full">
               <thead>
-                <tr className="bg-gray-50 text-left">
-                  <th className="px-4 py-2 text-sm font-semibold text-gray-700">Level</th>
-                  <th className="px-4 py-2 text-sm font-semibold text-gray-700">Completed</th>
-                  <th className="px-4 py-2 text-sm font-semibold text-gray-700">In Progress</th>
+                <tr className="bg-gradient-to-r from-slate-50 to-gray-50 border-b border-slate-200">
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700 uppercase tracking-wider">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-gradient-to-r from-purple-500 to-indigo-600 rounded-full"></div>
+                      Level
+                    </div>
+                  </th>
+                  <th className="px-6 py-4 text-center text-sm font-semibold text-slate-700 uppercase tracking-wider">
+                    <div className="flex items-center justify-center gap-2">
+                      <div className="w-2 h-2 bg-gradient-to-r from-green-500 to-emerald-600 rounded-full"></div>
+                      Completed
+                    </div>
+                  </th>
+                  <th className="px-6 py-4 text-center text-sm font-semibold text-slate-700 uppercase tracking-wider">
+                    <div className="flex items-center justify-center gap-2">
+                      <div className="w-2 h-2 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full"></div>
+                      In Progress
+                    </div>
+                  </th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-slate-200/60">
                 {(data?.byLevel || []).map((row: any, idx: number) => (
-                  <tr key={row.level || idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
-                    <td className="px-4 py-2 text-gray-800 font-medium">{row.level || 'Unknown'}</td>
-                    <td className="px-4 py-2"><span className="inline-flex items-center px-2 py-1 rounded bg-green-50 text-green-700 border border-green-200 text-sm font-semibold">{row.completed}</span></td>
-                    <td className="px-4 py-2"><span className="inline-flex items-center px-2 py-1 rounded bg-blue-50 text-blue-700 border border-blue-200 text-sm font-semibold">{row.inProgress}</span></td>
+                  <tr 
+                    key={row.level || idx} 
+                    className="group hover:bg-gradient-to-r hover:from-slate-50/50 hover:to-blue-50/30 transition-all duration-200"
+                  >
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-gradient-to-br from-purple-100 to-indigo-100 rounded-lg flex items-center justify-center group-hover:from-purple-200 group-hover:to-indigo-200 transition-all duration-200">
+                          <span className="text-sm font-bold text-purple-700">
+                            {row.level?.replace('Level ', 'L') || '?'}
+                          </span>
+                        </div>
+                        <span className="text-slate-800 font-semibold text-sm">
+                          {row.level || 'Unknown'}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200/60 shadow-sm group-hover:shadow-md transition-all duration-200">
+                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                        <span className="text-green-700 font-bold text-sm">
+                          {row.completed || 0}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/60 shadow-sm group-hover:shadow-md transition-all duration-200">
+                        <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                        <span className="text-blue-700 font-bold text-sm">
+                          {row.inProgress || 0}
+                        </span>
+                      </div>
+                    </td>
                   </tr>
                 ))}
                 {(!data?.byLevel || data.byLevel.length === 0) && (
                   <tr>
-                    <td className="px-4 py-3 text-gray-500" colSpan={3}>No data for selected filters</td>
+                    <td className="px-6 py-12 text-center" colSpan={3}>
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="w-12 h-12 bg-gradient-to-br from-slate-100 to-slate-200 rounded-full flex items-center justify-center">
+                          <FileText className="h-6 w-6 text-slate-400" />
+                        </div>
+                        <div className="text-slate-500 font-medium">No data available</div>
+                        <div className="text-slate-400 text-sm">Try adjusting your filters</div>
+                      </div>
+                    </td>
                   </tr>
                 )}
               </tbody>

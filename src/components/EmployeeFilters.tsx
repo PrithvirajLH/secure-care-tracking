@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Filter, X } from "lucide-react";
+import { Filter, X, Users2 } from "lucide-react";
 import { ShineBorder } from "@/components/magicui/shine-border";
 import { motion } from "framer-motion";
 
@@ -23,6 +23,12 @@ interface EmployeeFiltersProps {
   areas: string[];
   statuses: string[];
   jobTitles: string[];
+  // Employee count indicator props
+  employees: any[];
+  totalEmployees: number;
+  isLoading: boolean;
+  apiCurrentPage: number;
+  totalPages: number;
 }
 
 export default function EmployeeFilters({
@@ -40,7 +46,12 @@ export default function EmployeeFilters({
   facilities,
   areas,
   statuses,
-  jobTitles
+  jobTitles,
+  employees,
+  totalEmployees,
+  isLoading,
+  apiCurrentPage,
+  totalPages
 }: EmployeeFiltersProps) {
   const hasActiveFilters = selectedFacility !== "all" || selectedArea !== "all" || selectedStatus !== "all" || selectedJobTitle !== "all" || query.trim();
   
@@ -194,46 +205,81 @@ export default function EmployeeFilters({
               </div>
             </>
           )}
+
+          {/* Active Filter Tags - Inline */}
+          {hasActiveFilters && (
+            <>
+              <div className="w-px h-8 bg-purple-300" />
+              <div className="flex items-center gap-2 flex-wrap">
+                {selectedFacility !== "all" && (
+                  <motion.span initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} className="inline-flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-medium shadow-sm border border-purple-200">
+                    <Filter className="w-3 h-3" />
+                    {selectedFacility}
+                  </motion.span>
+                )}
+                {selectedArea !== "all" && (
+                  <motion.span initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} className="inline-flex items-center gap-1 px-2 py-1 bg-indigo-100 text-indigo-700 rounded-full text-xs font-medium shadow-sm border border-indigo-200">
+                    <Filter className="w-3 h-3" />
+                    {selectedArea}
+                  </motion.span>
+                )}
+                {selectedStatus !== "all" && (
+                  <motion.span initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} className="inline-flex items-center gap-1 px-2 py-1 bg-cyan-100 text-cyan-700 rounded-full text-xs font-medium shadow-sm border border-cyan-200">
+                    <Filter className="w-3 h-3" />
+                    {selectedStatus}
+                  </motion.span>
+                )}
+                {selectedJobTitle !== "all" && (
+                  <motion.span initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} className="inline-flex items-center gap-1 px-2 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-medium shadow-sm border border-emerald-200">
+                    <Filter className="w-3 h-3" />
+                    {selectedJobTitle}
+                  </motion.span>
+                )}
+                {query.trim() && (
+                  <motion.span initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} className="inline-flex items-center gap-1 px-2 py-1 bg-amber-100 text-amber-700 rounded-full text-xs font-medium shadow-sm border border-amber-200">
+                    <Filter className="w-3 h-3" />
+                    "{query}"
+                  </motion.span>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* Spacer to push count indicator to the right */}
+          <div className="flex-1" />
+
+          {/* Employee Count Indicator - Rightmost with larger size */}
+          <div className="w-px h-8 bg-purple-300" />
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center justify-center w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg">
+              <Users2 className="h-6 w-6 text-white" />
+            </div>
+            <div className="flex flex-col">
+              {isLoading ? (
+                <div className="flex items-center space-x-3">
+                  <div className="w-4 h-4 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin"></div>
+                  <span className="text-sm font-medium text-slate-600">Loading...</span>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-lg font-bold text-slate-800">
+                      {employees.length.toLocaleString()}
+                    </span>
+                    <span className="text-sm text-slate-500">of</span>
+                    <span className="text-lg font-bold text-slate-800">
+                      {totalEmployees.toLocaleString()}
+                    </span>
+                    <span className="text-sm text-slate-500">employees</span>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Active Filters Summary */}
-      {hasActiveFilters && (
-        <div className="w-full mt-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            {selectedFacility !== "all" && (
-              <motion.span initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} className="inline-flex items-center gap-1 px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-medium shadow-sm border border-purple-200">
-                <Filter className="w-3 h-3" />
-                Facility: {selectedFacility}
-              </motion.span>
-            )}
-            {selectedArea !== "all" && (
-              <motion.span initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} className="inline-flex items-center gap-1 px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-xs font-medium shadow-sm border border-indigo-200">
-                <Filter className="w-3 h-3" />
-                Area: {selectedArea}
-              </motion.span>
-            )}
-            {selectedStatus !== "all" && (
-              <motion.span initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} className="inline-flex items-center gap-1 px-3 py-1 bg-cyan-100 text-cyan-700 rounded-full text-xs font-medium shadow-sm border border-cyan-200">
-                <Filter className="w-3 h-3" />
-                Status: {selectedStatus}
-              </motion.span>
-            )}
-            {selectedJobTitle !== "all" && (
-              <motion.span initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} className="inline-flex items-center gap-1 px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-medium shadow-sm border border-emerald-200">
-                <Filter className="w-3 h-3" />
-                Job Title: {selectedJobTitle}
-              </motion.span>
-            )}
-            {query.trim() && (
-              <motion.span initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} className="inline-flex items-center gap-1 px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-xs font-medium shadow-sm border border-amber-200">
-                <Filter className="w-3 h-3" />
-                Search: "{query}"
-              </motion.span>
-            )}
-          </div>
-        </div>
-      )}
+
     </div>
   );
 }

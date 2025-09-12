@@ -82,28 +82,38 @@ export default function Dashboard() {
     const uniqueEmployeeNumbers = new Set(employees.map(e => e.employeeNumber));
     const total = uniqueEmployeeNumbers.size;
     
+    // Get unique employees (one record per employee with highest status)
+    const uniqueEmployees = employees.filter((employee, index, arr) => 
+      arr.findIndex(e => e.employeeNumber === employee.employeeNumber) === index
+    );
+    
     // Calculate completion rates for each level using correct database fields
-    const level1Completed = employees.filter(e => e.awardType === 'Level 1' && e.secureCareAwarded).length;
-    const level2Completed = employees.filter(e => e.awardType === 'Level 2' && e.secureCareAwarded).length;
-    const level3Completed = employees.filter(e => e.awardType === 'Level 3' && e.secureCareAwarded).length;
-    const consultantCompleted = employees.filter(e => e.awardType === 'Consultant' && e.secureCareAwarded).length;
-    const coachCompleted = employees.filter(e => e.awardType === 'Coach' && e.secureCareAwarded).length;
+    const level1Completed = uniqueEmployees.filter(e => e.awardType === 'Level 1' && e.secureCareAwarded).length;
+    const level2Completed = uniqueEmployees.filter(e => e.awardType === 'Level 2' && e.secureCareAwarded).length;
+    const level3Completed = uniqueEmployees.filter(e => e.awardType === 'Level 3' && e.secureCareAwarded).length;
+    const consultantCompleted = uniqueEmployees.filter(e => e.awardType === 'Consultant' && e.secureCareAwarded).length;
+    const coachCompleted = uniqueEmployees.filter(e => e.awardType === 'Coach' && e.secureCareAwarded).length;
 
-    // Calculate in-progress counts using correct logic
-    const level1InProgress = employees.filter(e => 
-      e.awardType === 'Level 1' && e.assignedDate && !e.secureCareAwarded
+    // Calculate in-progress counts - employees whose conference has been completed AND approved (not awaiting)
+    const level1InProgress = uniqueEmployees.filter(e => 
+      e.awardType === 'Level 1' && e.conferenceCompleted && e.conferenceCompleted.trim() !== '' && 
+      e.awaiting !== 1 && e.awaiting !== true
     ).length;
-    const level2InProgress = employees.filter(e => 
-      e.awardType === 'Level 2' && !e.secureCareAwarded && e.awaiting !== 1 && e.awaiting !== true
+    const level2InProgress = uniqueEmployees.filter(e => 
+      e.awardType === 'Level 2' && e.conferenceCompleted && e.conferenceCompleted.trim() !== '' && 
+      e.awaiting !== 1 && e.awaiting !== true
     ).length;
-    const level3InProgress = employees.filter(e => 
-      e.awardType === 'Level 3' && !e.secureCareAwarded && e.awaiting !== 1 && e.awaiting !== true
+    const level3InProgress = uniqueEmployees.filter(e => 
+      e.awardType === 'Level 3' && e.conferenceCompleted && e.conferenceCompleted.trim() !== '' && 
+      e.awaiting !== 1 && e.awaiting !== true
     ).length;
-    const consultantInProgress = employees.filter(e => 
-      e.awardType === 'Consultant' && !e.secureCareAwarded && e.awaiting !== 1 && e.awaiting !== true
+    const consultantInProgress = uniqueEmployees.filter(e => 
+      e.awardType === 'Consultant' && e.conferenceCompleted && e.conferenceCompleted.trim() !== '' && 
+      e.awaiting !== 1 && e.awaiting !== true
     ).length;
-    const coachInProgress = employees.filter(e => 
-      e.awardType === 'Coach' && !e.secureCareAwarded && e.awaiting !== 1 && e.awaiting !== true
+    const coachInProgress = uniqueEmployees.filter(e => 
+      e.awardType === 'Coach' && e.conferenceCompleted && e.conferenceCompleted.trim() !== '' && 
+      e.awaiting !== 1 && e.awaiting !== true
     ).length;
 
     // Calculate pending counts (no award type assigned yet)
@@ -137,7 +147,7 @@ export default function Dashboard() {
     }).length;
 
     // Awaiting approvals (L2+ conference completed but awaiting approval or simply flagged awaiting=0)
-    const awaitingApprovals = employees.filter(e => {
+    const awaitingApprovals = uniqueEmployees.filter(e => {
       if (e.awardType === 'Level 1') return false;
         return e.awaiting === 1 || e.awaiting === true; // 1 or true => awaiting approval
     }).length;
@@ -149,12 +159,15 @@ export default function Dashboard() {
     const consultantPercentage = Math.round((consultantCompleted / Math.max(level3Completed, 1)) * 100);
     const coachPercentage = Math.round((coachCompleted / Math.max(consultantCompleted, 1)) * 100);
 
-    // Simple statistics based on secureCareAwarded field - count ALL records, not unique employees
-    // Count ALL records where secureCareAwarded = 1
-    const totalCompleted = employees.filter(e => e.secureCareAwarded === 1 || e.secureCareAwarded === true).length;
+    // Simple statistics based on secureCareAwarded field - count unique employees
+    // Count unique employees where secureCareAwarded = 1
+    const totalCompleted = uniqueEmployees.filter(e => e.secureCareAwarded === 1 || e.secureCareAwarded === true).length;
     
-    // Count ALL records where secureCareAwarded = 0
-    const totalInProgress = employees.filter(e => e.secureCareAwarded === 0 || e.secureCareAwarded === false).length;
+    // Count unique employees where conference has been completed AND approved (not awaiting)
+    const totalInProgress = uniqueEmployees.filter(e => 
+      e.conferenceCompleted && e.conferenceCompleted.trim() !== '' && 
+      e.awaiting !== 1 && e.awaiting !== true
+    ).length;
 
     const calculatedStats = {
       total,
@@ -178,6 +191,7 @@ export default function Dashboard() {
         coach: { completed: coachCompleted, inProgress: coachInProgress, pending: coachPending, overdue: 0 }
       }
     };
+
 
     return calculatedStats;
   }, [employees]);
@@ -257,7 +271,7 @@ export default function Dashboard() {
   const recentActivity = useMemo(() => {
     const activities: Array<{
       id: string;
-      type: 'awaiting' | 'scheduled' | 'completed' | 'rescheduled' | 'awarded' | 'conference';
+      type: 'awaiting' | 'scheduled' | 'completed' | 'rescheduled' | 'awarded' | 'conference' | 'rejected';
       employeeName: string;
       level: string;
       date: string;
