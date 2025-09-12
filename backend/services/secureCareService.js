@@ -132,44 +132,41 @@ class SecureCareService {
       if (filters.status && filters.status !== 'all') {
         let statusCondition = '';
         switch (filters.status) {
-          case 'Not Started':
-            statusCondition = `(e.awardType IS NULL OR e.assignedDate IS NULL)`;
-            break;
-          case 'Level 1 In Progress':
-            statusCondition = `(e.awardType = 'Level 1' AND e.secureCareAwarded = 0 AND (e.awaiting IS NULL OR e.awaiting = 0))`;
-            break;
-          case 'Level 1':
+        case 'Level 1 In Progress':
+          statusCondition = `(e.awardType = 'Level 1' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND (e.awaiting IS NULL OR e.awaiting = 0) AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
+          break;
+          case 'Level 1 Completed':
             statusCondition = `(e.awardType = 'Level 1' AND e.secureCareAwarded = 1)`;
             break;
-          case 'Level 2 In Progress':
-            statusCondition = `(e.awardType = 'Level 2' AND e.secureCareAwarded = 0 AND (e.awaiting IS NULL OR e.awaiting = 0))`;
-            break;
-          case 'Level 2':
+        case 'Level 2 In Progress':
+          statusCondition = `(e.awardType = 'Level 2' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND (e.awaiting IS NULL OR e.awaiting = 0) AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
+          break;
+          case 'Level 2 Completed':
             statusCondition = `(e.awardType = 'Level 2' AND e.secureCareAwarded = 1)`;
             break;
-          case 'Level 3 In Progress':
-            statusCondition = `(e.awardType = 'Level 3' AND e.secureCareAwarded = 0 AND (e.awaiting IS NULL OR e.awaiting = 0))`;
-            break;
-          case 'Level 3':
+        case 'Level 3 In Progress':
+          statusCondition = `(e.awardType = 'Level 3' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND (e.awaiting IS NULL OR e.awaiting = 0) AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
+          break;
+          case 'Level 3 Completed':
             statusCondition = `(e.awardType = 'Level 3' AND e.secureCareAwarded = 1)`;
             break;
-          case 'Consultant In Progress':
-            statusCondition = `(e.awardType = 'Consultant' AND e.secureCareAwarded = 0 AND (e.awaiting IS NULL OR e.awaiting = 0))`;
-            break;
-          case 'Consultant':
+        case 'Consultant In Progress':
+          statusCondition = `(e.awardType = 'Consultant' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND (e.awaiting IS NULL OR e.awaiting = 0) AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
+          break;
+          case 'Consultant Completed':
             statusCondition = `(e.awardType = 'Consultant' AND e.secureCareAwarded = 1)`;
             break;
-          case 'Coach In Progress':
-            statusCondition = `(e.awardType = 'Coach' AND e.secureCareAwarded = 0 AND (e.awaiting IS NULL OR e.awaiting = 0))`;
-            break;
-          case 'Coach':
+        case 'Coach In Progress':
+          statusCondition = `(e.awardType = 'Coach' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND (e.awaiting IS NULL OR e.awaiting = 0) AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
+          break;
+          case 'Coach Completed':
             statusCondition = `(e.awardType = 'Coach' AND e.secureCareAwarded = 1)`;
             break;
           case 'Awaiting Approval':
-            statusCondition = `(e.awaiting = 1)`;
+            statusCondition = `(e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND e.awaiting = 1)`;
             break;
-          case 'Conference Rejected':
-            statusCondition = `(e.awaiting IS NULL)`;
+          case 'Rejected Approval':
+            statusCondition = `(e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND e.awaiting IS NULL)`;
             break;
         }
         if (statusCondition) {
@@ -182,28 +179,37 @@ class SecureCareService {
     const limit = Math.min(parseInt(filters.limit) || 50, 100); // Max 100 records per page
     const offset = (page - 1) * limit;
     
-    // Add sorting support with level-specific defaults
-    const sortBy = filters.sortBy || (filters.level === 'Level 1' ? 'latest' : 'conference');
-    const sortOrder = filters.sortOrder || 'desc';
+    // Add sorting support - default to name sorting
+    const sortBy = filters.sortBy || 'name';
+    const sortOrder = filters.sortOrder || 'asc';
     
     let orderClause = '';
     switch (sortBy) {
       case 'latest':
-        orderClause = `ORDER BY e.assignedDate DESC, e.employeeId DESC`;
+        orderClause = `ORDER BY assignedDate ${sortOrder.toUpperCase()}, employeeId ${sortOrder.toUpperCase()}`;
         break;
       case 'conference':
-        orderClause = `ORDER BY e.conferenceCompleted DESC, e.employeeId DESC`;
+        orderClause = `ORDER BY conferenceCompleted ${sortOrder.toUpperCase()}, employeeId ${sortOrder.toUpperCase()}`;
         break;
       case 'name':
-        orderClause = `ORDER BY e.name ASC`;
+        orderClause = `ORDER BY Employee ${sortOrder.toUpperCase()}`;
         break;
       case 'facility':
-        orderClause = `ORDER BY e.facility ASC`;
+        orderClause = `ORDER BY Facility ${sortOrder.toUpperCase()}`;
+        break;
+      case 'area':
+        orderClause = `ORDER BY Area ${sortOrder.toUpperCase()}`;
+        break;
+      case 'jobTitle':
+        orderClause = `ORDER BY staffRoll ${sortOrder.toUpperCase()}`;
+        break;
+      case 'employeeId':
+        orderClause = `ORDER BY employeeNumber ${sortOrder.toUpperCase()}`;
         break;
       default:
         orderClause = filters.level === 'Level 1' 
-          ? `ORDER BY e.assignedDate DESC, e.employeeId DESC`
-          : `ORDER BY e.conferenceCompleted DESC, e.employeeId DESC`;
+          ? `ORDER BY e.assignedDate ${sortOrder.toUpperCase()}, e.employeeId ${sortOrder.toUpperCase()}`
+          : `ORDER BY e.conferenceCompleted ${sortOrder.toUpperCase()}, e.employeeId ${sortOrder.toUpperCase()}`;
     }
     
     query += ` ${orderClause} OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY`;
@@ -276,44 +282,41 @@ class SecureCareService {
       if (filters.status && filters.status !== 'all') {
         let statusCondition = '';
         switch (filters.status) {
-          case 'Not Started':
-            statusCondition = `(e.awardType IS NULL OR e.assignedDate IS NULL)`;
-            break;
-          case 'Level 1 In Progress':
-            statusCondition = `(e.awardType = 'Level 1' AND e.secureCareAwarded = 0 AND (e.awaiting IS NULL OR e.awaiting = 0))`;
-            break;
-          case 'Level 1':
+        case 'Level 1 In Progress':
+          statusCondition = `(e.awardType = 'Level 1' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND (e.awaiting IS NULL OR e.awaiting = 0) AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
+          break;
+          case 'Level 1 Completed':
             statusCondition = `(e.awardType = 'Level 1' AND e.secureCareAwarded = 1)`;
             break;
-          case 'Level 2 In Progress':
-            statusCondition = `(e.awardType = 'Level 2' AND e.secureCareAwarded = 0 AND (e.awaiting IS NULL OR e.awaiting = 0))`;
-            break;
-          case 'Level 2':
+        case 'Level 2 In Progress':
+          statusCondition = `(e.awardType = 'Level 2' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND (e.awaiting IS NULL OR e.awaiting = 0) AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
+          break;
+          case 'Level 2 Completed':
             statusCondition = `(e.awardType = 'Level 2' AND e.secureCareAwarded = 1)`;
             break;
-          case 'Level 3 In Progress':
-            statusCondition = `(e.awardType = 'Level 3' AND e.secureCareAwarded = 0 AND (e.awaiting IS NULL OR e.awaiting = 0))`;
-            break;
-          case 'Level 3':
+        case 'Level 3 In Progress':
+          statusCondition = `(e.awardType = 'Level 3' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND (e.awaiting IS NULL OR e.awaiting = 0) AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
+          break;
+          case 'Level 3 Completed':
             statusCondition = `(e.awardType = 'Level 3' AND e.secureCareAwarded = 1)`;
             break;
-          case 'Consultant In Progress':
-            statusCondition = `(e.awardType = 'Consultant' AND e.secureCareAwarded = 0 AND (e.awaiting IS NULL OR e.awaiting = 0))`;
-            break;
-          case 'Consultant':
+        case 'Consultant In Progress':
+          statusCondition = `(e.awardType = 'Consultant' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND (e.awaiting IS NULL OR e.awaiting = 0) AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
+          break;
+          case 'Consultant Completed':
             statusCondition = `(e.awardType = 'Consultant' AND e.secureCareAwarded = 1)`;
             break;
-          case 'Coach In Progress':
-            statusCondition = `(e.awardType = 'Coach' AND e.secureCareAwarded = 0 AND (e.awaiting IS NULL OR e.awaiting = 0))`;
-            break;
-          case 'Coach':
+        case 'Coach In Progress':
+          statusCondition = `(e.awardType = 'Coach' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND (e.awaiting IS NULL OR e.awaiting = 0) AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
+          break;
+          case 'Coach Completed':
             statusCondition = `(e.awardType = 'Coach' AND e.secureCareAwarded = 1)`;
             break;
           case 'Awaiting Approval':
-            statusCondition = `(e.awaiting = 1)`;
+            statusCondition = `(e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND e.awaiting = 1)`;
             break;
-          case 'Conference Rejected':
-            statusCondition = `(e.awaiting IS NULL)`;
+          case 'Rejected Approval':
+            statusCondition = `(e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND e.awaiting IS NULL)`;
             break;
         }
         if (statusCondition) {
@@ -646,8 +649,11 @@ class SecureCareService {
   async getUniqueEmployeesByLevel(level, filters = {}) {
     const pool = await getPool();
     
-    // First, get the highest status for each employee using a subquery
-    // Priority: 1) Highest level, 2) In progress (started but not awarded), 3) Completed, 4) Awaiting
+    // If status filter is applied, use direct query without deduplication
+    // This ensures we get the specific records that match the status filter
+    if (filters.status && filters.status !== 'all') {
+      const request = pool.request();
+      
     let query = `
       SELECT 
         e.employeeId,
@@ -682,24 +688,8 @@ class SecureCareService {
         a.firstName + ' ' + ISNULL(a.lastName, '') as advisorName
       FROM dbo.SecureCareEmployee e
       LEFT JOIN dbo.Advisor a ON e.advisorId = a.advisorId
-      WHERE e.employeeId IN (
-        SELECT TOP 1 WITH TIES e2.employeeId
-        FROM dbo.SecureCareEmployee e2
-        WHERE e2.employeeNumber = e.employeeNumber
-        ORDER BY 
-          CASE 
-            WHEN e2.awardType = 'Coach' THEN 1
-            WHEN e2.awardType = 'Consultant' THEN 2
-            WHEN e2.awardType = 'Level 3' THEN 3
-            WHEN e2.awardType = 'Level 2' THEN 4
-            WHEN e2.awardType = 'Level 1' THEN 5
-            ELSE 99
-          END,
-          e2.employeeId
-      )
-    `;
-    
-    const request = pool.request();
+        WHERE 1=1
+      `;
     
     // Apply level filter unless requesting all levels
     const isAllLevels = !level || level.toLowerCase() === 'all' || level.toLowerCase() === 'all levels';
@@ -730,52 +720,48 @@ class SecureCareService {
       }
       
       // Status filter - this is complex as it depends on awardType and completion status
-      if (filters.status && filters.status !== 'all') {
         let statusCondition = '';
         switch (filters.status) {
-          case 'Not Started':
-            statusCondition = `(e.awardType IS NULL OR e.assignedDate IS NULL)`;
+        case 'Awaiting Approval':
+          statusCondition = `(e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND e.awaiting = 1)`;
             break;
-          case 'Level 1 In Progress':
-            statusCondition = `(e.awardType = 'Level 1' AND e.secureCareAwarded = 0 AND (e.awaiting IS NULL OR e.awaiting = 0))`;
+        case 'Rejected Approval':
+          statusCondition = `(e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND e.awaiting IS NULL)`;
             break;
-          case 'Level 1':
+        case 'Level 1 Completed':
             statusCondition = `(e.awardType = 'Level 1' AND e.secureCareAwarded = 1)`;
             break;
-          case 'Level 2 In Progress':
-            statusCondition = `(e.awardType = 'Level 2' AND e.secureCareAwarded = 0 AND (e.awaiting IS NULL OR e.awaiting = 0))`;
-            break;
-          case 'Level 2':
+        case 'Level 1 In Progress':
+          statusCondition = `(e.awardType = 'Level 1' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND (e.awaiting IS NULL OR e.awaiting = 0) AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
+          break;
+        case 'Level 2 Completed':
             statusCondition = `(e.awardType = 'Level 2' AND e.secureCareAwarded = 1)`;
             break;
-          case 'Level 3 In Progress':
-            statusCondition = `(e.awardType = 'Level 3' AND e.secureCareAwarded = 0 AND (e.awaiting IS NULL OR e.awaiting = 0))`;
-            break;
-          case 'Level 3':
+        case 'Level 2 In Progress':
+          statusCondition = `(e.awardType = 'Level 2' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND (e.awaiting IS NULL OR e.awaiting = 0) AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
+          break;
+        case 'Level 3 Completed':
             statusCondition = `(e.awardType = 'Level 3' AND e.secureCareAwarded = 1)`;
             break;
-          case 'Consultant In Progress':
-            statusCondition = `(e.awardType = 'Consultant' AND e.secureCareAwarded = 0 AND (e.awaiting IS NULL OR e.awaiting = 0))`;
-            break;
-          case 'Consultant':
+        case 'Level 3 In Progress':
+          statusCondition = `(e.awardType = 'Level 3' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND (e.awaiting IS NULL OR e.awaiting = 0) AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
+          break;
+        case 'Consultant Completed':
             statusCondition = `(e.awardType = 'Consultant' AND e.secureCareAwarded = 1)`;
             break;
-          case 'Coach In Progress':
-            statusCondition = `(e.awardType = 'Coach' AND e.secureCareAwarded = 0 AND (e.awaiting IS NULL OR e.awaiting = 0))`;
-            break;
-          case 'Coach':
+        case 'Consultant In Progress':
+          statusCondition = `(e.awardType = 'Consultant' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND (e.awaiting IS NULL OR e.awaiting = 0) AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
+          break;
+        case 'Coach Completed':
             statusCondition = `(e.awardType = 'Coach' AND e.secureCareAwarded = 1)`;
             break;
-          case 'Awaiting Approval':
-            statusCondition = `(e.awaiting = 1)`;
-            break;
-          case 'Conference Rejected':
-            statusCondition = `(e.awaiting IS NULL)`;
-            break;
+        case 'Coach In Progress':
+          statusCondition = `(e.awardType = 'Coach' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND (e.awaiting IS NULL OR e.awaiting = 0) AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
+          break;
         }
+      
         if (statusCondition) {
           query += ` AND ${statusCondition}`;
-        }
       }
       
       // Add pagination
@@ -783,131 +769,304 @@ class SecureCareService {
     const limit = Math.min(parseInt(filters.limit) || 50, 100); // Max 100 records per page
     const offset = (page - 1) * limit;
     
-    // Add sorting support with level-specific defaults
-    const sortBy = filters.sortBy || (filters.level === 'Level 1' ? 'latest' : 'conference');
-    const sortOrder = filters.sortOrder || 'desc';
+      // Add sorting support - default to name sorting
+      const sortBy = filters.sortBy || 'name';
+      const sortOrder = filters.sortOrder || 'asc';
     
     let orderClause = '';
     switch (sortBy) {
       case 'latest':
-        orderClause = `ORDER BY e.assignedDate DESC, e.employeeId DESC`;
+          orderClause = `ORDER BY assignedDate ${sortOrder.toUpperCase()}, employeeId ${sortOrder.toUpperCase()}`;
         break;
       case 'conference':
-        orderClause = `ORDER BY e.conferenceCompleted DESC, e.employeeId DESC`;
+          orderClause = `ORDER BY conferenceCompleted ${sortOrder.toUpperCase()}, employeeId ${sortOrder.toUpperCase()}`;
         break;
       case 'name':
-        orderClause = `ORDER BY e.name ASC`;
+          orderClause = `ORDER BY Employee ${sortOrder.toUpperCase()}`;
         break;
       case 'facility':
-        orderClause = `ORDER BY e.facility ASC`;
+          orderClause = `ORDER BY Facility ${sortOrder.toUpperCase()}`;
+          break;
+        case 'area':
+          orderClause = `ORDER BY Area ${sortOrder.toUpperCase()}`;
+          break;
+        case 'jobTitle':
+          orderClause = `ORDER BY staffRoll ${sortOrder.toUpperCase()}`;
+          break;
+        case 'employeeId':
+          orderClause = `ORDER BY employeeNumber ${sortOrder.toUpperCase()}`;
         break;
       default:
         orderClause = filters.level === 'Level 1' 
-          ? `ORDER BY e.assignedDate DESC, e.employeeId DESC`
-          : `ORDER BY e.conferenceCompleted DESC, e.employeeId DESC`;
+            ? `ORDER BY e.assignedDate ${sortOrder.toUpperCase()}, e.employeeId ${sortOrder.toUpperCase()}`
+            : `ORDER BY e.conferenceCompleted ${sortOrder.toUpperCase()}, e.employeeId ${sortOrder.toUpperCase()}`;
     }
     
     query += ` ${orderClause} OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY`;
     
     const result = await request.query(query);
     
-    // Get total count for unique employees
+      // Get total count for status-filtered results
     let countQuery = `
-      SELECT COUNT(DISTINCT e.employeeNumber) as total 
+        SELECT COUNT(*) as total 
       FROM dbo.SecureCareEmployee e
-      WHERE e.employeeId IN (
-        SELECT TOP 1 WITH TIES e2.employeeId
-        FROM dbo.SecureCareEmployee e2
-        WHERE e2.employeeNumber = e.employeeNumber
+        WHERE 1=1
+      `;
+      
+      // Apply the same filters to count query
+      if (!isAllLevels) {
+        countQuery += ` AND e.awardType = @level`;
+      }
+      if (filters.facility && filters.facility !== 'all') {
+        countQuery += ` AND e.facility = @facility`;
+      }
+      if (filters.area && filters.area !== 'all') {
+        countQuery += ` AND e.area = @area`;
+      }
+      if (filters.search) {
+        countQuery += ` AND (e.name LIKE @search OR e.employeeNumber LIKE @search)`;
+      }
+      if (filters.jobTitle && filters.jobTitle !== 'all') {
+        countQuery += ` AND e.staffRoll = @jobTitle`;
+      }
+      if (statusCondition) {
+        countQuery += ` AND ${statusCondition}`;
+      }
+      
+      const countResult = await request.query(countQuery);
+      
+      return {
+        employees: result.recordset,
+        pagination: {
+          currentPage: page,
+          totalPages: Math.ceil(countResult.recordset[0].total / limit),
+          totalEmployees: countResult.recordset[0].total,
+          pageSize: limit
+        }
+      };
+    }
+    
+    // For non-status filtering, use the deduplication approach with CTE
+    let query = `
+      WITH RankedEmployees AS (
+        SELECT 
+          e.employeeId,
+          e.employeeNumber,
+          e.name AS Employee,
+          e.facility AS Facility,
+          e.area AS Area,
+          e.staffRoll,
+          e.awardType,
+          FORMAT(e.assignedDate, 'yyyy-MM-dd') AS assignedDate,
+          FORMAT(e.completedDate, 'yyyy-MM-dd') AS completedDate,
+          FORMAT(e.conferenceCompleted, 'yyyy-MM-dd') AS conferenceCompleted,
+          FORMAT(e.scheduleStandingVideo, 'yyyy-MM-dd') AS scheduleStandingVideo,
+          FORMAT(e.standingVideo, 'yyyy-MM-dd') AS standingVideo,
+          FORMAT(e.scheduleSleepingVideo, 'yyyy-MM-dd') AS scheduleSleepingVideo,
+          FORMAT(e.sleepingVideo, 'yyyy-MM-dd') AS sleepingVideo,
+          FORMAT(e.scheduleFeedGradVideo, 'yyyy-MM-dd') AS scheduleFeedGradVideo,
+          FORMAT(e.feedGradVideo, 'yyyy-MM-dd') AS feedGradVideo,
+          FORMAT(e.schedulenoHandnoSpeak, 'yyyy-MM-dd') AS schedulenoHandnoSpeak,
+          FORMAT(e.noHandnoSpeak, 'yyyy-MM-dd') AS noHandnoSpeak,
+          FORMAT(e.[scheduleSession#1], 'yyyy-MM-dd') AS scheduleSession1,
+          FORMAT(e.[session#1], 'yyyy-MM-dd') AS session1,
+          FORMAT(e.[scheduleSession#2], 'yyyy-MM-dd') AS scheduleSession2,
+          FORMAT(e.[session#2], 'yyyy-MM-dd') AS session2,
+          FORMAT(e.[scheduleSession#3], 'yyyy-MM-dd') AS scheduleSession3,
+          FORMAT(e.[session#3], 'yyyy-MM-dd') AS session3,
+          e.secureCareAwarded,
+          FORMAT(e.secureCareAwardedDate, 'yyyy-MM-dd') AS secureCareAwardedDate,
+          e.awaiting,
+          e.notes,
+          e.advisorId,
+          a.firstName + ' ' + ISNULL(a.lastName, '') as advisorName,
+          ROW_NUMBER() OVER (
+            PARTITION BY e.employeeNumber 
         ORDER BY 
           CASE 
-            WHEN e2.awardType = 'Coach' THEN 1
-            WHEN e2.awardType = 'Consultant' THEN 2
-            WHEN e2.awardType = 'Level 3' THEN 3
-            WHEN e2.awardType = 'Level 2' THEN 4
-            WHEN e2.awardType = 'Level 1' THEN 5
+                WHEN e.awardType = 'Coach' THEN 1
+                WHEN e.awardType = 'Consultant' THEN 2
+                WHEN e.awardType = 'Level 3' THEN 3
+                WHEN e.awardType = 'Level 2' THEN 4
+                WHEN e.awardType = 'Level 1' THEN 5
             ELSE 99
           END,
-          CASE WHEN e2.secureCareAwarded = 1 THEN 0 ELSE 1 END,
-          CASE WHEN e2.awaiting = 1 THEN 0 ELSE 1 END,
-          e2.employeeId
+              e.employeeId
+          ) as rn
+        FROM dbo.SecureCareEmployee e
+        LEFT JOIN dbo.Advisor a ON e.advisorId = a.advisorId
+        WHERE 1=1
       )
+      SELECT 
+        employeeId,
+        employeeNumber,
+        Employee,
+        Facility,
+        Area,
+        staffRoll,
+        awardType,
+        assignedDate,
+        completedDate,
+        conferenceCompleted,
+        scheduleStandingVideo,
+        standingVideo,
+        scheduleSleepingVideo,
+        sleepingVideo,
+        scheduleFeedGradVideo,
+        feedGradVideo,
+        schedulenoHandnoSpeak,
+        noHandnoSpeak,
+        scheduleSession1,
+        session1,
+        scheduleSession2,
+        session2,
+        scheduleSession3,
+        session3,
+        secureCareAwarded,
+        secureCareAwardedDate,
+        awaiting,
+        notes,
+        advisorId,
+        advisorName
+      FROM RankedEmployees
+      WHERE rn = 1
+    `;
+    
+    const request = pool.request();
+    
+    // Apply level filter unless requesting all levels
+    const isAllLevels = !level || level.toLowerCase() === 'all' || level.toLowerCase() === 'all levels';
+    if (!isAllLevels) {
+      request.input('level', sql.VarChar, level);
+      query = query.replace('WHERE 1=1', 'WHERE 1=1 AND e.awardType = @level');
+    }
+    
+    // Apply additional filters within the CTE
+    if (filters.facility && filters.facility !== 'all') {
+      request.input('facility', sql.VarChar, filters.facility);
+      query = query.replace('WHERE 1=1', 'WHERE 1=1 AND e.facility = @facility');
+    }
+    
+    if (filters.area && filters.area !== 'all') {
+      request.input('area', sql.VarChar, filters.area);
+      query = query.replace('WHERE 1=1', 'WHERE 1=1 AND e.area = @area');
+    }
+    
+      if (filters.search) {
+      request.input('search', sql.VarChar, `%${filters.search}%`);
+      query = query.replace('WHERE 1=1', 'WHERE 1=1 AND (e.name LIKE @search OR e.employeeNumber LIKE @search)');
+      }
+      
+      if (filters.jobTitle && filters.jobTitle !== 'all') {
+      request.input('jobTitle', sql.VarChar, filters.jobTitle);
+      query = query.replace('WHERE 1=1', 'WHERE 1=1 AND e.staffRoll = @jobTitle');
+    }
+      
+      
+      // Add pagination
+    const page = parseInt(filters.page) || 1;
+    const limit = Math.min(parseInt(filters.limit) || 50, 100); // Max 100 records per page
+    const offset = (page - 1) * limit;
+    
+    // Add sorting support - default to name sorting
+    const sortBy = filters.sortBy || 'name';
+    const sortOrder = filters.sortOrder || 'asc';
+    
+    let orderClause = '';
+    switch (sortBy) {
+      case 'latest':
+        orderClause = `ORDER BY assignedDate ${sortOrder.toUpperCase()}, employeeId ${sortOrder.toUpperCase()}`;
+            break;
+      case 'conference':
+        orderClause = `ORDER BY conferenceCompleted ${sortOrder.toUpperCase()}, employeeId ${sortOrder.toUpperCase()}`;
+            break;
+      case 'name':
+        orderClause = `ORDER BY Employee ${sortOrder.toUpperCase()}`;
+            break;
+      case 'facility':
+        orderClause = `ORDER BY Facility ${sortOrder.toUpperCase()}`;
+            break;
+      case 'area':
+        orderClause = `ORDER BY Area ${sortOrder.toUpperCase()}`;
+            break;
+      case 'jobTitle':
+        orderClause = `ORDER BY staffRoll ${sortOrder.toUpperCase()}`;
+            break;
+      case 'employeeId':
+        orderClause = `ORDER BY employeeNumber ${sortOrder.toUpperCase()}`;
+            break;
+      default:
+        orderClause = filters.level === 'Level 1' 
+          ? `ORDER BY e.assignedDate ${sortOrder.toUpperCase()}, e.employeeId ${sortOrder.toUpperCase()}`
+          : `ORDER BY e.conferenceCompleted ${sortOrder.toUpperCase()}, e.employeeId ${sortOrder.toUpperCase()}`;
+    }
+    
+    query += ` ${orderClause} OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY`;
+    
+    const result = await request.query(query);
+    
+    // Get total count for unique employees using CTE
+    let countQuery = `
+      WITH RankedEmployees AS (
+        SELECT 
+          e.employeeNumber,
+          e.awardType,
+          e.facility,
+          e.area,
+          e.name,
+          e.staffRoll,
+          ROW_NUMBER() OVER (
+            PARTITION BY e.employeeNumber 
+            ORDER BY 
+              CASE 
+                WHEN e.awardType = 'Coach' THEN 1
+                WHEN e.awardType = 'Consultant' THEN 2
+                WHEN e.awardType = 'Level 3' THEN 3
+                WHEN e.awardType = 'Level 2' THEN 4
+                WHEN e.awardType = 'Level 1' THEN 5
+                ELSE 99
+              END,
+              e.employeeId
+          ) as rn
+        FROM dbo.SecureCareEmployee e
+        WHERE 1=1
     `;
     
     const countRequest = pool.request();
+    
+    // Apply filters within the CTE
     if (!isAllLevels) {
       countRequest.input('level', sql.VarChar, level);
       countQuery += ` AND e.awardType = @level`;
     }
     
     if (filters.facility && filters.facility !== 'all') {
-      countQuery += ` AND e.facility = @facility`;
       countRequest.input('facility', sql.VarChar, filters.facility);
+      countQuery += ` AND e.facility = @facility`;
     }
     
     if (filters.area && filters.area !== 'all') {
-      countQuery += ` AND e.area = @area`;
       countRequest.input('area', sql.VarChar, filters.area);
+      countQuery += ` AND e.area = @area`;
     }
     
-      if (filters.search) {
-        countQuery += ` AND (e.name LIKE @search OR e.employeeNumber LIKE @search)`;
-        countRequest.input('search', sql.VarChar, `%${filters.search}%`);
-      }
+    if (filters.search) {
+      countRequest.input('search', sql.VarChar, `%${filters.search}%`);
+      countQuery += ` AND (e.name LIKE @search OR e.employeeNumber LIKE @search)`;
+    }
+    
+    if (filters.jobTitle && filters.jobTitle !== 'all') {
+      countRequest.input('jobTitle', sql.VarChar, filters.jobTitle);
+      countQuery += ` AND e.staffRoll = @jobTitle`;
+    }
+    
+    countQuery += `
+      )
+      SELECT COUNT(*) as total 
+      FROM RankedEmployees
+      WHERE rn = 1
+    `;
       
-      if (filters.jobTitle && filters.jobTitle !== 'all') {
-        countQuery += ` AND e.staffRoll = @jobTitle`;
-        countRequest.input('jobTitle', sql.VarChar, filters.jobTitle);
-      }
-      
-      // Status filter for count query
-      if (filters.status && filters.status !== 'all') {
-        let statusCondition = '';
-        switch (filters.status) {
-          case 'Not Started':
-            statusCondition = `(e.awardType IS NULL OR e.assignedDate IS NULL)`;
-            break;
-          case 'Level 1 In Progress':
-            statusCondition = `(e.awardType = 'Level 1' AND e.secureCareAwarded = 0 AND (e.awaiting IS NULL OR e.awaiting = 0))`;
-            break;
-          case 'Level 1':
-            statusCondition = `(e.awardType = 'Level 1' AND e.secureCareAwarded = 1)`;
-            break;
-          case 'Level 2 In Progress':
-            statusCondition = `(e.awardType = 'Level 2' AND e.secureCareAwarded = 0 AND (e.awaiting IS NULL OR e.awaiting = 0))`;
-            break;
-          case 'Level 2':
-            statusCondition = `(e.awardType = 'Level 2' AND e.secureCareAwarded = 1)`;
-            break;
-          case 'Level 3 In Progress':
-            statusCondition = `(e.awardType = 'Level 3' AND e.secureCareAwarded = 0 AND (e.awaiting IS NULL OR e.awaiting = 0))`;
-            break;
-          case 'Level 3':
-            statusCondition = `(e.awardType = 'Level 3' AND e.secureCareAwarded = 1)`;
-            break;
-          case 'Consultant In Progress':
-            statusCondition = `(e.awardType = 'Consultant' AND e.secureCareAwarded = 0 AND (e.awaiting IS NULL OR e.awaiting = 0))`;
-            break;
-          case 'Consultant':
-            statusCondition = `(e.awardType = 'Consultant' AND e.secureCareAwarded = 1)`;
-            break;
-          case 'Coach In Progress':
-            statusCondition = `(e.awardType = 'Coach' AND e.secureCareAwarded = 0 AND (e.awaiting IS NULL OR e.awaiting = 0))`;
-            break;
-          case 'Coach':
-            statusCondition = `(e.awardType = 'Coach' AND e.secureCareAwarded = 1)`;
-            break;
-          case 'Awaiting Approval':
-            statusCondition = `(e.awaiting = 1)`;
-            break;
-          case 'Conference Rejected':
-            statusCondition = `(e.awaiting IS NULL)`;
-            break;
-        }
-        if (statusCondition) {
-          countQuery += ` AND ${statusCondition}`;
-        }
-      }
       
       const countResult = await countRequest.query(countQuery);
     const total = countResult.recordset[0].total;
@@ -1539,10 +1698,12 @@ class SecureCareService {
           (e.[scheduleSession#3] BETWEEN @startDate AND @endDate)
         ) THEN 1 ELSE 0 END) AS scheduled,
 
-        -- inProgress: assigned in range and not awarded
-        SUM(CASE WHEN e.secureCareAwarded = 0 AND (
+        -- inProgress: conference completed and approved (not awaiting) and secureCare not awarded
+        SUM(CASE WHEN e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND 
+          (e.awaiting IS NULL OR e.awaiting = 0) AND 
+          (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0) AND (
           (@startDate IS NULL AND @endDate IS NULL) OR
-          (e.assignedDate BETWEEN @startDate AND @endDate)
+          (e.conferenceCompleted BETWEEN @startDate AND @endDate)
         ) THEN 1 ELSE 0 END) AS inProgress,
 
         -- awaiting: conference completed in range and awaiting=1
@@ -1569,9 +1730,11 @@ class SecureCareService {
           (@startDate IS NULL AND @endDate IS NULL) OR
           (e.secureCareAwardedDate BETWEEN @startDate AND @endDate)
         ) THEN 1 ELSE 0 END) AS completed,
-        SUM(CASE WHEN e.secureCareAwarded = 0 AND (
+        SUM(CASE WHEN e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND 
+          (e.awaiting IS NULL OR e.awaiting = 0) AND 
+          (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0) AND (
           (@startDate IS NULL AND @endDate IS NULL) OR
-          (e.assignedDate BETWEEN @startDate AND @endDate)
+          (e.conferenceCompleted BETWEEN @startDate AND @endDate)
         ) THEN 1 ELSE 0 END) AS inProgress
       FROM dbo.SecureCareEmployee e
       ${where}

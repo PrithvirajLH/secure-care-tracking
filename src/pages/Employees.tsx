@@ -31,7 +31,7 @@ export default function Employees() {
   const [sortField, setSortField] = useState<string>("name");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   // Pagination is now handled by the useEmployees hook
-  const [itemsPerPage] = useState<number>(10); // Changed from 100 to test pagination
+  const [itemsPerPage] = useState<number>(20);
   const [selectedJobTitle, setSelectedJobTitle] = useState<string>("all");
 
   // Fetch filter options from API
@@ -57,8 +57,11 @@ export default function Employees() {
     if (selectedStatus !== "all") filterObj.status = selectedStatus;
     if (selectedJobTitle !== "all") filterObj.jobTitle = selectedJobTitle;
     if (state.filters.query) filterObj.search = state.filters.query;
+    // Add sorting parameters
+    filterObj.sortBy = sortField;
+    filterObj.sortOrder = sortDirection;
     return filterObj;
-  }, [selectedFacility, selectedArea, selectedStatus, selectedJobTitle, state.filters.query]);
+  }, [selectedFacility, selectedArea, selectedStatus, selectedJobTitle, state.filters.query, sortField, sortDirection]);
 
   const {
     employees: currentEmployees,
@@ -129,89 +132,8 @@ export default function Employees() {
     setSearchParams(params, { replace: true });
   }, [state.filters.query, selectedFacility, selectedArea, selectedStatus, selectedJobTitle, sortField, sortDirection, apiCurrentPage]);
 
-  // Use currentEmployees from API instead of state.employees for consistency
+  // Use currentEmployees from API - sorting is now handled server-side
   const employees = currentEmployees || [];
-
-  // Apply sorting to the API data
-  const sortedEmployees = useMemo(() => {
-    if (!currentEmployees || currentEmployees.length === 0) return [];
-    
-    let filtered = [...currentEmployees];
-    
-    // Apply status filter
-    if (selectedStatus !== "all") {
-      filtered = filtered.filter(employee => {
-        switch (selectedStatus) {
-          case "Awaiting Approval":
-            return employee.awaiting === true; // awaiting = 1 means waiting for approval
-          case "Conference Rejected":
-            return employee.awaiting === null;
-          case "Not Started":
-            return !employee.awardType && !employee.assignedDate;
-          case "Level 1 In Progress":
-            return employee.awardType === "Level 1" && employee.assignedDate && !employee.secureCareAwarded;
-          case "Level 1":
-            return employee.awardType === "Level 1" && employee.secureCareAwarded === true;
-          case "Level 2 In Progress":
-            return employee.awardType === "Level 2" && !employee.secureCareAwarded && employee.awaiting !== 1 && employee.awaiting !== true;
-          case "Level 2":
-            return employee.awardType === "Level 2" && employee.secureCareAwarded === true;
-          case "Level 3 In Progress":
-            return employee.awardType === "Level 3" && !employee.secureCareAwarded && employee.awaiting !== 1 && employee.awaiting !== true;
-          case "Level 3":
-            return employee.awardType === "Level 3" && employee.secureCareAwarded === true;
-          case "Consultant In Progress":
-            return employee.awardType === "Consultant" && !employee.secureCareAwarded && employee.awaiting !== 1 && employee.awaiting !== true;
-          case "Consultant":
-            return employee.awardType === "Consultant" && employee.secureCareAwarded === true;
-          case "Coach In Progress":
-            return employee.awardType === "Coach" && !employee.secureCareAwarded && employee.awaiting !== 1 && employee.awaiting !== true;
-          case "Coach":
-            return employee.awardType === "Coach" && employee.secureCareAwarded === true;
-          default:
-            return true;
-        }
-      });
-    }
-    
-    // Apply sorting
-    const sorted = filtered.sort((a, b) => {
-      let aValue: string | number;
-      let bValue: string | number;
-
-      switch (sortField) {
-        case "name":
-          aValue = (a.name || a.Employee || '').toLowerCase();
-          bValue = (b.name || b.Employee || '').toLowerCase();
-          break;
-        case "employeeId":
-          aValue = String(a.employeeNumber || a.employeeId || a.Employee || '').toLowerCase();
-          bValue = String(b.employeeNumber || b.employeeId || b.Employee || '').toLowerCase();
-          break;
-        case "facility":
-          aValue = (a.facility || a.Facility || '').toLowerCase();
-          bValue = (b.facility || b.Facility || '').toLowerCase();
-          break;
-        case "area":
-          aValue = (a.area || a.Area || '').toLowerCase();
-          bValue = (b.area || b.Area || '').toLowerCase();
-          break;
-        case "jobTitle":
-          aValue = (a.staffRoll || a.staffRoles || '').toLowerCase();
-          bValue = (b.staffRoll || b.staffRoles || '').toLowerCase();
-          break;
-        default:
-          aValue = (a.name || a.Employee || '').toLowerCase();
-          bValue = (b.name || b.Employee || '').toLowerCase();
-      }
-
-      if (aValue < bValue) return sortDirection === "asc" ? -1 : 1;
-      if (aValue > bValue) return sortDirection === "asc" ? 1 : -1;
-      return 0;
-    });
-
-    return sorted;
-  }, [currentEmployees, sortField, sortDirection, selectedStatus]);
 
     const getCurrentLevel = (employee: any) => {
     // The backend now returns the highest level record for each employee
@@ -502,14 +424,18 @@ export default function Employees() {
 
   // Get unique statuses for filter options
   const statuses = useMemo(() => [
-    'Not Started', 'Level 1 In Progress', 'Level 1', 'Level 2 In Progress', 'Level 2', 
-    'Level 3 In Progress', 'Level 3', 'Consultant In Progress', 'Consultant', 'Coach In Progress', 'Coach',
-    'Awaiting Approval', 'Conference Rejected'
-  ].sort(), []);
+    'Awaiting Approval', 'Rejected Approval', 
+    'Level 1 Completed', 'Level 1 In Progress',
+    'Level 2 Completed', 'Level 2 In Progress', 
+    'Level 3 Completed', 'Level 3 In Progress',
+    'Consultant Completed', 'Consultant In Progress',
+    'Coach Completed', 'Coach In Progress'
+  ], []);
 
   const handleSort = (field: string) => {
     if (sortField === field) {
-      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+      const newDirection = sortDirection === "asc" ? "desc" : "asc";
+      setSortDirection(newDirection);
     } else {
       setSortField(field);
       setSortDirection("asc");
@@ -575,8 +501,14 @@ export default function Employees() {
           areas={areas}
           statuses={statuses}
           jobTitles={jobTitles}
+          employees={employees}
+          totalEmployees={totalEmployees}
+          isLoading={isLoading}
+          apiCurrentPage={apiCurrentPage}
+          totalPages={totalPages}
         />
       </div>
+
 
       <div className="rounded-lg border bg-white/95 backdrop-blur-sm shadow-lg border-gray-200 overflow-auto">
         <Table>
@@ -646,7 +578,7 @@ export default function Employees() {
              </TableRow>
            </TableHeader>
                                                                                        <TableBody>
-               {sortedEmployees.map((e, index) => {
+               {employees.map((e, index) => {
                  const currentLevel = getCurrentLevel(e);
                  return (
                                      <TableRow key={e.employeeId} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'} hover:bg-gray-100/50 transition-colors`}>
@@ -655,7 +587,6 @@ export default function Employees() {
                          <Button variant="ghost" className="h-auto p-0 justify-start hover:bg-transparent group">
                            <div className="text-left">
                              <div className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors text-base">{e.name || e.Employee}</div>
-                             <div className="text-base text-gray-500">{e.employeeNumber || e.employeeId || e.Employee}</div>
                            </div>
                            <Eye className="w-4 h-4 ml-2 text-gray-400 group-hover:text-blue-500 transition-colors" />
                          </Button>

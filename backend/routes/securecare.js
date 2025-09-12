@@ -50,6 +50,7 @@ router.get('/employees-unique/:level', async (req, res) => {
       limit: req.query.limit || 50
     };
     
+    
     const result = await secureCareService.getUniqueEmployeesByLevel(level, filters);
     res.json(result);
     
