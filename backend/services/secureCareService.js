@@ -133,31 +133,31 @@ class SecureCareService {
         let statusCondition = '';
         switch (filters.status) {
         case 'Level 1 In Progress':
-          statusCondition = `(e.awardType = 'Level 1' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND (e.awaiting IS NULL OR e.awaiting = 0) AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
+          statusCondition = `(e.awardType = 'Level 1' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND e.awaiting = 0 AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
           break;
           case 'Level 1 Completed':
             statusCondition = `(e.awardType = 'Level 1' AND e.secureCareAwarded = 1)`;
             break;
         case 'Level 2 In Progress':
-          statusCondition = `(e.awardType = 'Level 2' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND (e.awaiting IS NULL OR e.awaiting = 0) AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
+          statusCondition = `(e.awardType = 'Level 2' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND e.awaiting = 0 AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
           break;
           case 'Level 2 Completed':
             statusCondition = `(e.awardType = 'Level 2' AND e.secureCareAwarded = 1)`;
             break;
         case 'Level 3 In Progress':
-          statusCondition = `(e.awardType = 'Level 3' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND (e.awaiting IS NULL OR e.awaiting = 0) AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
+          statusCondition = `(e.awardType = 'Level 3' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND e.awaiting = 0 AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
           break;
           case 'Level 3 Completed':
             statusCondition = `(e.awardType = 'Level 3' AND e.secureCareAwarded = 1)`;
             break;
         case 'Consultant In Progress':
-          statusCondition = `(e.awardType = 'Consultant' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND (e.awaiting IS NULL OR e.awaiting = 0) AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
+          statusCondition = `(e.awardType = 'Consultant' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND e.awaiting = 0 AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
           break;
           case 'Consultant Completed':
             statusCondition = `(e.awardType = 'Consultant' AND e.secureCareAwarded = 1)`;
             break;
         case 'Coach In Progress':
-          statusCondition = `(e.awardType = 'Coach' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND (e.awaiting IS NULL OR e.awaiting = 0) AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
+          statusCondition = `(e.awardType = 'Coach' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND e.awaiting = 0 AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
           break;
           case 'Coach Completed':
             statusCondition = `(e.awardType = 'Coach' AND e.secureCareAwarded = 1)`;
@@ -283,31 +283,31 @@ class SecureCareService {
         let statusCondition = '';
         switch (filters.status) {
         case 'Level 1 In Progress':
-          statusCondition = `(e.awardType = 'Level 1' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND (e.awaiting IS NULL OR e.awaiting = 0) AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
+          statusCondition = `(e.awardType = 'Level 1' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND e.awaiting = 0 AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
           break;
           case 'Level 1 Completed':
             statusCondition = `(e.awardType = 'Level 1' AND e.secureCareAwarded = 1)`;
             break;
         case 'Level 2 In Progress':
-          statusCondition = `(e.awardType = 'Level 2' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND (e.awaiting IS NULL OR e.awaiting = 0) AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
+          statusCondition = `(e.awardType = 'Level 2' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND e.awaiting = 0 AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
           break;
           case 'Level 2 Completed':
             statusCondition = `(e.awardType = 'Level 2' AND e.secureCareAwarded = 1)`;
             break;
         case 'Level 3 In Progress':
-          statusCondition = `(e.awardType = 'Level 3' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND (e.awaiting IS NULL OR e.awaiting = 0) AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
+          statusCondition = `(e.awardType = 'Level 3' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND e.awaiting = 0 AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
           break;
           case 'Level 3 Completed':
             statusCondition = `(e.awardType = 'Level 3' AND e.secureCareAwarded = 1)`;
             break;
         case 'Consultant In Progress':
-          statusCondition = `(e.awardType = 'Consultant' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND (e.awaiting IS NULL OR e.awaiting = 0) AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
+          statusCondition = `(e.awardType = 'Consultant' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND e.awaiting = 0 AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
           break;
           case 'Consultant Completed':
             statusCondition = `(e.awardType = 'Consultant' AND e.secureCareAwarded = 1)`;
             break;
         case 'Coach In Progress':
-          statusCondition = `(e.awardType = 'Coach' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND (e.awaiting IS NULL OR e.awaiting = 0) AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
+          statusCondition = `(e.awardType = 'Coach' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND e.awaiting = 0 AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
           break;
           case 'Coach Completed':
             statusCondition = `(e.awardType = 'Coach' AND e.secureCareAwarded = 1)`;
@@ -732,31 +732,31 @@ class SecureCareService {
             statusCondition = `(e.awardType = 'Level 1' AND e.secureCareAwarded = 1)`;
             break;
         case 'Level 1 In Progress':
-          statusCondition = `(e.awardType = 'Level 1' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND (e.awaiting IS NULL OR e.awaiting = 0) AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
+          statusCondition = `(e.awardType = 'Level 1' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND e.awaiting = 0 AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
           break;
         case 'Level 2 Completed':
             statusCondition = `(e.awardType = 'Level 2' AND e.secureCareAwarded = 1)`;
             break;
         case 'Level 2 In Progress':
-          statusCondition = `(e.awardType = 'Level 2' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND (e.awaiting IS NULL OR e.awaiting = 0) AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
+          statusCondition = `(e.awardType = 'Level 2' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND e.awaiting = 0 AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
           break;
         case 'Level 3 Completed':
             statusCondition = `(e.awardType = 'Level 3' AND e.secureCareAwarded = 1)`;
             break;
         case 'Level 3 In Progress':
-          statusCondition = `(e.awardType = 'Level 3' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND (e.awaiting IS NULL OR e.awaiting = 0) AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
+          statusCondition = `(e.awardType = 'Level 3' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND e.awaiting = 0 AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
           break;
         case 'Consultant Completed':
             statusCondition = `(e.awardType = 'Consultant' AND e.secureCareAwarded = 1)`;
             break;
         case 'Consultant In Progress':
-          statusCondition = `(e.awardType = 'Consultant' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND (e.awaiting IS NULL OR e.awaiting = 0) AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
+          statusCondition = `(e.awardType = 'Consultant' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND e.awaiting = 0 AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
           break;
         case 'Coach Completed':
             statusCondition = `(e.awardType = 'Coach' AND e.secureCareAwarded = 1)`;
             break;
         case 'Coach In Progress':
-          statusCondition = `(e.awardType = 'Coach' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND (e.awaiting IS NULL OR e.awaiting = 0) AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
+          statusCondition = `(e.awardType = 'Coach' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND e.awaiting = 0 AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
           break;
         }
       
@@ -1678,67 +1678,102 @@ class SecureCareService {
 
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
+
     const query = `
+      WITH RankedEmployees AS (
+        SELECT *,
+          ROW_NUMBER() OVER (
+            PARTITION BY e.employeeNumber, e.awardType 
+            ORDER BY 
+              CASE e.awardType 
+                WHEN 'Level 1' THEN 1
+                WHEN 'Level 2' THEN 2
+                WHEN 'Level 3' THEN 3
+                WHEN 'Consultant' THEN 4
+                WHEN 'Coach' THEN 5
+                ELSE 6
+              END,
+              e.assignedDate DESC
+          ) as rn
+        FROM dbo.SecureCareEmployee e
+        ${where}
+      )
       SELECT 
         -- completed: awarded within range (or awarded with no range specified)
-        SUM(CASE WHEN e.secureCareAwarded = 1 AND (
+        SUM(CASE WHEN secureCareAwarded = 1 AND (
           (@startDate IS NULL AND @endDate IS NULL) OR
-          (e.secureCareAwardedDate BETWEEN @startDate AND @endDate)
+          (secureCareAwardedDate IS NOT NULL AND secureCareAwardedDate BETWEEN @startDate AND @endDate)
         ) THEN 1 ELSE 0 END) AS completed,
 
         -- scheduled: any schedule date within range and not completed
-        SUM(CASE WHEN e.secureCareAwarded = 0 AND (
+        SUM(CASE WHEN secureCareAwarded = 0 AND (
           (@startDate IS NULL AND @endDate IS NULL) OR
-          (e.scheduleStandingVideo BETWEEN @startDate AND @endDate) OR
-          (e.scheduleSleepingVideo BETWEEN @startDate AND @endDate) OR
-          (e.scheduleFeedGradVideo BETWEEN @startDate AND @endDate) OR
-          (e.schedulenoHandnoSpeak BETWEEN @startDate AND @endDate) OR
-          (e.[scheduleSession#1] BETWEEN @startDate AND @endDate) OR
-          (e.[scheduleSession#2] BETWEEN @startDate AND @endDate) OR
-          (e.[scheduleSession#3] BETWEEN @startDate AND @endDate)
+          (scheduleStandingVideo BETWEEN @startDate AND @endDate) OR
+          (scheduleSleepingVideo BETWEEN @startDate AND @endDate) OR
+          (scheduleFeedGradVideo BETWEEN @startDate AND @endDate) OR
+          (schedulenoHandnoSpeak BETWEEN @startDate AND @endDate) OR
+          ([scheduleSession#1] BETWEEN @startDate AND @endDate) OR
+          ([scheduleSession#2] BETWEEN @startDate AND @endDate) OR
+          ([scheduleSession#3] BETWEEN @startDate AND @endDate)
         ) THEN 1 ELSE 0 END) AS scheduled,
 
-        -- inProgress: conference completed and approved (not awaiting) and secureCare not awarded
-        SUM(CASE WHEN e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND 
-          (e.awaiting IS NULL OR e.awaiting = 0) AND 
-          (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0) AND (
+        -- inProgress: conference completed and approved (not awaiting)
+        SUM(CASE WHEN conferenceCompleted IS NOT NULL AND conferenceCompleted != '' AND 
+          (awaiting IS NULL OR awaiting = 0) AND (
           (@startDate IS NULL AND @endDate IS NULL) OR
-          (e.conferenceCompleted BETWEEN @startDate AND @endDate)
+          (conferenceCompleted BETWEEN @startDate AND @endDate)
         ) THEN 1 ELSE 0 END) AS inProgress,
 
         -- awaiting: conference completed in range and awaiting=1
-        SUM(CASE WHEN e.awaiting = 1 AND (
+        SUM(CASE WHEN awaiting = 1 AND (
           (@startDate IS NULL AND @endDate IS NULL) OR
-          (e.conferenceCompleted BETWEEN @startDate AND @endDate)
+          (conferenceCompleted BETWEEN @startDate AND @endDate)
         ) THEN 1 ELSE 0 END) AS awaiting,
 
         -- rejected: conference completed in range and awaiting IS NULL
-        SUM(CASE WHEN e.awaiting IS NULL AND (
+        SUM(CASE WHEN awaiting IS NULL AND (
           (@startDate IS NULL AND @endDate IS NULL) OR
-          (e.conferenceCompleted BETWEEN @startDate AND @endDate)
+          (conferenceCompleted BETWEEN @startDate AND @endDate)
         ) THEN 1 ELSE 0 END) AS rejected
-      FROM dbo.SecureCareEmployee e
-      ${where}
+      FROM RankedEmployees
+      WHERE rn = 1
     `;
 
     const result = await request.query(query);
 
-    // Breakdown by level
+    // Breakdown by level with deduplication
     const breakdownQuery = `
-      SELECT e.awardType as level,
-        SUM(CASE WHEN e.secureCareAwarded = 1 AND (
+      WITH RankedEmployees AS (
+        SELECT *,
+          ROW_NUMBER() OVER (
+            PARTITION BY e.employeeNumber, e.awardType 
+            ORDER BY 
+              CASE e.awardType 
+                WHEN 'Level 1' THEN 1
+                WHEN 'Level 2' THEN 2
+                WHEN 'Level 3' THEN 3
+                WHEN 'Consultant' THEN 4
+                WHEN 'Coach' THEN 5
+                ELSE 6
+              END,
+              e.assignedDate DESC
+          ) as rn
+        FROM dbo.SecureCareEmployee e
+        ${where}
+      )
+      SELECT awardType as level,
+        SUM(CASE WHEN secureCareAwarded = 1 AND (
           (@startDate IS NULL AND @endDate IS NULL) OR
-          (e.secureCareAwardedDate BETWEEN @startDate AND @endDate)
+          (secureCareAwardedDate IS NOT NULL AND secureCareAwardedDate BETWEEN @startDate AND @endDate)
         ) THEN 1 ELSE 0 END) AS completed,
-        SUM(CASE WHEN e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND 
-          (e.awaiting IS NULL OR e.awaiting = 0) AND 
-          (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0) AND (
+        SUM(CASE WHEN conferenceCompleted IS NOT NULL AND conferenceCompleted != '' AND 
+          (awaiting IS NULL OR awaiting = 0) AND (
           (@startDate IS NULL AND @endDate IS NULL) OR
-          (e.conferenceCompleted BETWEEN @startDate AND @endDate)
+          (conferenceCompleted BETWEEN @startDate AND @endDate)
         ) THEN 1 ELSE 0 END) AS inProgress
-      FROM dbo.SecureCareEmployee e
-      ${where}
-      GROUP BY e.awardType
+      FROM RankedEmployees
+      WHERE rn = 1
+      GROUP BY awardType
     `;
 
     const breakdownReq = pool.request();

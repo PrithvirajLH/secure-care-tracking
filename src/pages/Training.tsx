@@ -389,27 +389,31 @@ export default function Training() {
     refetch
   } = useTrainingEmployees(filters, itemsPerPage);
 
-  // Remove duplicate employees - keep only one record per employee (the one with highest status)
+  // Remove duplicate employees - allow unique combinations of employeeId, awardType, and awaiting status
   const currentEmployees = useMemo(() => {
     if (!allEmployees || allEmployees.length === 0) return [];
     
-    // Group employees by employeeNumber and keep the one with highest status
+    // Group employees by unique combination of employeeNumber, awardType, and awaiting status
     const employeeMap = new Map();
     
     allEmployees.forEach(employee => {
       const employeeNumber = employee.employeeNumber || employee.employeeId;
       if (!employeeNumber) return;
       
-      const existing = employeeMap.get(employeeNumber);
-      if (!existing) {
-        employeeMap.set(employeeNumber, employee);
+      // Create unique key combining employeeId, awardType, and awaiting status
+      const uniqueKey = `${employeeNumber}-${employee.awardType || 'null'}-${employee.awaiting}`;
+      
+      // If this unique combination doesn't exist, add it
+      if (!employeeMap.has(uniqueKey)) {
+        employeeMap.set(uniqueKey, employee);
       } else {
-        // Keep the employee with higher status (based on awardType priority)
+        // If the same combination exists, keep the one with higher awardType priority
+        const existing = employeeMap.get(uniqueKey);
         const currentPriority = getAwardTypePriority(employee.awardType);
         const existingPriority = getAwardTypePriority(existing.awardType);
         
         if (currentPriority < existingPriority) {
-          employeeMap.set(employeeNumber, employee);
+          employeeMap.set(uniqueKey, employee);
         }
       }
     });

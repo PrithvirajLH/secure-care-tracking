@@ -52,13 +52,26 @@ export default function Dashboard() {
   const { state } = useApp();
 
   // For Dashboard, we need all employee records to calculate accurate stats
-  const { employees: apiEmployees, isLoading, error, isFetching, refetch } = useTrainingEmployees({ level: 'all' }, 100);
+  const { employees: apiEmployees, isLoading, error, isFetching, refetch } = useTrainingEmployees({ level: 'all' }, 10000);
+  
   // Note: allTrainingData not available in useTrainingData hook, using employee data instead
   const isLoadingAll = false;
 
   useEffect(() => {
     document.title = "SecureCare Training Dashboard";
   }, []);
+
+  // Auto-refresh when page becomes visible (user switches back to tab)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        refetch();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [refetch]);
 
   // Use API employees if available, otherwise fall back to state employees
   // This ensures the Dashboard always has data to display
@@ -152,6 +165,14 @@ export default function Dashboard() {
         return e.awaiting === 1 || e.awaiting === true; // 1 or true => awaiting approval
     }).length;
 
+    // Rejected approvals (conference completed but awaiting=null, indicating rejection)
+    // Use all employees, not just unique ones, to match completion page logic
+    const rejectedEmployees = employees.filter(e => {
+      return e.conferenceCompleted && e.conferenceCompleted.trim() !== '' && e.awaiting === null;
+    });
+    const rejectedApprovals = rejectedEmployees.length;
+    
+
     // Calculate completion percentages
     const level1Percentage = Math.round((level1Completed / Math.max(total, 1)) * 100);
     const level2Percentage = Math.round((level2Completed / Math.max(level1Completed, 1)) * 100);
@@ -176,6 +197,7 @@ export default function Dashboard() {
       totalPending: level1Pending + level2Pending + level3Pending + consultantPending + coachPending,
       totalOverdue: level1Overdue + level2Overdue + level3Overdue,
       awaitingApprovals,
+      rejectedApprovals,
       completion: { 
         level1: level1Percentage, 
         level2: level2Percentage, 
@@ -253,6 +275,7 @@ export default function Dashboard() {
           name: name.length > 20 ? name.substring(0, 20) + '...' : name, // Truncate long names
           fullName: name, // Keep full name for tooltip
           completed: Math.round((typedStats.completed / Math.max(typedStats.total, 1)) * 100),
+          inProgress: Math.round((typedStats.inProgress / Math.max(typedStats.total, 1)) * 100),
           completedCount: typedStats.completed,
           totalCount: typedStats.total,
           inProgressCount: typedStats.inProgress,
@@ -459,7 +482,7 @@ export default function Dashboard() {
       {/* Data source indicator */}
       
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
           <Card className="shadow-sm bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -508,6 +531,18 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         </motion.div>
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+          <Card className="shadow-sm bg-gradient-to-br from-red-50 to-red-100 border-red-200">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-red-700">Rejected</CardTitle>
+              <AlertCircle className="h-4 w-4 text-red-700" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-red-700">{enhancedStats.rejectedApprovals}</div>
+              <p className="text-xs text-red-600 mt-1">Conference approvals rejected</p>
+            </CardContent>
+          </Card>
+        </motion.div>
       </div>
 
       {/* Level-wise Statistics */}
@@ -549,8 +584,8 @@ export default function Dashboard() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card className="shadow-sm">
+      <div className="grid gap-4 lg:grid-cols-5">
+        <Card className="shadow-sm lg:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <TrendingUp className="w-5 h-5 text-blue-600" />
@@ -600,7 +635,7 @@ export default function Dashboard() {
             </div>
           </CardContent>
         </Card>
-        <Card className="shadow-sm">
+        <Card className="shadow-sm lg:col-span-3">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Award className="w-5 h-5 text-green-600" />
@@ -622,14 +657,18 @@ export default function Dashboard() {
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={[...facilityRankings.top].reverse()} layout="vertical" margin={{ left: 24, right: 16, top: 8, bottom: 8 }}>
+                    <BarChart data={[...facilityRankings.top].reverse()} layout="vertical" margin={{ left: 24, right: 60, top: 8, bottom: 8 }}>
                       <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 12 }} hide={false} />
                       <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} width={140} />
                       <Tooltip 
-                        formatter={(value, name, props) => [
-                          `${value}% (${props.payload.completedCount}/${props.payload.totalCount} records)`,
-                          'Completion %'
-                        ]}
+                        formatter={(value, name, props) => {
+                          if (name === 'Completed') {
+                            return [`${value}% (${props.payload.completedCount}/${props.payload.totalCount} records)`, 'Completed %'];
+                          } else if (name === 'In Progress') {
+                            return [`${value}% (${props.payload.inProgressCount}/${props.payload.totalCount} records)`, 'In Progress %'];
+                          }
+                          return [value, name];
+                        }}
                         contentStyle={{ 
                           backgroundColor: '#f9fafb', 
                           border: '1px solid #e5e7eb',
@@ -637,9 +676,17 @@ export default function Dashboard() {
                           boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
                         }}
                       />
-                      <Bar dataKey="completed" fill="#10b981" radius={[0, 6, 6, 0]} name="Completion %">
-                        <LabelList dataKey="completed" position="right" formatter={(v) => `${v}%`} style={{ fill: '#374151', fontSize: 12 }} />
+                      <Bar dataKey="completed" fill="#10b981" radius={[0, 6, 6, 0]} name="Completed">
+                        <LabelList dataKey="completed" position="center" formatter={(v: number) => v > 5 ? `${v}%` : ''} style={{ fill: 'white', fontSize: 11, fontWeight: 'bold' }} />
                       </Bar>
+                      <Bar dataKey="inProgress" fill="#8b5cf6" radius={[0, 6, 6, 0]} name="In Progress">
+                        <LabelList dataKey="inProgress" position="center" formatter={(v: number) => v > 5 ? `${v}%` : ''} style={{ fill: 'white', fontSize: 11, fontWeight: 'bold' }} />
+                      </Bar>
+                      <Legend 
+                        verticalAlign="bottom" 
+                        height={36}
+                        formatter={(value) => <span className="text-sm text-gray-700">{value}</span>}
+                      />
                     </BarChart>
                   </ResponsiveContainer>
                 )}
@@ -654,14 +701,18 @@ export default function Dashboard() {
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={[...facilityRankings.bottom]} layout="vertical" margin={{ left: 24, right: 16, top: 8, bottom: 8 }}>
+                    <BarChart data={[...facilityRankings.bottom]} layout="vertical" margin={{ left: 24, right: 60, top: 8, bottom: 8 }}>
                       <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 12 }} hide={false} />
                       <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} width={140} />
                       <Tooltip 
-                        formatter={(value, name, props) => [
-                          `${value}% (${props.payload.completedCount}/${props.payload.totalCount} records)`,
-                          'Completion %'
-                        ]}
+                        formatter={(value, name, props) => {
+                          if (name === 'Completed') {
+                            return [`${value}% (${props.payload.completedCount}/${props.payload.totalCount} records)`, 'Completed %'];
+                          } else if (name === 'In Progress') {
+                            return [`${value}% (${props.payload.inProgressCount}/${props.payload.totalCount} records)`, 'In Progress %'];
+                          }
+                          return [value, name];
+                        }}
                         contentStyle={{ 
                           backgroundColor: '#f9fafb', 
                           border: '1px solid #e5e7eb',
@@ -669,9 +720,17 @@ export default function Dashboard() {
                           boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
                         }}
                       />
-                      <Bar dataKey="completed" fill="#ef4444" radius={[0, 6, 6, 0]} name="Completion %">
-                        <LabelList dataKey="completed" position="right" formatter={(v) => `${v}%`} style={{ fill: '#374151', fontSize: 12 }} />
+                      <Bar dataKey="completed" fill="#ef4444" radius={[0, 6, 6, 0]} name="Completed">
+                        <LabelList dataKey="completed" position="center" formatter={(v: number) => v > 5 ? `${v}%` : ''} style={{ fill: 'white', fontSize: 11, fontWeight: 'bold' }} />
                       </Bar>
+                      <Bar dataKey="inProgress" fill="#8b5cf6" radius={[0, 6, 6, 0]} name="In Progress">
+                        <LabelList dataKey="inProgress" position="center" formatter={(v: number) => v > 5 ? `${v}%` : ''} style={{ fill: 'white', fontSize: 11, fontWeight: 'bold' }} />
+                      </Bar>
+                      <Legend 
+                        verticalAlign="bottom" 
+                        height={36}
+                        formatter={(value) => <span className="text-sm text-gray-700">{value}</span>}
+                      />
                     </BarChart>
                   </ResponsiveContainer>
                 )}

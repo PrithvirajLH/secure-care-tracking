@@ -48,16 +48,69 @@ export default function Advisors() {
   const { data: apiAdvisors = [], isLoading: advisorsLoading, error: advisorsError, refetch: refetchAdvisors } = useAdvisors();
   const employees = currentEmployees && currentEmployees.length > 0 ? currentEmployees : state.employees;
 
+  // Input sanitization function (for real-time input)
+  const sanitizeInput = (input: string): string => {
+    return input
+      .replace(/[<>\"'&]/g, '') // Remove potentially dangerous characters
+      .replace(/\s+/g, ' ') // Replace multiple spaces with single space
+      .substring(0, 50); // Limit length to 50 characters
+  };
+
+  // Final sanitization function (for validation and submission)
+  const finalSanitizeInput = (input: string): string => {
+    return input
+      .trim() // Remove leading/trailing whitespace
+      .replace(/[<>\"'&]/g, '') // Remove potentially dangerous characters
+      .replace(/\s+/g, ' ') // Replace multiple spaces with single space
+      .substring(0, 50); // Limit length to 50 characters
+  };
+
+  // Validate input function
+  const validateInput = (input: string): boolean => {
+    const sanitized = finalSanitizeInput(input);
+    
+    // Check basic format
+    if (sanitized.length < 2 || sanitized.length > 50) return false;
+    if (!/^[a-zA-Z\s\-'\.]+$/.test(sanitized)) return false;
+    
+    // Block SQL injection keywords (case insensitive) - only exact word matches
+    const sqlKeywords = [
+      'drop', 'delete', 'insert', 'update', 'select', 'create', 'alter', 'truncate',
+      'exec', 'execute', 'union', 'script', 'javascript', 'vbscript',
+      'onload', 'onerror', 'onclick', 'eval', 'expression', 'iframe', 'object',
+      'embed', 'form', 'input', 'textarea', 'button', 'link', 'meta', 'style'
+    ];
+    
+    const lowerInput = sanitized.toLowerCase();
+    const words = lowerInput.split(/\s+/); // Split by whitespace to get individual words
+    
+    for (const keyword of sqlKeywords) {
+      if (words.includes(keyword)) {
+        return false;
+      }
+    }
+    
+    return true;
+  };
+
   // Handle adding new advisor
   const handleAddAdvisor = async () => {
-    if (!newAdvisor.firstName.trim() || !newAdvisor.lastName.trim()) {
+    const sanitizedFirstName = finalSanitizeInput(newAdvisor.firstName);
+    const sanitizedLastName = finalSanitizeInput(newAdvisor.lastName);
+
+    if (!sanitizedFirstName || !sanitizedLastName) {
       toast.error('Please enter both first name and last name');
+      return;
+    }
+
+    if (!validateInput(newAdvisor.firstName) || !validateInput(newAdvisor.lastName)) {
+      toast.error('Invalid name format. Names can only contain letters, spaces, hyphens, apostrophes, and periods (2-50 characters). SQL keywords are not allowed as individual words.');
       return;
     }
 
     setIsAdding(true);
     try {
-      const advisor = await trainingAPI.addAdvisor(newAdvisor.firstName.trim(), newAdvisor.lastName.trim());
+      const advisor = await trainingAPI.addAdvisor(sanitizedFirstName, sanitizedLastName);
       setNewAdvisor({ firstName: '', lastName: '' });
       setIsAddModalOpen(false);
       toast.success(`Advisor ${advisor.fullName} added successfully`);
@@ -201,11 +254,11 @@ export default function Advisors() {
               shimmerColor="#8b5cf6"
               shimmerSize="0.05em"
               shimmerDuration="3s"
-              borderRadius="8px"
+              borderRadius="50px"
               background="linear-gradient(45deg, #8b5cf6, #a855f7, #c084fc)"
-              className="text-white font-medium"
+              className="text-white font-medium shadow-lg hover:shadow-xl transition-shadow duration-300"
             >
-              <Plus className="w-4 h-4 mr-2" />
+              <Plus className="w-5 h-5 mr-2" />
               Add Advisor
             </ShimmerButton>
           </DialogTrigger>
@@ -229,9 +282,13 @@ export default function Advisors() {
                   <Input
                     id="firstName"
                     value={newAdvisor.firstName}
-                    onChange={(e) => setNewAdvisor(prev => ({ ...prev, firstName: e.target.value }))}
+                    onChange={(e) => {
+                      const sanitized = sanitizeInput(e.target.value);
+                      setNewAdvisor(prev => ({ ...prev, firstName: sanitized }));
+                    }}
                     className="col-span-3"
                     placeholder="Enter first name"
+                    maxLength={50}
                   />
                 </div>
                 <div className="grid grid-cols-4 items-center gap-4">
@@ -241,9 +298,13 @@ export default function Advisors() {
                   <Input
                     id="lastName"
                     value={newAdvisor.lastName}
-                    onChange={(e) => setNewAdvisor(prev => ({ ...prev, lastName: e.target.value }))}
+                    onChange={(e) => {
+                      const sanitized = sanitizeInput(e.target.value);
+                      setNewAdvisor(prev => ({ ...prev, lastName: sanitized }));
+                    }}
                     className="col-span-3"
                     placeholder="Enter last name"
+                    maxLength={50}
                   />
                 </div>
               </div>
@@ -259,7 +320,7 @@ export default function Advisors() {
                 </Button>
                 <Button
                   onClick={handleAddAdvisor}
-                  disabled={isAdding || !newAdvisor.firstName.trim() || !newAdvisor.lastName.trim()}
+                  disabled={isAdding || !validateInput(newAdvisor.firstName) || !validateInput(newAdvisor.lastName)}
                   className="bg-purple-600 hover:bg-purple-700 text-white"
                 >
                   {isAdding ? 'Adding...' : 'Add Advisor'}
