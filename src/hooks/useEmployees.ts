@@ -23,7 +23,7 @@ export const useEmployees = (filters: EmployeeFilters, pageSize: number = 10) =>
   // Reset to page 1 when filters change (excluding search to prevent focus loss)
   useEffect(() => {
     setCurrentPage(1);
-  }, [filters.level, filters.facility, filters.area, filters.status, filters.jobTitle]);
+  }, [filters.level, filters.facility, filters.area, filters.status, filters.jobTitle, filters.sortBy, filters.sortOrder]);
 
   const queryClient = useQueryClient();
   const { data, isLoading, error, refetch, isFetching } = useQuery<EmployeeResponse>({
@@ -79,7 +79,7 @@ export const useTrainingEmployees = (filters: EmployeeFilters, pageSize: number 
   // Reset to page 1 when filters change (excluding search to prevent focus loss)
   useEffect(() => {
     setCurrentPage(1);
-  }, [filters.level, filters.facility, filters.area, filters.status, filters.jobTitle]);
+  }, [filters.level, filters.facility, filters.area, filters.status, filters.jobTitle, filters.sortBy, filters.sortOrder]);
 
   const queryClient = useQueryClient();
   const { data, isLoading, error, refetch, isFetching } = useQuery<EmployeeResponse>({

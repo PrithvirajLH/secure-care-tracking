@@ -87,7 +87,7 @@ export default function Training() {
     setSearchParams({ level: newTab });
   };
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [itemsPerPage] = useState(50);
+  const [itemsPerPage] = useState(100);
   const [facilityFilter, setFacilityFilter] = useState<string>("all");
   const [areaFilter, setAreaFilter] = useState<string>("all");
   const [reqStatusFilters, setReqStatusFilters] = useState<Record<string, string>>({});
@@ -374,7 +374,7 @@ export default function Training() {
     ...filters,
     dateField: dateFilter.column ? currentFieldMapping[dateFilter.column] : undefined,
     date: dateFilter.date ? dateFilter.date.toISOString().split('T')[0] : undefined
-  }), [filters.level, filters.status, filters.facility, filters.area, dateFilter, currentFieldMapping]);
+  }), [filters.level, filters.status, filters.facility, filters.area, filters.sortBy, filters.sortOrder, dateFilter, currentFieldMapping]);
 
   // Filter columns based on visibility settings (only for levels 2-5)
   const filteredColumns = useMemo(() => {
@@ -394,7 +394,7 @@ export default function Training() {
     if (currentPage !== 1) {
       setCurrentPage(1);
     }
-  }, [facilityFilter, areaFilter, currentPage, setCurrentPage]);
+  }, [facilityFilter, areaFilter, setCurrentPage]);
 
   // Server-side statistics
   const { data: levelStats } = useEmployeeStats(activeTab);
@@ -434,6 +434,7 @@ export default function Training() {
     });
     setReqStatusFilters(next);
   }, [activeTab, setCurrentPage, filteredColumns, currentFieldMapping]);
+
 
   // Advisors are automatically loaded via React Query useAdvisors hook
 
@@ -640,6 +641,148 @@ export default function Training() {
       return fieldKey && (reqStatusFilters[fieldKey] || 'all') !== 'all';
     });
   }, [facilityFilter, areaFilter, searchQuery, dateFilter, reqStatusFilters, filteredColumns, currentFieldMapping]);
+
+  // Auto-fill to 100 rows when any filters are active by fetching subsequent pages and merging
+  const [mergedEmployees, setMergedEmployees] = useState<any[]>([]);
+  useEffect(() => {
+    let isCancelled = false;
+    const fill = async () => {
+      // When no filters are active, just use the current page data
+      if (!isAnyFilterActive) {
+        setMergedEmployees(currentEmployees);
+        return;
+      }
+
+      // Start with current page employees
+      let accumulated = [...(currentEmployees || [])];
+
+      // Fetch next pages until we hit 100 rows or run out of pages
+      let nextPage = (currentPage || 1) + 1;
+      while (accumulated.length < 100 && nextPage <= (totalPages || 0)) {
+        try {
+          const level = getLevelFromTabKey(activeTab);
+          const resp = await trainingAPI.getEmployeesByLevel(level, {
+            ...filters,
+            page: nextPage,
+            limit: itemsPerPage,
+          });
+          const nextEmployees = resp?.employees || [];
+          accumulated = accumulated.concat(nextEmployees);
+        } catch (e) {
+          break;
+        }
+        nextPage += 1;
+      }
+
+      if (!isCancelled) setMergedEmployees(accumulated);
+    };
+
+    fill();
+    return () => {
+      isCancelled = true;
+    };
+  }, [isAnyFilterActive, currentEmployees, currentPage, totalPages, itemsPerPage, filters, activeTab]);
+
+  // Base list used for local filtering/rendering
+  const baseEmployees = isAnyFilterActive ? mergedEmployees : currentEmployees;
+
+  // Update filteredEmployees to use baseEmployees when available
+  const finalFilteredEmployees = useMemo(() => {
+    if (!isAnyFilterActive) {
+      return filteredEmployees;
+    }
+    
+    // Re-apply filters to the merged employees
+    let filtered = baseEmployees;
+    
+    // Apply search filter first
+    if (searchQuery.trim()) {
+      const searchTerm = searchQuery.toLowerCase().trim();
+      filtered = filtered.filter(emp => {
+        const name = (emp.name || emp.Employee || '').toLowerCase();
+        const employeeNumber = (emp.employeeNumber || emp.employeeId || '').toLowerCase();
+        return name.includes(searchTerm) || employeeNumber.includes(searchTerm);
+      });
+    }
+    
+    // Apply date filter if active (covers scheduled, completed, awaiting, rejected)
+    if (dateFilter.column && dateFilter.date) {
+      const fieldKey = currentFieldMapping[dateFilter.column];
+      if (fieldKey) {
+        filtered = filtered.filter(emp => {
+          let dateSource: string | Date | null | undefined = null;
+
+          // For Awarded columns, use the awarded date field if present
+          if (fieldKey === 'secureCareAwarded') {
+            dateSource = (emp as any).secureCareAwardedDate;
+          } else if (fieldKey === 'conferenceCompleted') {
+            // Conference: use the conferenceCompleted date for completed/awaiting/rejected
+            dateSource = emp[fieldKey];
+          } else {
+            // Regular training fields: prefer completed date; if not present, use scheduled date
+            const completedDate = emp[fieldKey];
+            const scheduleField = ScheduleFieldMapping[fieldKey];
+            const scheduledDate = scheduleField ? emp[scheduleField] : null;
+            dateSource = completedDate || scheduledDate;
+          }
+
+          if (!dateSource) return false;
+
+          const empDate = parseDate(dateSource);
+          const filterDate = dateFilter.date;
+          if (!empDate || !filterDate) return false;
+
+          // Compare dates (ignore time, timezone-safe)
+          const empDateOnly = new Date(empDate.getFullYear(), empDate.getMonth(), empDate.getDate());
+          const filterDateOnly = new Date(filterDate.getFullYear(), filterDate.getMonth(), filterDate.getDate());
+
+          return empDateOnly.getTime() === filterDateOnly.getTime();
+        });
+      }
+    }
+    
+    // Apply per-requirement filters
+    filtered = filtered.filter(emp => {
+      for (const column of filteredColumns) {
+        const fieldKey = currentFieldMapping[column];
+        if (!fieldKey) continue;
+        
+        const want = reqStatusFilters[fieldKey] || 'all';
+        if (want === 'all') continue;
+
+        // Custom filtering for Notes
+        if (column === 'Notes') {
+          const noteValue = (emp.notes || '').trim();
+          if (want === 'empty') {
+            // Show only records where notes are empty or NULL
+            if (noteValue !== '' && emp.notes !== null && emp.notes !== undefined) return false;
+          } else {
+            if (noteValue !== want) return false;
+          }
+          continue;
+        }
+
+        // Custom filtering for Advisor
+        if (column === 'Advisor') {
+          const advisorId = emp.advisorId != null ? String(emp.advisorId) : '';
+          if (want === 'unassigned') {
+            // Show only records where advisor is NULL or empty
+            if (emp.advisorId !== null && emp.advisorId !== undefined && advisorId !== '') return false;
+          } else {
+            // Specific advisor by id
+            if (advisorId !== want) return false;
+          }
+          continue;
+        }
+
+        const status = computeRequirementStatus(emp, fieldKey);
+        if (status !== want) return false;
+      }
+      return true;
+    });
+    
+    return filtered;
+  }, [isAnyFilterActive, filteredEmployees, baseEmployees, searchQuery, reqStatusFilters, filteredColumns, currentFieldMapping, dateFilter]);
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
@@ -1377,7 +1520,7 @@ export default function Training() {
                    <div className="flex-1 overflow-visible min-h-0">
                      <Table>
                        <TableBody>
-                          {filteredEmployees.map((employee, index) => (
+                          {finalFilteredEmployees.map((employee, index) => (
                              <TableRow key={employee.employeeId} className={`${index % 2 === 0 ? 'bg-white' : 'bg-purple-50/30'} hover:bg-purple-50/60 transition-all duration-200 border-b border-purple-100`}>
                               {filteredColumns.map((column, colIndex) => {
                                 const fieldKey = currentFieldMapping[column];
@@ -1501,7 +1644,7 @@ export default function Training() {
                        <div className="text-sm text-gray-600">
                          {isFetching && <span className="text-purple-600">• Loading...</span>}
                        </div>
-                       {totalPages > 1 && (
+                       {totalPages > 1 && !isAnyFilterActive && (
                          <CompactPagination
                            currentPage={currentPage}
                            totalPages={totalPages}
