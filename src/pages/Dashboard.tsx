@@ -288,7 +288,7 @@ export default function Dashboard() {
       // Relias Training Completion
       if (employee.completedDate) {
         activities.push({
-          id: `${employee.employeeId}-relias-completed`,
+          id: `${employee.employeeId}-${level}-relias-completed`,
           type: 'completed',
           employeeName,
           level,
@@ -303,7 +303,7 @@ export default function Dashboard() {
       if (employee.conferenceCompleted) {
         if (employee.awaiting === 1 || employee.awaiting === true) {
           activities.push({
-            id: `${employee.employeeId}-conference-awaiting`,
+            id: `${employee.employeeId}-${level}-conference-awaiting`,
             type: 'awaiting',
             employeeName,
             level,
@@ -314,7 +314,7 @@ export default function Dashboard() {
           });
         } else if (employee.awaiting === false || employee.awaiting === 0) {
           activities.push({
-            id: `${employee.employeeId}-conference-approved`,
+            id: `${employee.employeeId}-${level}-conference-approved`,
             type: 'conference',
             employeeName,
             level,
@@ -325,7 +325,7 @@ export default function Dashboard() {
           });
         } else if (employee.awaiting === null) {
           activities.push({
-            id: `${employee.employeeId}-conference-rejected`,
+            id: `${employee.employeeId}-${level}-conference-rejected`,
             type: 'rejected',
             employeeName,
             level,
@@ -352,7 +352,7 @@ export default function Dashboard() {
       scheduledFields.forEach(({ field, name }) => {
         if (employee[field]) {
           activities.push({
-            id: `${employee.employeeId}-${field}`,
+            id: `${employee.employeeId}-${level}-${field}`,
             type: 'scheduled',
             employeeName,
             level,
@@ -378,7 +378,7 @@ export default function Dashboard() {
       completedFields.forEach(({ field, name }) => {
         if (employee[field]) {
           activities.push({
-            id: `${employee.employeeId}-${field}`,
+            id: `${employee.employeeId}-${level}-${field}`,
             type: 'completed',
             employeeName,
             level,
@@ -393,7 +393,7 @@ export default function Dashboard() {
       // Awarded
       if (employee.secureCareAwarded === 1 || employee.secureCareAwarded === true) {
         activities.push({
-          id: `${employee.employeeId}-awarded`,
+          id: `${employee.employeeId}-${level}-awarded`,
           type: 'awarded',
           employeeName,
           level,
@@ -405,10 +405,10 @@ export default function Dashboard() {
       }
     });
 
-    // Sort by date (most recent first) and take top 50 to ensure we have enough for each group
+    // Sort by date (most recent first) and take top 200 to ensure we have enough for each group
     const sortedActivities = activities
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-      .slice(0, 50);
+      .slice(0, 200);
 
     return sortedActivities;
   }, [employees]);
@@ -715,7 +715,11 @@ export default function Dashboard() {
                 // Sort each group by date (most recent first) and take latest 5
                 Object.keys(groupedActivities).forEach(type => {
                   groupedActivities[type] = groupedActivities[type]
-                    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                    .sort((a, b) => {
+                      const dateA = new Date(a.date);
+                      const dateB = new Date(b.date);
+                      return dateB.getTime() - dateA.getTime();
+                    })
                     .slice(0, 5);
                 });
 

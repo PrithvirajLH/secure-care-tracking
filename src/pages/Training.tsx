@@ -107,6 +107,18 @@ export default function Training() {
   const [reqStatusFilters, setReqStatusFilters] = useState<Record<string, string>>({});
   const [sortBy, setSortBy] = useState<string>("latest"); // Will be updated based on level
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>("desc");
+
+  // Custom handler to update sortBy and sortOrder together
+  const handleSortByChange = (newSortBy: string) => {
+    setSortBy(newSortBy);
+    
+    // Set sort order based on the sort option
+    if (newSortBy === 'name' || newSortBy === 'facility') {
+      setSortOrder('asc'); // A-Z should be ascending
+    } else {
+      setSortOrder('desc'); // Latest should be descending
+    }
+  };
   
   // Enhanced UI state
   // Use React Query for advisors data
@@ -348,9 +360,9 @@ export default function Training() {
 
   // Get current level configuration first
   const currentLevel: AwardType = getLevelFromTabKey(activeTab);
-  const currentLevelConfig = LevelConfig[currentLevel];
-  const currentColumns = LevelColumns[currentLevel];
-  const currentFieldMapping = LevelFieldMapping[currentLevel];
+  const currentLevelConfig = useMemo(() => LevelConfig[currentLevel], [currentLevel]);
+  const currentColumns = useMemo(() => LevelColumns[currentLevel], [currentLevel]);
+  const currentFieldMapping = useMemo(() => LevelFieldMapping[currentLevel], [currentLevel]);
 
   // Server-side pagination with filters (includes optional date filter)
   // Consolidated filters definition to avoid circular dependency
@@ -441,16 +453,16 @@ export default function Training() {
     if (currentLevel === 'Level 1') {
       // Level 1: only allow 'latest', 'name', 'facility'
       if (sortBy === 'conference') {
-        setSortBy('latest'); // Switch from conference to latest for Level 1
+        handleSortByChange('latest'); // Switch from conference to latest for Level 1
       } else if (!['latest', 'name', 'facility'].includes(sortBy)) {
-        setSortBy('latest'); // Default to latest for Level 1
+        handleSortByChange('latest'); // Default to latest for Level 1
       }
     } else {
       // Other levels: only allow 'conference', 'name', 'facility'
       if (sortBy === 'latest') {
-        setSortBy('conference'); // Switch from latest to conference for other levels
+        handleSortByChange('conference'); // Switch from latest to conference for other levels
       } else if (!['conference', 'name', 'facility'].includes(sortBy)) {
-        setSortBy('conference'); // Default to conference for other levels
+        handleSortByChange('conference'); // Default to conference for other levels
       }
     }
     
@@ -691,7 +703,14 @@ export default function Training() {
         try {
           const level = getLevelFromTabKey(activeTab);
           const resp = await trainingAPI.getEmployeesByLevel(level, {
-            ...filters,
+            level: activeTab,
+            status: 'active',
+            facility: facilityFilter !== 'all' ? facilityFilter : undefined,
+            area: areaFilter !== 'all' ? areaFilter : undefined,
+            sortBy: sortBy,
+            sortOrder: sortOrder,
+            dateField: dateFilter.column ? currentFieldMapping[dateFilter.column] : undefined,
+            date: dateFilter.date ? dateFilter.date.toISOString().split('T')[0] : undefined,
             page: nextPage,
             limit: itemsPerPage,
           });
@@ -710,7 +729,7 @@ export default function Training() {
     return () => {
       isCancelled = true;
     };
-  }, [isAnyFilterActive, currentEmployees, currentPage, totalPages, itemsPerPage, filters, activeTab]);
+  }, [isAnyFilterActive, currentEmployees, currentPage, totalPages, itemsPerPage, sortBy, sortOrder, facilityFilter, areaFilter, dateFilter, activeTab]);
 
   // Base list used for local filtering/rendering
   const baseEmployees = isAnyFilterActive ? mergedEmployees : currentEmployees;
@@ -1225,7 +1244,7 @@ export default function Training() {
                        <TrendingUp className="w-4 h-4 text-purple-600" />
                        <span className="text-sm font-medium text-purple-900">Sort:</span>
                      </div>
-                     <Select value={sortBy} onValueChange={setSortBy}>
+                     <Select value={sortBy} onValueChange={handleSortByChange}>
                        <SelectTrigger className="h-8 w-[180px] text-sm bg-white border-purple-200 shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
                          <SelectValue />
                        </SelectTrigger>
