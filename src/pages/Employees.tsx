@@ -71,7 +71,8 @@ export default function Employees() {
     setCurrentPage: setApiCurrentPage,
     totalPages,
     totalEmployees,
-    isFetching
+    isFetching,
+    refetch: refetchEmployees
   } = useEmployees({ ...stableFilters, level: 'all' }, itemsPerPage);
 
   // Sync local state with API state
@@ -131,6 +132,17 @@ export default function Employees() {
     params.set("page", String(apiCurrentPage));
     setSearchParams(params, { replace: true });
   }, [state.filters.query, selectedFacility, selectedArea, selectedStatus, selectedJobTitle, sortField, sortDirection, apiCurrentPage]);
+
+  // Auto-refresh when page becomes visible (user switches back to tab)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        refetchEmployees();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [refetchEmployees]);
 
   // Use currentEmployees from API - sorting is now handled server-side
   const employees = currentEmployees || [];

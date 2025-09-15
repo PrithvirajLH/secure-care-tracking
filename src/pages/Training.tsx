@@ -389,34 +389,59 @@ export default function Training() {
     refetch
   } = useTrainingEmployees(filters, itemsPerPage);
 
-  // Remove duplicate employees - allow unique combinations of employeeId, awardType, and awaiting status
+  // Auto-refresh when page becomes visible (user switches back to tab)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        refetch();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [refetch]);
+
+  // Remove duplicate employees - keep one record per employeeNumber + awardType (newest/most relevant)
   const currentEmployees = useMemo(() => {
     if (!allEmployees || allEmployees.length === 0) return [];
     
-    // Group employees by unique combination of employeeNumber, awardType, and awaiting status
-    const employeeMap = new Map();
+    // Group by employeeNumber + awardType, then select the best record
+    const employeeMap = new Map<string, any>();
     
-    allEmployees.forEach(employee => {
+    const getRecencyScore = (emp: any) => {
+      // Prefer awarded, then most recent conference/completion/assigned, finally highest employeeId
+      const awarded = emp.secureCareAwarded ? 1 : 0;
+      const dates = [
+        emp.secureCareAwardedDate,
+        emp.conferenceCompleted,
+        emp.completedDate,
+        emp.session3,
+        emp.session2,
+        emp.session1,
+        emp.standingVideo,
+        emp.sleepingVideo,
+        emp.feedGradVideo,
+        emp.noHandnoSpeak,
+        emp.assignedDate
+      ].map(d => (d ? new Date(d).getTime() : 0));
+      const maxDate = Math.max(0, ...dates);
+      const id = typeof emp.employeeId === 'number' ? emp.employeeId : 0;
+      return awarded * 1e12 + maxDate * 10 + (id % 10);
+    };
+    
+    for (const employee of allEmployees) {
       const employeeNumber = employee.employeeNumber || employee.employeeId;
-      if (!employeeNumber) return;
-      
-      // Create unique key combining employeeId, awardType, and awaiting status
-      const uniqueKey = `${employeeNumber}-${employee.awardType || 'null'}-${employee.awaiting}`;
-      
-      // If this unique combination doesn't exist, add it
-      if (!employeeMap.has(uniqueKey)) {
-        employeeMap.set(uniqueKey, employee);
-      } else {
-        // If the same combination exists, keep the one with higher awardType priority
-        const existing = employeeMap.get(uniqueKey);
-        const currentPriority = getAwardTypePriority(employee.awardType);
-        const existingPriority = getAwardTypePriority(existing.awardType);
-        
-        if (currentPriority < existingPriority) {
-          employeeMap.set(uniqueKey, employee);
-        }
+      if (!employeeNumber) continue;
+      const key = `${employeeNumber}-${employee.awardType || 'null'}`;
+      const existing = employeeMap.get(key);
+      if (!existing) {
+        employeeMap.set(key, employee);
+        continue;
       }
-    });
+      if (getRecencyScore(employee) > getRecencyScore(existing)) {
+        employeeMap.set(key, employee);
+      }
+    }
     
     return Array.from(employeeMap.values());
   }, [allEmployees]);

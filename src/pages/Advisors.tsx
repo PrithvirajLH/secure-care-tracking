@@ -44,9 +44,22 @@ export default function Advisors() {
   const [isAdding, setIsAdding] = useState<boolean>(false);
 
   // Use React Query for both employees and advisors data
-  const { employees: currentEmployees, isLoading: employeesLoading, error: employeesError } = useEmployees({}, 50);
+  const { employees: currentEmployees, isLoading: employeesLoading, error: employeesError, refetch: refetchEmployees } = useEmployees({}, 50);
   const { data: apiAdvisors = [], isLoading: advisorsLoading, error: advisorsError, refetch: refetchAdvisors } = useAdvisors();
   const employees = currentEmployees && currentEmployees.length > 0 ? currentEmployees : state.employees;
+
+  // Auto-refresh when page becomes visible (user switches back to tab)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        refetchAdvisors();
+        refetchEmployees && refetchEmployees();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [refetchAdvisors, refetchEmployees]);
 
   // Input sanitization function (for real-time input)
   const sanitizeInput = (input: string): string => {

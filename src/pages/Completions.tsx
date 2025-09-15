@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { trainingAPI } from '@/services/api';
 import PageHeader from '@/components/PageHeader';
@@ -38,6 +38,17 @@ export default function Completions() {
     queryFn: () => trainingAPI.getFilterOptions(),
     staleTime: 10 * 60 * 1000,
   });
+
+  // Auto-refresh when page becomes visible (user switches back to tab)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        refetch();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [refetch]);
 
   return (
     <div className="space-y-6">
