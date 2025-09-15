@@ -10,7 +10,8 @@ import { useTrainingData } from "@/hooks/useTrainingData";
 import { parseDate } from "@/config/awardTypes";
 import PageHeader from "@/components/PageHeader";
 
-const COLORS = ["#3b82f6", "#10b981", "#8b5cf6", "#f59e0b", "#ef4444"];
+// Refreshed palette for certification progress pie
+const COLORS = ["#4f46e5", "#14b8a6", "#f59e0b", "#ec4899", "#22c55e"];
 
 // Helper function to get display names for requirement keys
 const getRequirementDisplayName = (requirementKey: string): string => {
@@ -73,6 +74,15 @@ export default function Dashboard() {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [refetch]);
 
+  // Also refresh on window focus to capture rapid changes (e.g., awarded toggled)
+  useEffect(() => {
+    const handleFocus = () => {
+      refetch();
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [refetch]);
+
   // Use API employees if available, otherwise fall back to state employees
   // This ensures the Dashboard always has data to display
   const employees = useMemo(() => {
@@ -95,10 +105,48 @@ export default function Dashboard() {
     const uniqueEmployeeNumbers = new Set(employees.map(e => e.employeeNumber));
     const total = uniqueEmployeeNumbers.size;
     
-    // Get unique employees (one record per employee with highest status)
-    const uniqueEmployees = employees.filter((employee, index, arr) => 
-      arr.findIndex(e => e.employeeNumber === employee.employeeNumber) === index
-    );
+    // Get unique employees prioritized by current, highest-status record per employeeNumber
+    const uniqueEmployees = (() => {
+      const employeeMap = new Map<string, any>();
+      const getRank = (e: any) => {
+        // Prefer awarded > approved conference > in progress > assigned
+        if (e.secureCareAwarded === 1 || e.secureCareAwarded === true) return 4;
+        const hasApprovedConf = e.conferenceCompleted && String(e.conferenceCompleted).trim() !== '' && (e.awaiting === 0 || e.awaiting === false);
+        if (hasApprovedConf) return 3;
+        const hasInProgress = e.conferenceCompleted && String(e.conferenceCompleted).trim() !== '' && (e.awaiting !== 1 && e.awaiting !== true);
+        if (hasInProgress) return 2;
+        if (e.assignedDate) return 1;
+        return 0;
+      };
+      const getTime = (e: any) => {
+        const dates = [
+          e.secureCareAwardedDate,
+          e.conferenceCompleted,
+          e.completedDate,
+          e.session3,
+          e.session2,
+          e.session1,
+          e.standingVideo,
+          e.sleepingVideo,
+          e.feedGradVideo,
+          e.noHandnoSpeak,
+          e.assignedDate
+        ].map((d: any) => d ? new Date(d).getTime() : 0);
+        return Math.max(0, ...dates);
+      };
+      for (const e of employees) {
+        const key = String(e.employeeNumber || e.employeeId);
+        const existing = employeeMap.get(key);
+        if (!existing) { employeeMap.set(key, e); continue; }
+        const aRank = getRank(e), bRank = getRank(existing);
+        if (aRank > bRank) { employeeMap.set(key, e); continue; }
+        if (aRank === bRank) {
+          const aTime = getTime(e), bTime = getTime(existing);
+          if (aTime > bTime) employeeMap.set(key, e);
+        }
+      }
+      return Array.from(employeeMap.values());
+    })();
     
     // Calculate completion rates for each level using correct database fields
     const level1Completed = uniqueEmployees.filter(e => e.awardType === 'Level 1' && e.secureCareAwarded).length;
@@ -109,23 +157,23 @@ export default function Dashboard() {
 
     // Calculate in-progress counts - employees whose conference has been completed AND approved (not awaiting)
     const level1InProgress = uniqueEmployees.filter(e => 
-      e.awardType === 'Level 1' && e.conferenceCompleted && e.conferenceCompleted.trim() !== '' && 
+      e.awardType === 'Level 1' && !e.secureCareAwarded && e.conferenceCompleted && e.conferenceCompleted.trim() !== '' && 
       e.awaiting !== 1 && e.awaiting !== true
     ).length;
     const level2InProgress = uniqueEmployees.filter(e => 
-      e.awardType === 'Level 2' && e.conferenceCompleted && e.conferenceCompleted.trim() !== '' && 
+      e.awardType === 'Level 2' && !e.secureCareAwarded && e.conferenceCompleted && e.conferenceCompleted.trim() !== '' && 
       e.awaiting !== 1 && e.awaiting !== true
     ).length;
     const level3InProgress = uniqueEmployees.filter(e => 
-      e.awardType === 'Level 3' && e.conferenceCompleted && e.conferenceCompleted.trim() !== '' && 
+      e.awardType === 'Level 3' && !e.secureCareAwarded && e.conferenceCompleted && e.conferenceCompleted.trim() !== '' && 
       e.awaiting !== 1 && e.awaiting !== true
     ).length;
     const consultantInProgress = uniqueEmployees.filter(e => 
-      e.awardType === 'Consultant' && e.conferenceCompleted && e.conferenceCompleted.trim() !== '' && 
+      e.awardType === 'Consultant' && !e.secureCareAwarded && e.conferenceCompleted && e.conferenceCompleted.trim() !== '' && 
       e.awaiting !== 1 && e.awaiting !== true
     ).length;
     const coachInProgress = uniqueEmployees.filter(e => 
-      e.awardType === 'Coach' && e.conferenceCompleted && e.conferenceCompleted.trim() !== '' && 
+      e.awardType === 'Coach' && !e.secureCareAwarded && e.conferenceCompleted && e.conferenceCompleted.trim() !== '' && 
       e.awaiting !== 1 && e.awaiting !== true
     ).length;
 
@@ -186,7 +234,7 @@ export default function Dashboard() {
     
     // Count unique employees where conference has been completed AND approved (not awaiting)
     const totalInProgress = uniqueEmployees.filter(e => 
-      e.conferenceCompleted && e.conferenceCompleted.trim() !== '' && 
+      !e.secureCareAwarded && e.conferenceCompleted && e.conferenceCompleted.trim() !== '' && 
       e.awaiting !== 1 && e.awaiting !== true
     ).length;
 
@@ -236,6 +284,51 @@ export default function Dashboard() {
     { name: "Coach", value: enhancedStats.completion.coach, count: enhancedStats.counts.coach.completed },
   ].filter(item => item.value > 0); // Only show levels with completions
 
+  // Recompute pie to reflect Completed-to-In-Progress ratio per level.
+  // We normalize each level's slice so value = completed / (completed + inProgress) * 100
+  // and show only levels that have completed + inProgress > 0.
+  const ratioPieData = [
+    {
+      name: "Level 1",
+      completed: enhancedStats.counts.level1.completed,
+      inProgress: enhancedStats.counts.level1.inProgress,
+    },
+    {
+      name: "Level 2",
+      completed: enhancedStats.counts.level2.completed,
+      inProgress: enhancedStats.counts.level2.inProgress,
+    },
+    {
+      name: "Level 3",
+      completed: enhancedStats.counts.level3.completed,
+      inProgress: enhancedStats.counts.level3.inProgress,
+    },
+    {
+      name: "Consultant",
+      completed: enhancedStats.counts.consultant.completed,
+      inProgress: enhancedStats.counts.consultant.inProgress,
+    },
+    {
+      name: "Coach",
+      completed: enhancedStats.counts.coach.completed,
+      inProgress: enhancedStats.counts.coach.inProgress,
+    },
+  ]
+    .map(item => {
+      const denom = Math.max(item.completed + item.inProgress, 0);
+      const completedPct = denom > 0 ? Math.round((item.completed / denom) * 100) : 0;
+      const inProgressPct = denom > 0 ? Math.round((item.inProgress / denom) * 100) : 0;
+      return {
+        name: item.name,
+        value: completedPct,
+        inProgressPct,
+        countCompleted: item.completed,
+        countInProgress: item.inProgress,
+        // Ensure minimum value for pie chart visibility
+        minValue: 1,
+      };
+    });
+
   // Generate facility rankings (top and bottom) from actual employee data
   const facilityRankings = useMemo(() => {
     // Filter out employees with null/undefined facility names
@@ -268,24 +361,33 @@ export default function Dashboard() {
       return acc;
     }, {} as Record<string, { total: number; completed: number; inProgress: number; awaiting: number }>);
 
+    // Compute ratios
+    const WEIGHT_COMPLETED = 0.7; // give more weight to completed ratio
+    const WEIGHT_INPROGRESS = 0.3;
+
     const facilityDataArray = Object.entries(facilityStats)
       .map(([name, stats]) => {
         const typedStats = stats as { total: number; completed: number; inProgress: number; awaiting: number };
+        const completedDenom = Math.max(typedStats.completed + typedStats.inProgress, 0);
+        const completedRatio = completedDenom > 0 ? (typedStats.completed / completedDenom) * 100 : 0;
+        const inProgressRatio = Math.max(typedStats.total, 1) > 0 ? (typedStats.inProgress / Math.max(typedStats.total, 1)) * 100 : 0;
+        const combinedScore = WEIGHT_COMPLETED * completedRatio + WEIGHT_INPROGRESS * inProgressRatio;
         return {
-          name: name.length > 20 ? name.substring(0, 20) + '...' : name, // Truncate long names
-          fullName: name, // Keep full name for tooltip
-          completed: Math.round((typedStats.completed / Math.max(typedStats.total, 1)) * 100),
-          inProgress: Math.round((typedStats.inProgress / Math.max(typedStats.total, 1)) * 100),
+          name: name.length > 20 ? name.substring(0, 20) + '...' : name,
+          fullName: name,
+          completedRatio: Math.round(completedRatio),
+          inProgressRatio: Math.round(inProgressRatio),
+          combinedScore,
           completedCount: typedStats.completed,
-          totalCount: typedStats.total,
           inProgressCount: typedStats.inProgress,
-          awaitingCount: typedStats.awaiting
+          awaitingCount: typedStats.awaiting,
+          totalCount: typedStats.total,
         };
       })
-      .sort((a, b) => b.completed - a.completed);
+      .sort((a, b) => b.combinedScore - a.combinedScore);
 
     const top = facilityDataArray.slice(0, 5);
-    const bottom = facilityDataArray.slice(-5).reverse();
+    const bottom = [...facilityDataArray].reverse().slice(0, 5);
 
     return { top, bottom };
   }, [employees]);
@@ -592,7 +694,7 @@ export default function Dashboard() {
               Certification Progress
             </CardTitle>
             <p className="text-sm text-gray-600 mt-1">
-              Completion rates by certification level
+              Completed ratio by level (Completed ÷ (Completed + In Progress))
             </p>
           </CardHeader>
           <CardContent>
@@ -601,22 +703,35 @@ export default function Dashboard() {
                 <PieChart>
                   <Pie 
                     dataKey="value" 
-                    data={donutData} 
+                    data={ratioPieData.filter(item => item.value > 0)}
                     innerRadius={60} 
                     outerRadius={90} 
                     paddingAngle={4}
                     label={({ name, value }) => `${name}: ${value}%`}
                     labelLine={false}
                   >
-                    {donutData.map((_, i) => (
-                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                    ))}
+                    {ratioPieData
+                      .filter(item => item.value > 0)
+                      .sort((a, b) => {
+                        const order = ["Level 1", "Level 2", "Level 3", "Consultant", "Coach"];
+                        return order.indexOf(a.name) - order.indexOf(b.name);
+                      })
+                      .map((item, i) => (
+                        <Cell key={`ratio-${item.name}`} fill={COLORS[i % COLORS.length]} />
+                      ))}
                   </Pie>
                   <Tooltip 
-                    formatter={(value, name, props) => [
-                      `${value}% (${props.payload.count} completed)`, 
-                      name
-                    ]}
+                    formatter={(value, name, props) => {
+                      const p = props?.payload || {};
+                      const comp = (p.countCompleted ?? p.countCompleted === 0) ? p.countCompleted : undefined;
+                      const prog = (p.countInProgress ?? p.countInProgress === 0) ? p.countInProgress : undefined;
+                      const inProgPct = (p.inProgressPct ?? p.inProgressPct === 0) ? p.inProgressPct : undefined;
+                      const parts = [] as string[];
+                      parts.push(`${value}% completed`);
+                      if (typeof inProgPct === 'number') parts.push(`${inProgPct}% in progress`);
+                      if (comp !== undefined && prog !== undefined) parts.push(`(${comp} completed / ${prog} in progress)`);
+                      return [parts.join(' | '), name];
+                    }}
                     labelStyle={{ color: '#374151', fontWeight: 'bold' }}
                     contentStyle={{ 
                       backgroundColor: '#f9fafb', 
@@ -657,15 +772,15 @@ export default function Dashboard() {
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={[...facilityRankings.top].reverse()} layout="vertical" margin={{ left: 24, right: 60, top: 8, bottom: 8 }}>
+                    <BarChart data={facilityRankings.top} layout="vertical" margin={{ left: 24, right: 60, top: 8, bottom: 8 }}>
                       <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 12 }} hide={false} />
                       <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} width={140} />
                       <Tooltip 
                         formatter={(value, name, props) => {
                           if (name === 'Completed') {
-                            return [`${value}% (${props.payload.completedCount}/${props.payload.totalCount} records)`, 'Completed %'];
+                            return [`${value}% (${props.payload.completedCount}/${props.payload.completedCount + props.payload.inProgressCount} completed/in-progress)`, 'Completed Ratio'];
                           } else if (name === 'In Progress') {
-                            return [`${value}% (${props.payload.inProgressCount}/${props.payload.totalCount} records)`, 'In Progress %'];
+                            return [`${value}% (${props.payload.inProgressCount}/${props.payload.totalCount} in-progress/total)`, 'In Progress Ratio'];
                           }
                           return [value, name];
                         }}
@@ -676,11 +791,11 @@ export default function Dashboard() {
                           boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
                         }}
                       />
-                      <Bar dataKey="completed" fill="#10b981" radius={[0, 6, 6, 0]} name="Completed">
-                        <LabelList dataKey="completed" position="center" formatter={(v: number) => v > 5 ? `${v}%` : ''} style={{ fill: 'white', fontSize: 11, fontWeight: 'bold' }} />
+                      <Bar dataKey="completedRatio" fill="#10b981" radius={[0, 6, 6, 0]} name="Completed">
+                        <LabelList dataKey="completedRatio" position="center" formatter={(v: number) => v > 5 ? `${v}%` : ''} style={{ fill: 'white', fontSize: 11, fontWeight: 'bold' }} />
                       </Bar>
-                      <Bar dataKey="inProgress" fill="#8b5cf6" radius={[0, 6, 6, 0]} name="In Progress">
-                        <LabelList dataKey="inProgress" position="center" formatter={(v: number) => v > 5 ? `${v}%` : ''} style={{ fill: 'white', fontSize: 11, fontWeight: 'bold' }} />
+                      <Bar dataKey="inProgressRatio" fill="#8b5cf6" radius={[0, 6, 6, 0]} name="In Progress">
+                        <LabelList dataKey="inProgressRatio" position="center" formatter={(v: number) => v > 5 ? `${v}%` : ''} style={{ fill: 'white', fontSize: 11, fontWeight: 'bold' }} />
                       </Bar>
                       <Legend 
                         verticalAlign="bottom" 
@@ -701,15 +816,15 @@ export default function Dashboard() {
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={[...facilityRankings.bottom]} layout="vertical" margin={{ left: 24, right: 60, top: 8, bottom: 8 }}>
+                    <BarChart data={facilityRankings.bottom} layout="vertical" margin={{ left: 24, right: 60, top: 8, bottom: 8 }}>
                       <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 12 }} hide={false} />
                       <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} width={140} />
                       <Tooltip 
                         formatter={(value, name, props) => {
                           if (name === 'Completed') {
-                            return [`${value}% (${props.payload.completedCount}/${props.payload.totalCount} records)`, 'Completed %'];
+                            return [`${value}% (${props.payload.completedCount}/${props.payload.completedCount + props.payload.inProgressCount} completed/in-progress)`, 'Completed Ratio'];
                           } else if (name === 'In Progress') {
-                            return [`${value}% (${props.payload.inProgressCount}/${props.payload.totalCount} records)`, 'In Progress %'];
+                            return [`${value}% (${props.payload.inProgressCount}/${props.payload.totalCount} in-progress/total)`, 'In Progress Ratio'];
                           }
                           return [value, name];
                         }}
@@ -720,11 +835,11 @@ export default function Dashboard() {
                           boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
                         }}
                       />
-                      <Bar dataKey="completed" fill="#ef4444" radius={[0, 6, 6, 0]} name="Completed">
-                        <LabelList dataKey="completed" position="center" formatter={(v: number) => v > 5 ? `${v}%` : ''} style={{ fill: 'white', fontSize: 11, fontWeight: 'bold' }} />
+                      <Bar dataKey="completedRatio" fill="#ef4444" radius={[0, 6, 6, 0]} name="Completed">
+                        <LabelList dataKey="completedRatio" position="center" formatter={(v: number) => v > 5 ? `${v}%` : ''} style={{ fill: 'white', fontSize: 11, fontWeight: 'bold' }} />
                       </Bar>
-                      <Bar dataKey="inProgress" fill="#8b5cf6" radius={[0, 6, 6, 0]} name="In Progress">
-                        <LabelList dataKey="inProgress" position="center" formatter={(v: number) => v > 5 ? `${v}%` : ''} style={{ fill: 'white', fontSize: 11, fontWeight: 'bold' }} />
+                      <Bar dataKey="inProgressRatio" fill="#8b5cf6" radius={[0, 6, 6, 0]} name="In Progress">
+                        <LabelList dataKey="inProgressRatio" position="center" formatter={(v: number) => v > 5 ? `${v}%` : ''} style={{ fill: 'white', fontSize: 11, fontWeight: 'bold' }} />
                       </Bar>
                       <Legend 
                         verticalAlign="bottom" 
