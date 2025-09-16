@@ -133,7 +133,7 @@ class SecureCareService {
         let statusCondition = '';
         switch (filters.status) {
         case 'Level 1 In Progress':
-          statusCondition = `(e.awardType = 'Level 1' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND e.awaiting = 0 AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
+          statusCondition = `(e.awardType = 'Level 1' AND e.assignedDate IS NOT NULL AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
           break;
           case 'Level 1 Completed':
             statusCondition = `(e.awardType = 'Level 1' AND e.secureCareAwarded = 1)`;
@@ -283,7 +283,7 @@ class SecureCareService {
         let statusCondition = '';
         switch (filters.status) {
         case 'Level 1 In Progress':
-          statusCondition = `(e.awardType = 'Level 1' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND e.awaiting = 0 AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
+          statusCondition = `(e.awardType = 'Level 1' AND e.assignedDate IS NOT NULL AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
           break;
           case 'Level 1 Completed':
             statusCondition = `(e.awardType = 'Level 1' AND e.secureCareAwarded = 1)`;
@@ -732,7 +732,7 @@ class SecureCareService {
             statusCondition = `(e.awardType = 'Level 1' AND e.secureCareAwarded = 1)`;
             break;
         case 'Level 1 In Progress':
-          statusCondition = `(e.awardType = 'Level 1' AND e.conferenceCompleted IS NOT NULL AND e.conferenceCompleted != '' AND e.awaiting = 0 AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
+          statusCondition = `(e.awardType = 'Level 1' AND e.assignedDate IS NOT NULL AND (e.secureCareAwarded IS NULL OR e.secureCareAwarded = 0))`;
           break;
         case 'Level 2 Completed':
             statusCondition = `(e.awardType = 'Level 2' AND e.secureCareAwarded = 1)`;
