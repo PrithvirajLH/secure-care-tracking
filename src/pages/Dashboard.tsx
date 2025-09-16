@@ -148,32 +148,64 @@ export default function Dashboard() {
       return Array.from(employeeMap.values());
     })();
     
-    // Calculate completion rates for each level using correct database fields
-    const level1Completed = uniqueEmployees.filter(e => e.awardType === 'Level 1' && e.secureCareAwarded).length;
-    const level2Completed = uniqueEmployees.filter(e => e.awardType === 'Level 2' && e.secureCareAwarded).length;
-    const level3Completed = uniqueEmployees.filter(e => e.awardType === 'Level 3' && e.secureCareAwarded).length;
-    const consultantCompleted = uniqueEmployees.filter(e => e.awardType === 'Consultant' && e.secureCareAwarded).length;
-    const coachCompleted = uniqueEmployees.filter(e => e.awardType === 'Coach' && e.secureCareAwarded).length;
+    // Build per-level, per-employeeNumber deduplicated records to count per level accurately
+    const perLevelEmployees = (() => {
+      const map = new Map<string, any>();
+      const getTime = (e: any) => {
+        const dates = [
+          e.secureCareAwardedDate,
+          e.conferenceCompleted,
+          e.completedDate,
+          e.session3,
+          e.session2,
+          e.session1,
+          e.standingVideo,
+          e.sleepingVideo,
+          e.feedGradVideo,
+          e.noHandnoSpeak,
+          e.assignedDate
+        ].map((d: any) => (d ? new Date(d).getTime() : 0));
+        return Math.max(0, ...dates);
+      };
+      for (const e of employees) {
+        const empNum = String(e.employeeNumber || e.employeeId);
+        const level = e.awardType || 'Unknown';
+        const key = `${empNum}::${level}`;
+        const existing = map.get(key);
+        if (!existing) { map.set(key, e); continue; }
+        const aTime = getTime(e), bTime = getTime(existing);
+        if (aTime > bTime) map.set(key, e);
+      }
+      return Array.from(map.values());
+    })();
 
-    // Calculate in-progress counts - employees whose conference has been completed AND approved (not awaiting)
-    const level1InProgress = uniqueEmployees.filter(e => 
-      e.awardType === 'Level 1' && !e.secureCareAwarded && e.conferenceCompleted && e.conferenceCompleted.trim() !== '' && 
+    // Calculate completion rates for each level using per-level deduped records
+    const level1Completed = perLevelEmployees.filter(e => e.awardType === 'Level 1' && e.secureCareAwarded).length;
+    const level2Completed = perLevelEmployees.filter(e => e.awardType === 'Level 2' && e.secureCareAwarded).length;
+    const level3Completed = perLevelEmployees.filter(e => e.awardType === 'Level 3' && e.secureCareAwarded).length;
+    const consultantCompleted = perLevelEmployees.filter(e => e.awardType === 'Consultant' && e.secureCareAwarded).length;
+    const coachCompleted = perLevelEmployees.filter(e => e.awardType === 'Coach' && e.secureCareAwarded).length;
+
+    // Calculate in-progress counts per level
+    // Level 1: assignedDate present and not awarded
+    const level1InProgress = perLevelEmployees.filter(e => 
+      e.awardType === 'Level 1' && !e.secureCareAwarded && !!e.assignedDate
+    ).length;
+    // L2+/Consultant/Coach: conference completed and not awaiting approval, not awarded
+    const level2InProgress = perLevelEmployees.filter(e => 
+      e.awardType === 'Level 2' && !e.secureCareAwarded && e.conferenceCompleted && String(e.conferenceCompleted).trim() !== '' && 
       e.awaiting !== 1 && e.awaiting !== true
     ).length;
-    const level2InProgress = uniqueEmployees.filter(e => 
-      e.awardType === 'Level 2' && !e.secureCareAwarded && e.conferenceCompleted && e.conferenceCompleted.trim() !== '' && 
+    const level3InProgress = perLevelEmployees.filter(e => 
+      e.awardType === 'Level 3' && !e.secureCareAwarded && e.conferenceCompleted && String(e.conferenceCompleted).trim() !== '' && 
       e.awaiting !== 1 && e.awaiting !== true
     ).length;
-    const level3InProgress = uniqueEmployees.filter(e => 
-      e.awardType === 'Level 3' && !e.secureCareAwarded && e.conferenceCompleted && e.conferenceCompleted.trim() !== '' && 
+    const consultantInProgress = perLevelEmployees.filter(e => 
+      e.awardType === 'Consultant' && !e.secureCareAwarded && e.conferenceCompleted && String(e.conferenceCompleted).trim() !== '' && 
       e.awaiting !== 1 && e.awaiting !== true
     ).length;
-    const consultantInProgress = uniqueEmployees.filter(e => 
-      e.awardType === 'Consultant' && !e.secureCareAwarded && e.conferenceCompleted && e.conferenceCompleted.trim() !== '' && 
-      e.awaiting !== 1 && e.awaiting !== true
-    ).length;
-    const coachInProgress = uniqueEmployees.filter(e => 
-      e.awardType === 'Coach' && !e.secureCareAwarded && e.conferenceCompleted && e.conferenceCompleted.trim() !== '' && 
+    const coachInProgress = perLevelEmployees.filter(e => 
+      e.awardType === 'Coach' && !e.secureCareAwarded && e.conferenceCompleted && String(e.conferenceCompleted).trim() !== '' && 
       e.awaiting !== 1 && e.awaiting !== true
     ).length;
 
@@ -233,10 +265,7 @@ export default function Dashboard() {
     const totalCompleted = uniqueEmployees.filter(e => e.secureCareAwarded === 1 || e.secureCareAwarded === true).length;
     
     // Count unique employees where conference has been completed AND approved (not awaiting)
-    const totalInProgress = uniqueEmployees.filter(e => 
-      !e.secureCareAwarded && e.conferenceCompleted && e.conferenceCompleted.trim() !== '' && 
-      e.awaiting !== 1 && e.awaiting !== true
-    ).length;
+    const totalInProgress = level1InProgress + level2InProgress + level3InProgress + consultantInProgress + coachInProgress;
 
     const calculatedStats = {
       total,
