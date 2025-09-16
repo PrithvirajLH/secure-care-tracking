@@ -192,19 +192,19 @@ export default function Dashboard() {
     ).length;
     const level2InProgress = perLevelEmployees.filter(e => 
       e.awardType === 'Level 2' && !e.secureCareAwarded && e.conferenceCompleted && String(e.conferenceCompleted).trim() !== '' && 
-      e.awaiting !== 1 && e.awaiting !== true
+      (e.awaiting === 0 || e.awaiting === false)
     ).length;
     const level3InProgress = perLevelEmployees.filter(e => 
       e.awardType === 'Level 3' && !e.secureCareAwarded && e.conferenceCompleted && String(e.conferenceCompleted).trim() !== '' && 
-      e.awaiting !== 1 && e.awaiting !== true
+      (e.awaiting === 0 || e.awaiting === false)
     ).length;
     const consultantInProgress = perLevelEmployees.filter(e => 
       e.awardType === 'Consultant' && !e.secureCareAwarded && e.conferenceCompleted && String(e.conferenceCompleted).trim() !== '' && 
-      e.awaiting !== 1 && e.awaiting !== true
+      (e.awaiting === 0 || e.awaiting === false)
     ).length;
     const coachInProgress = perLevelEmployees.filter(e => 
       e.awardType === 'Coach' && !e.secureCareAwarded && e.conferenceCompleted && String(e.conferenceCompleted).trim() !== '' && 
-      e.awaiting !== 1 && e.awaiting !== true
+      (e.awaiting === 0 || e.awaiting === false)
     ).length;
 
     // Calculate pending counts (no award type assigned yet)
@@ -238,7 +238,7 @@ export default function Dashboard() {
     }).length;
 
     // Awaiting approvals (L2+ conference completed but awaiting approval or simply flagged awaiting=0)
-    const awaitingApprovals = uniqueEmployees.filter(e => {
+    const awaitingApprovals = perLevelEmployees.filter(e => {
       if (e.awardType === 'Level 1') return false;
         return e.awaiting === 1 || e.awaiting === true; // 1 or true => awaiting approval
     }).length;
@@ -251,18 +251,24 @@ export default function Dashboard() {
     const rejectedApprovals = rejectedEmployees.length;
     
 
-    // Calculate completion percentages
-    const level1Percentage = Math.round((level1Completed / Math.max(total, 1)) * 100);
-    const level2Percentage = Math.round((level2Completed / Math.max(level1Completed, 1)) * 100);
-    const level3Percentage = Math.round((level3Completed / Math.max(level2Completed, 1)) * 100);
-    const consultantPercentage = Math.round((consultantCompleted / Math.max(level3Completed, 1)) * 100);
-    const coachPercentage = Math.round((coachCompleted / Math.max(consultantCompleted, 1)) * 100);
-
-    // Simple statistics based on secureCareAwarded field - count unique employees
-    // Count unique employees where secureCareAwarded = 1
-    const totalCompleted = uniqueEmployees.filter(e => e.secureCareAwarded === 1 || e.secureCareAwarded === true).length;
+    // Calculate completion percentages as percentage of total employees assigned to each level
+    const level1Total = perLevelEmployees.filter(e => e.awardType === 'Level 1').length;
+    const level2Total = perLevelEmployees.filter(e => e.awardType === 'Level 2').length;
+    const level3Total = perLevelEmployees.filter(e => e.awardType === 'Level 3').length;
+    const consultantTotal = perLevelEmployees.filter(e => e.awardType === 'Consultant').length;
+    const coachTotal = perLevelEmployees.filter(e => e.awardType === 'Coach').length;
     
-    // Count unique employees where conference has been completed AND approved (not awaiting)
+    const level1Percentage = Math.round((level1Completed / Math.max(level1Total, 1)) * 100);
+    const level2Percentage = Math.round((level2Completed / Math.max(level2Total, 1)) * 100);
+    const level3Percentage = Math.round((level3Completed / Math.max(level3Total, 1)) * 100);
+    const consultantPercentage = Math.round((consultantCompleted / Math.max(consultantTotal, 1)) * 100);
+    const coachPercentage = Math.round((coachCompleted / Math.max(coachTotal, 1)) * 100);
+
+    // Simple statistics based on secureCareAwarded field - count per-level records
+    // Count all completed records across all levels
+    const totalCompleted = level1Completed + level2Completed + level3Completed + consultantCompleted + coachCompleted;
+    
+    // Count all in-progress records across all levels
     const totalInProgress = level1InProgress + level2InProgress + level3InProgress + consultantInProgress + coachInProgress;
 
     const calculatedStats = {

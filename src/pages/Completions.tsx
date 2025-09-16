@@ -265,7 +265,13 @@ export default function Completions() {
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 bg-gradient-to-br from-purple-100 to-indigo-100 rounded-lg flex items-center justify-center group-hover:from-purple-200 group-hover:to-indigo-200 transition-all duration-200">
                           <span className="text-sm font-bold text-purple-700">
-                            {row.level?.replace('Level ', 'L') || '?'}
+                            {(() => {
+                              const lvl = row.level || '';
+                              if (lvl.startsWith('Level ')) return lvl.replace('Level ', 'L');
+                              if (lvl === 'Consultant') return 'Ct';
+                              if (lvl === 'Coach') return 'Ch';
+                              return '?';
+                            })()}
                           </span>
                         </div>
                         <span className="text-slate-800 font-semibold text-sm">
