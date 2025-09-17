@@ -149,6 +149,7 @@ export default function Dashboard() {
     })();
     
     // Build per-level, per-employeeNumber deduplicated records
+    // Use same logic as training page to show both approved and rejected records
     const perLevelEmployees = (() => {
       const map = new Map<string, any>();
       const getTime = (e: any) => {
@@ -170,7 +171,13 @@ export default function Dashboard() {
       for (const e of employees) {
         const empNum = String(e.employeeNumber || e.employeeId);
         const level = e.awardType || 'Unknown';
-        const key = `${empNum}::${level}`;
+        
+        // Create unique key that includes awaiting status to show both approved and rejected records
+        const awaitingStatus = e.awaiting === null ? 'rejected' : 
+                             e.awaiting === 0 ? 'approved' : 
+                             e.awaiting === 1 ? 'awaiting' : 'unknown';
+        const key = `${empNum}::${level}::${awaitingStatus}`;
+        
         const existing = map.get(key);
         if (!existing) { map.set(key, e); continue; }
         const aTime = getTime(e), bTime = getTime(existing);

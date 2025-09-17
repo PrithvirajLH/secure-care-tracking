@@ -368,7 +368,7 @@ export default function Training() {
   // Consolidated filters definition to avoid circular dependency
   const filters = useMemo(() => ({
     level: activeTab,
-    status: 'active',
+    status: 'all', // Changed from 'active' to 'all' to show all employees
     facility: facilityFilter !== 'all' ? facilityFilter : undefined,
     area: areaFilter !== 'all' ? areaFilter : undefined,
     sortBy: sortBy,
@@ -402,15 +402,18 @@ export default function Training() {
   }, [refetch]);
 
   // Remove duplicate employees - keep one record per employeeNumber + awardType (newest/most relevant)
+  // Exception: Show both approved and rejected records for the same employee if they exist
   const currentEmployees = useMemo(() => {
     if (!allEmployees || allEmployees.length === 0) return [];
     
-    // Group by employeeNumber + awardType, then select the best record
+    // Group by employeeNumber + awardType + awaiting status, then select the best record
     const employeeMap = new Map<string, any>();
     
     const getRecencyScore = (emp: any) => {
-      // Prefer awarded, then most recent conference/completion/assigned, finally highest employeeId
+      // Prefer awarded, then approved (awaiting=0), then most recent conference/completion/assigned, finally highest employeeId
       const awarded = emp.secureCareAwarded ? 1 : 0;
+      const approved = (emp.awaiting === 0 || emp.awaiting === false) ? 1 : 0; // Approved status
+      const rejected = (emp.awaiting === null) ? -1 : 0; // Rejected status gets negative score
       const dates = [
         emp.secureCareAwardedDate,
         emp.conferenceCompleted,
@@ -426,13 +429,19 @@ export default function Training() {
       ].map(d => (d ? new Date(d).getTime() : 0));
       const maxDate = Math.max(0, ...dates);
       const id = typeof emp.employeeId === 'number' ? emp.employeeId : 0;
-      return awarded * 1e12 + maxDate * 10 + (id % 10);
+      return awarded * 1e15 + approved * 1e12 + rejected * 1e9 + maxDate * 10 + (id % 10);
     };
     
     for (const employee of allEmployees) {
       const employeeNumber = employee.employeeNumber || employee.employeeId;
       if (!employeeNumber) continue;
-      const key = `${employeeNumber}-${employee.awardType || 'null'}`;
+      
+      // Create unique key that includes awaiting status to show both approved and rejected records
+      const awaitingStatus = employee.awaiting === null ? 'rejected' : 
+                           employee.awaiting === 0 ? 'approved' : 
+                           employee.awaiting === 1 ? 'awaiting' : 'unknown';
+      const key = `${employeeNumber}-${employee.awardType || 'null'}-${awaitingStatus}`;
+      
       const existing = employeeMap.get(key);
       if (!existing) {
         employeeMap.set(key, employee);
@@ -733,7 +742,7 @@ export default function Training() {
           const level = getLevelFromTabKey(activeTab);
           const resp = await trainingAPI.getEmployeesByLevel(level, {
             level: activeTab,
-            status: 'active',
+            status: 'all', // Changed from 'active' to 'all' to show all employees
             facility: facilityFilter !== 'all' ? facilityFilter : undefined,
             area: areaFilter !== 'all' ? areaFilter : undefined,
             sortBy: sortBy,
@@ -1376,7 +1385,7 @@ export default function Training() {
                          <span className="text-sm font-bold text-slate-800">
                            {currentEmployees.length.toLocaleString()}
                          </span>
-                         <span className="text-xs text-slate-500">employees</span>
+                         <span className="text-xs text-slate-500">records</span>
                        </div>
                      )}
                    </div>
