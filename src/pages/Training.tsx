@@ -95,17 +95,22 @@ export default function Training() {
     return searchParams.get('level') || "level-1";
   });
   
-  // Update URL when tab changes
+  // Update URL when tab changes and set default sort per level (L1: latest, others: conference)
   const handleTabChange = (newTab: string) => {
     setActiveTab(newTab);
     setSearchParams({ level: newTab });
+    const level = getLevelFromTabKey(newTab);
+    const nextSort = level === 'Level 1' ? 'latest' : 'conference';
+    setSortBy(nextSort);
+    setSortOrder('desc');
+    setCurrentPage(1);
   };
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [itemsPerPage] = useState(100);
   const [facilityFilter, setFacilityFilter] = useState<string>("all");
   const [areaFilter, setAreaFilter] = useState<string>("all");
   const [reqStatusFilters, setReqStatusFilters] = useState<Record<string, string>>({});
-  const [sortBy, setSortBy] = useState<string>("latest"); // Will be updated based on level
+  const [sortBy, setSortBy] = useState<string>("latest");
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>("desc");
 
   // Custom handler to update sortBy and sortOrder together
@@ -115,9 +120,14 @@ export default function Training() {
     // Set sort order based on the sort option
     if (newSortBy === 'name' || newSortBy === 'facility') {
       setSortOrder('asc'); // A-Z should be ascending
+    } else if (newSortBy === 'latestCompletion') {
+      setSortOrder('desc');
     } else {
       setSortOrder('desc'); // Latest should be descending
     }
+
+    // Always reset to first page on sort change so slicing starts at correct boundary
+    setCurrentPage(1);
   };
   
   // Enhanced UI state
@@ -488,21 +498,7 @@ export default function Training() {
     
     // Set level-specific default sorting
     const currentLevel: AwardType = getLevelFromTabKey(activeTab);
-    if (currentLevel === 'Level 1') {
-      // Level 1: only allow 'latest', 'name', 'facility'
-      if (sortBy === 'conference') {
-        handleSortByChange('latest'); // Switch from conference to latest for Level 1
-      } else if (!['latest', 'name', 'facility'].includes(sortBy)) {
-        handleSortByChange('latest'); // Default to latest for Level 1
-      }
-    } else {
-      // Other levels: only allow 'conference', 'name', 'facility'
-      if (sortBy === 'latest') {
-        handleSortByChange('conference'); // Switch from latest to conference for other levels
-      } else if (!['conference', 'name', 'facility'].includes(sortBy)) {
-        handleSortByChange('conference'); // Default to conference for other levels
-      }
-    }
+    // Keep existing behavior (no global default to latestCompletion)
     
     const next: Record<string, string> = {};
     filteredColumns.forEach(col => {
@@ -721,23 +717,100 @@ export default function Training() {
     });
   }, [facilityFilter, areaFilter, searchQuery, dateFilter, reqStatusFilters, filteredColumns, currentFieldMapping]);
 
-  // Auto-fill to 100 rows when any filters are active by fetching subsequent pages and merging
+  // Aggregate across pages when filters active, until either we collect all filtered rows
+  // or reach 100 (single page). If more than 100 exist, keep normal pagination.
   const [mergedEmployees, setMergedEmployees] = useState<any[]>([]);
+  const [aggregatedFilteredCount, setAggregatedFilteredCount] = useState<number>(0);
+  const [isAggregatingFiltered, setIsAggregatingFiltered] = useState<boolean>(false);
   useEffect(() => {
     let isCancelled = false;
     const fill = async () => {
-      // When no filters are active, just use the current page data
-      if (!isAnyFilterActive) {
+      // When no filters and not sorting by latestCompletion, just use current page
+      if (!isAnyFilterActive && sortBy !== 'latestCompletion') {
         setMergedEmployees(currentEmployees);
+        setAggregatedFilteredCount((currentEmployees || []).length);
+        setIsAggregatingFiltered(false);
         return;
       }
 
-      // Start with current page employees
-      let accumulated = [...(currentEmployees || [])];
+      setIsAggregatingFiltered(true);
+      // Start fresh and fetch ALL pages to support exact 100-per-page filtered pagination
+      let accumulated: any[] = [];
 
-      // Fetch next pages until we hit 100 rows or run out of pages
-      let nextPage = (currentPage || 1) + 1;
-      while (accumulated.length < 100 && nextPage <= (totalPages || 0)) {
+      const applyLocalFilters = (list: any[]) => {
+        let filtered = list;
+        // Apply search
+        if (searchQuery.trim()) {
+          const searchTerm = searchQuery.toLowerCase().trim();
+          filtered = filtered.filter(emp => {
+            const name = (emp.name || emp.Employee || '').toLowerCase();
+            const employeeNumber = String(emp.employeeNumber || emp.employeeId || '').toLowerCase();
+            return name.includes(searchTerm) || employeeNumber.includes(searchTerm);
+          });
+        }
+        // Date filter
+        if (dateFilter.column && dateFilter.date) {
+          const fieldKey = currentFieldMapping[dateFilter.column];
+          if (fieldKey) {
+            filtered = filtered.filter(emp => {
+              let dateSource: any = null;
+              if (fieldKey === 'secureCareAwarded') {
+                dateSource = (emp as any).secureCareAwardedDate;
+              } else if (fieldKey === 'conferenceCompleted') {
+                dateSource = emp[fieldKey];
+              } else {
+                const completedDate = emp[fieldKey];
+                const scheduleField = ScheduleFieldMapping[fieldKey];
+                const scheduledDate = scheduleField ? emp[scheduleField] : null;
+                dateSource = completedDate || scheduledDate;
+              }
+              if (!dateSource) return false;
+              const empDate = parseDate(dateSource);
+              const filterDate = dateFilter.date;
+              if (!empDate || !filterDate) return false;
+              const empDateOnly = new Date(empDate.getFullYear(), empDate.getMonth(), empDate.getDate());
+              const filterDateOnly = new Date(filterDate.getFullYear(), filterDate.getMonth(), filterDate.getDate());
+              return empDateOnly.getTime() === filterDateOnly.getTime();
+            });
+          }
+        }
+        // Per-requirement filters
+        filtered = filtered.filter(emp => {
+          for (const column of filteredColumns) {
+            const fieldKey = currentFieldMapping[column];
+            if (!fieldKey) continue;
+            const want = reqStatusFilters[fieldKey] || 'all';
+            if (want === 'all') continue;
+            if (column === 'Notes') {
+              const noteValue = (emp.notes || '').trim();
+              if (want === 'empty') {
+                if (noteValue !== '' && emp.notes !== null && emp.notes !== undefined) return false;
+              } else {
+                if (noteValue !== want) return false;
+              }
+              continue;
+            }
+            if (column === 'Advisor') {
+              const advisorId = emp.advisorId != null ? String(emp.advisorId) : '';
+              if (want === 'unassigned') {
+                if (emp.advisorId !== null && emp.advisorId !== undefined && advisorId !== '') return false;
+              } else {
+                if (advisorId !== want) return false;
+              }
+              continue;
+            }
+            const status = computeRequirementStatus(emp, fieldKey);
+            if (status !== want) return false;
+          }
+          return true;
+        });
+        return filtered;
+      };
+
+      // Fetch all pages to compute accurate filtered counts
+      let nextPage = 1;
+      let filteredSoFar = 0;
+      while (nextPage <= (totalPages || 0)) {
         try {
           const level = getLevelFromTabKey(activeTab);
           const resp = await trainingAPI.getEmployeesByLevel(level, {
@@ -754,27 +827,41 @@ export default function Training() {
           });
           const nextEmployees = resp?.employees || [];
           accumulated = accumulated.concat(nextEmployees);
+          filteredSoFar = applyLocalFilters(accumulated).length;
         } catch (e) {
           break;
         }
         nextPage += 1;
       }
 
-      if (!isCancelled) setMergedEmployees(accumulated);
+      if (!isCancelled) {
+        setMergedEmployees(accumulated);
+        setAggregatedFilteredCount(filteredSoFar);
+        setIsAggregatingFiltered(false);
+      }
     };
 
     fill();
     return () => {
       isCancelled = true;
     };
-  }, [isAnyFilterActive, currentEmployees, currentPage, totalPages, itemsPerPage, sortBy, sortOrder, facilityFilter, areaFilter, dateFilter, activeTab]);
+  }, [isAnyFilterActive, facilityFilter, areaFilter, dateFilter, activeTab, searchQuery, reqStatusFilters, filteredColumns]);
+
+  // Ensure pagination and counts update immediately when any filter changes
+  useEffect(() => {
+    if (isAnyFilterActive) {
+      setCurrentPage(1);
+    }
+  }, [searchQuery, dateFilter, reqStatusFilters, filteredColumns, isAnyFilterActive, setCurrentPage]);
 
   // Base list used for local filtering/rendering
+  // Decide whether to use merged (single page) or normal paged data
   const baseEmployees = isAnyFilterActive ? mergedEmployees : currentEmployees;
 
   // Update filteredEmployees to use baseEmployees when available
   const finalFilteredEmployees = useMemo(() => {
     if (!isAnyFilterActive) {
+      // With server-side latestCompletion, no client sorting needed
       return filteredEmployees;
     }
     
@@ -867,8 +954,15 @@ export default function Training() {
       return true;
     });
     
-    return filtered;
-  }, [isAnyFilterActive, filteredEmployees, baseEmployees, searchQuery, reqStatusFilters, filteredColumns, currentFieldMapping, dateFilter]);
+    // For filtered views: rely on server-side sorting too
+
+    // Default slicing for other sorts
+    {
+      const startIdx = (currentPage - 1) * itemsPerPage;
+      const endIdx = startIdx + itemsPerPage;
+      return filtered.slice(startIdx, endIdx);
+    }
+  }, [isAnyFilterActive, filteredEmployees, baseEmployees, searchQuery, reqStatusFilters, filteredColumns, currentFieldMapping, dateFilter, currentPage, itemsPerPage, sortBy]);
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
@@ -1282,20 +1376,22 @@ export default function Training() {
                        <TrendingUp className="w-4 h-4 text-purple-600" />
                        <span className="text-sm font-medium text-purple-900">Sort:</span>
                      </div>
-                     <Select value={sortBy} onValueChange={handleSortByChange}>
+                    <Select value={sortBy} onValueChange={handleSortByChange}>
                        <SelectTrigger className="h-8 w-[180px] text-sm bg-white border-purple-200 shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
                          <SelectValue />
                        </SelectTrigger>
                        <SelectContent>
-                         {currentLevel === 'Level 1' ? (
+                        {currentLevel === 'Level 1' ? (
                            <>
                              <SelectItem value="latest">Latest Assigned</SelectItem>
+                            <SelectItem value="latestCompletion">Latest Completion</SelectItem>
                              <SelectItem value="name">Name A-Z</SelectItem>
                              <SelectItem value="facility">Facility A-Z</SelectItem>
                            </>
                          ) : (
                            <>
-                             <SelectItem value="conference">Latest Conference</SelectItem>
+                            <SelectItem value="conference">Latest Conference</SelectItem>
+                            <SelectItem value="latestCompletion">Latest Completion</SelectItem>
                              <SelectItem value="name">Name A-Z</SelectItem>
                              <SelectItem value="facility">Facility A-Z</SelectItem>
                            </>
@@ -1371,23 +1467,32 @@ export default function Training() {
                      <Users className="h-4 w-4 text-white" />
                    </div>
                    <div className="flex flex-col">
-                     {isFetching ? (
+                    {isAggregatingFiltered ? (
                        <div className="flex items-center space-x-2">
                          <div className="w-3 h-3 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin"></div>
                          <span className="text-xs font-medium text-slate-600">Loading...</span>
                        </div>
-                     ) : (
-                       <div className="flex items-center space-x-1">
-                         <span className="text-sm font-bold text-slate-800">
-                           {filteredEmployees.length.toLocaleString()}
-                         </span>
-                         <span className="text-xs text-slate-500">of</span>
-                         <span className="text-sm font-bold text-slate-800">
-                           {currentEmployees.length.toLocaleString()}
-                         </span>
-                         <span className="text-xs text-slate-500">records</span>
-                       </div>
-                     )}
+                ) : (
+                      <div className="flex items-center space-x-1">
+                        {(() => {
+                          const totalCount = isAnyFilterActive ? aggregatedFilteredCount : totalEmployees;
+                          const start = totalCount === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
+                          const end = Math.min(currentPage * itemsPerPage, totalCount);
+                          return (
+                            <>
+                              <span className="text-sm font-bold text-slate-800">
+                                {start.toLocaleString()}–{end.toLocaleString()}
+                              </span>
+                              <span className="text-xs text-slate-500">of</span>
+                              <span className="text-sm font-bold text-slate-800">
+                                {totalCount.toLocaleString()}
+                              </span>
+                              <span className="text-xs text-slate-500">records</span>
+                            </>
+                          );
+                        })()}
+                      </div>
+                    )}
                    </div>
                  </div>
 
@@ -1752,16 +1857,32 @@ export default function Training() {
 
                                       {/* Compact Pagination */}
                    <div className="flex-shrink-0 border-t border-gray-200 bg-white px-6 py-2">
-                     <div className="flex items-center justify-between">
-                       <div className="text-sm text-gray-600">
-                         {isFetching && <span className="text-purple-600">• Loading...</span>}
-                       </div>
-                       {totalPages > 1 && !isAnyFilterActive && (
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm text-gray-600">
+                          {(() => {
+                            const totalCount = isAnyFilterActive ? aggregatedFilteredCount : totalEmployees;
+                            const start = totalCount === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
+                            const end = Math.min(currentPage * itemsPerPage, totalCount);
+                            const totalPagesDisplay = isAnyFilterActive ? Math.max(1, Math.ceil(totalCount / itemsPerPage)) : totalPages;
+                            return (
+                              <span>
+                                Page {currentPage} of {totalPagesDisplay} · Showing {start.toLocaleString()}–{end.toLocaleString()} of {totalCount.toLocaleString()}
+                               {isAggregatingFiltered && <span className="ml-2 text-purple-600">• Loading…</span>}
+                              </span>
+                            );
+                          })()}
+                        </div>
+                      {(() => {
+                        if (!isAnyFilterActive) return totalPages > 1;
+                        // For filtered views: compute total filtered pages from aggregatedFilteredCount
+                        const filteredPages = Math.max(1, Math.ceil(aggregatedFilteredCount / itemsPerPage));
+                        return filteredPages > 1;
+                      })() && (
                          <CompactPagination
                            currentPage={currentPage}
-                           totalPages={totalPages}
+                           totalPages={isAnyFilterActive ? Math.max(1, Math.ceil(aggregatedFilteredCount / itemsPerPage)) : totalPages}
                            onPageChange={setCurrentPage}
-                           totalItems={totalEmployees}
+                           totalItems={isAnyFilterActive ? aggregatedFilteredCount : totalEmployees}
                            itemsPerPage={itemsPerPage}
                            showInfo={false}
                          />

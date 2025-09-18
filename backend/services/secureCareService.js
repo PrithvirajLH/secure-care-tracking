@@ -176,7 +176,9 @@ class SecureCareService {
       
       // Add pagination
     const page = parseInt(filters.page) || 1;
-    const limit = Math.min(parseInt(filters.limit) || 50, 100); // Max 100 records per page
+    const requestedLimit = parseInt(filters.limit) || 50;
+    // Allow larger limits for dashboard (up to 10,000) but cap at 100 for regular pagination
+    const limit = requestedLimit > 100 ? Math.min(requestedLimit, 10000) : Math.min(requestedLimit, 100);
     const offset = (page - 1) * limit;
     
     // Add sorting support - default to name sorting
@@ -206,6 +208,15 @@ class SecureCareService {
       case 'employeeId':
         orderClause = `ORDER BY employeeNumber ${sortOrder.toUpperCase()}`;
         break;
+      case 'latestCompletion': {
+        // Build computed latest completion date: Level 1 uses completedDate; others use max of videos/sessions
+        const latestExpr = `(CASE WHEN e.awardType = 'Level 1' THEN e.completedDate ELSE (
+          SELECT MAX(d) FROM (VALUES (e.standingVideo), (e.sleepingVideo), (e.feedGradVideo), (e.noHandnoSpeak), (e.[session#1]), (e.[session#2]), (e.[session#3])) AS v(d)
+        ) END)`;
+        // Emulate NULLS LAST for SQL Server
+        orderClause = `ORDER BY CASE WHEN ${latestExpr} IS NULL THEN 1 ELSE 0 END, ${latestExpr} ${sortOrder.toUpperCase()}, e.employeeId ${sortOrder.toUpperCase()}`;
+        break;
+      }
       default:
         orderClause = filters.level === 'Level 1' 
           ? `ORDER BY e.assignedDate ${sortOrder.toUpperCase()}, e.employeeId ${sortOrder.toUpperCase()}`
@@ -766,7 +777,9 @@ class SecureCareService {
       
       // Add pagination
     const page = parseInt(filters.page) || 1;
-    const limit = Math.min(parseInt(filters.limit) || 50, 100); // Max 100 records per page
+    const requestedLimit = parseInt(filters.limit) || 50;
+    // Allow larger limits for dashboard (up to 10,000) but cap at 100 for regular pagination
+    const limit = requestedLimit > 100 ? Math.min(requestedLimit, 10000) : Math.min(requestedLimit, 100);
     const offset = (page - 1) * limit;
     
       // Add sorting support - default to name sorting
@@ -965,7 +978,9 @@ class SecureCareService {
       
       // Add pagination
     const page = parseInt(filters.page) || 1;
-    const limit = Math.min(parseInt(filters.limit) || 50, 100); // Max 100 records per page
+    const requestedLimit = parseInt(filters.limit) || 50;
+    // Allow larger limits for dashboard (up to 10,000) but cap at 100 for regular pagination
+    const limit = requestedLimit > 100 ? Math.min(requestedLimit, 10000) : Math.min(requestedLimit, 100);
     const offset = (page - 1) * limit;
     
     // Add sorting support - default to name sorting
@@ -1568,8 +1583,10 @@ class SecureCareService {
         request.input('level', sql.VarChar, filters.level);
       }
       
-      // Add the date condition to the where clause
-      conditions.push('e.secureCareAwardedDate IS NOT NULL');
+      // Add the date condition to the where clause - show recent conference approvals
+      conditions.push('e.conferenceCompleted IS NOT NULL');
+      conditions.push('e.conferenceCompleted != \'\'');
+      conditions.push('e.awaiting = 0');
       
       if (conditions.length > 0) {
         whereClause = 'WHERE ' + conditions.join(' AND ');
@@ -1580,14 +1597,23 @@ class SecureCareService {
           e.name as employee,
           e.facility,
           e.awardType as achievement,
-          e.secureCareAwardedDate as date,
-          DATEDIFF(day, e.assignedDate, e.secureCareAwardedDate) as timeToComplete
+          e.conferenceCompleted as date,
+          e.awaiting,
+          DATEDIFF(day, e.assignedDate, e.conferenceCompleted) as timeToComplete
         FROM dbo.SecureCareEmployee e
         ${whereClause}
-        ORDER BY e.secureCareAwardedDate DESC
+        ORDER BY e.conferenceCompleted DESC
       `;
       
       const result = await request.query(query);
+      
+      // Debug: Log the query and result count
+      console.log('Recent Activity Query:', query);
+      console.log('Recent Activity Result Count:', result.recordset.length);
+      if (result.recordset.length > 0) {
+        console.log('Sample record:', result.recordset[0]);
+      }
+      
       return result.recordset.map(row => ({
         employee: row.employee,
         facility: row.facility,
@@ -1680,10 +1706,15 @@ class SecureCareService {
 
 
     const query = `
-      WITH RankedEmployees AS (
+      /*
+        Build two views:
+        - RankedPerEmployee: One row per employeeNumber (for total unique employees)
+        - RankedPerLevel: One row per employeeNumber + awardType + awaiting (to match Dashboard per-level counting)
+      */
+      WITH RankedPerEmployee AS (
         SELECT *,
           ROW_NUMBER() OVER (
-            PARTITION BY e.employeeNumber, e.awardType 
+            PARTITION BY e.employeeNumber
             ORDER BY 
               CASE e.awardType 
                 WHEN 'Level 1' THEN 1
@@ -1694,59 +1725,96 @@ class SecureCareService {
                 ELSE 6
               END,
               e.assignedDate DESC
-          ) as rn
+          ) as rn_emp
+        FROM dbo.SecureCareEmployee e
+        ${where}
+      ),
+      RankedPerLevel AS (
+        SELECT *,
+          ROW_NUMBER() OVER (
+            PARTITION BY e.employeeNumber, e.awardType, e.awaiting
+            ORDER BY 
+              CASE e.awardType 
+                WHEN 'Level 1' THEN 1
+                WHEN 'Level 2' THEN 2
+                WHEN 'Level 3' THEN 3
+                WHEN 'Consultant' THEN 4
+                WHEN 'Coach' THEN 5
+                ELSE 6
+              END,
+              e.assignedDate DESC
+          ) as rn_lvl
         FROM dbo.SecureCareEmployee e
         ${where}
       )
       SELECT 
-        -- completed: awarded within range (or awarded with no range specified)
-        SUM(CASE WHEN secureCareAwarded = 1 AND (
+        /* total unique employees */
+        (SELECT COUNT(DISTINCT employeeNumber) FROM RankedPerEmployee) AS total,
+
+        /* completed: awarded within range (or all time when no date range) */
+        SUM(CASE WHEN rpl.secureCareAwarded = 1 AND (
           (@startDate IS NULL AND @endDate IS NULL) OR
-          (secureCareAwardedDate IS NOT NULL AND secureCareAwardedDate BETWEEN @startDate AND @endDate)
+          (rpl.secureCareAwardedDate IS NOT NULL AND rpl.secureCareAwardedDate BETWEEN @startDate AND @endDate)
         ) THEN 1 ELSE 0 END) AS completed,
 
-        -- scheduled: any schedule date within range and not completed
-        SUM(CASE WHEN secureCareAwarded = 0 AND (
+        /* scheduled: employees with specific training sessions scheduled (but not completed) */
+        SUM(CASE WHEN (rpl.secureCareAwarded IS NULL OR rpl.secureCareAwarded = 0) AND (
+          (rpl.scheduleStandingVideo IS NOT NULL AND rpl.scheduleStandingVideo != '' AND rpl.standingVideo IS NULL) OR
+          (rpl.scheduleSleepingVideo IS NOT NULL AND rpl.scheduleSleepingVideo != '' AND rpl.sleepingVideo IS NULL) OR
+          (rpl.scheduleFeedGradVideo IS NOT NULL AND rpl.scheduleFeedGradVideo != '' AND rpl.feedGradVideo IS NULL) OR
+          (rpl.schedulenoHandnoSpeak IS NOT NULL AND rpl.schedulenoHandnoSpeak != '' AND rpl.noHandnoSpeak IS NULL) OR
+          (rpl.[scheduleSession#1] IS NOT NULL AND rpl.[scheduleSession#1] != '' AND rpl.[session#1] IS NULL) OR
+          (rpl.[scheduleSession#2] IS NOT NULL AND rpl.[scheduleSession#2] != '' AND rpl.[session#2] IS NULL) OR
+          (rpl.[scheduleSession#3] IS NOT NULL AND rpl.[scheduleSession#3] != '' AND rpl.[session#3] IS NULL)
+        ) AND (
           (@startDate IS NULL AND @endDate IS NULL) OR
-          (scheduleStandingVideo BETWEEN @startDate AND @endDate) OR
-          (scheduleSleepingVideo BETWEEN @startDate AND @endDate) OR
-          (scheduleFeedGradVideo BETWEEN @startDate AND @endDate) OR
-          (schedulenoHandnoSpeak BETWEEN @startDate AND @endDate) OR
-          ([scheduleSession#1] BETWEEN @startDate AND @endDate) OR
-          ([scheduleSession#2] BETWEEN @startDate AND @endDate) OR
-          ([scheduleSession#3] BETWEEN @startDate AND @endDate)
+          (rpl.scheduleStandingVideo BETWEEN @startDate AND @endDate) OR
+          (rpl.scheduleSleepingVideo BETWEEN @startDate AND @endDate) OR
+          (rpl.scheduleFeedGradVideo BETWEEN @startDate AND @endDate) OR
+          (rpl.schedulenoHandnoSpeak BETWEEN @startDate AND @endDate) OR
+          (rpl.[scheduleSession#1] BETWEEN @startDate AND @endDate) OR
+          (rpl.[scheduleSession#2] BETWEEN @startDate AND @endDate) OR
+          (rpl.[scheduleSession#3] BETWEEN @startDate AND @endDate)
         ) THEN 1 ELSE 0 END) AS scheduled,
 
-        -- inProgress: conference completed and approved (not awaiting)
-        SUM(CASE WHEN conferenceCompleted IS NOT NULL AND conferenceCompleted != '' AND 
-          (awaiting IS NULL OR awaiting = 0) AND (
+        /* inProgress: sum of per-level in-progress counts (can exceed total) */
+        SUM(CASE WHEN (rpl.secureCareAwarded IS NULL OR rpl.secureCareAwarded = 0) AND (
+          (rpl.awardType = 'Level 1' AND rpl.assignedDate IS NOT NULL) OR 
+          (rpl.awardType <> 'Level 1' AND rpl.conferenceCompleted IS NOT NULL AND rpl.conferenceCompleted != '' AND rpl.awaiting = 0)
+        ) AND (
           (@startDate IS NULL AND @endDate IS NULL) OR
-          (conferenceCompleted BETWEEN @startDate AND @endDate)
+          (rpl.assignedDate BETWEEN @startDate AND @endDate) OR
+          (rpl.conferenceCompleted BETWEEN @startDate AND @endDate)
         ) THEN 1 ELSE 0 END) AS inProgress,
 
-        -- awaiting: conference completed in range and awaiting=1
-        SUM(CASE WHEN awaiting = 1 AND (
+        /* awaiting: conference completed and awaiting approval */
+        SUM(CASE WHEN rpl.awardType <> 'Level 1' AND rpl.awaiting = 1 AND (
           (@startDate IS NULL AND @endDate IS NULL) OR
-          (conferenceCompleted BETWEEN @startDate AND @endDate)
+          (rpl.conferenceCompleted BETWEEN @startDate AND @endDate)
         ) THEN 1 ELSE 0 END) AS awaiting,
 
-        -- rejected: conference completed in range and awaiting IS NULL
-        SUM(CASE WHEN awaiting IS NULL AND (
-          (@startDate IS NULL AND @endDate IS NULL) OR
-          (conferenceCompleted BETWEEN @startDate AND @endDate)
-        ) THEN 1 ELSE 0 END) AS rejected
-      FROM RankedEmployees
-      WHERE rn = 1
+        /* rejected: count all rejected conference records (not deduped) */
+        (
+          SELECT COUNT(*) FROM (
+            SELECT e.* FROM dbo.SecureCareEmployee e ${where ? where.replace('WHERE', 'WHERE') : ''}
+          ) rej
+          WHERE rej.conferenceCompleted IS NOT NULL AND rej.conferenceCompleted != '' AND rej.awaiting IS NULL AND (
+            (@startDate IS NULL AND @endDate IS NULL) OR
+            (rej.conferenceCompleted BETWEEN @startDate AND @endDate)
+          )
+        ) AS rejected
+      FROM RankedPerLevel rpl
+      WHERE rpl.rn_lvl = 1
     `;
 
     const result = await request.query(query);
 
     // Breakdown by level with deduplication
     const breakdownQuery = `
-      WITH RankedEmployees AS (
+      WITH RankedPerLevel AS (
         SELECT *,
           ROW_NUMBER() OVER (
-            PARTITION BY e.employeeNumber, e.awardType 
+            PARTITION BY e.employeeNumber, e.awardType, e.awaiting 
             ORDER BY 
               CASE e.awardType 
                 WHEN 'Level 1' THEN 1
@@ -1757,7 +1825,7 @@ class SecureCareService {
                 ELSE 6
               END,
               e.assignedDate DESC
-          ) as rn
+          ) as rn_lvl
         FROM dbo.SecureCareEmployee e
         ${where}
       )
@@ -1766,13 +1834,16 @@ class SecureCareService {
           (@startDate IS NULL AND @endDate IS NULL) OR
           (secureCareAwardedDate IS NOT NULL AND secureCareAwardedDate BETWEEN @startDate AND @endDate)
         ) THEN 1 ELSE 0 END) AS completed,
-        SUM(CASE WHEN conferenceCompleted IS NOT NULL AND conferenceCompleted != '' AND 
-          (awaiting IS NULL OR awaiting = 0) AND (
+        SUM(CASE WHEN (secureCareAwarded IS NULL OR secureCareAwarded = 0) AND (
+          (awardType = 'Level 1') OR 
+          (awardType != 'Level 1' AND conferenceCompleted IS NOT NULL AND conferenceCompleted != '' AND awaiting = 0)
+        ) AND (
           (@startDate IS NULL AND @endDate IS NULL) OR
+          (assignedDate BETWEEN @startDate AND @endDate) OR
           (conferenceCompleted BETWEEN @startDate AND @endDate)
         ) THEN 1 ELSE 0 END) AS inProgress
-      FROM RankedEmployees
-      WHERE rn = 1
+      FROM RankedPerLevel
+      WHERE rn_lvl = 1
       GROUP BY awardType
     `;
 
@@ -1786,7 +1857,7 @@ class SecureCareService {
     const byLevel = await breakdownReq.query(breakdownQuery);
 
     return {
-      totals: result.recordset[0] || { completed: 0, scheduled: 0, inProgress: 0, awaiting: 0, rejected: 0 },
+      totals: result.recordset[0] || { total: 0, completed: 0, scheduled: 0, inProgress: 0, awaiting: 0, rejected: 0 },
       byLevel: byLevel.recordset || []
     };
   }

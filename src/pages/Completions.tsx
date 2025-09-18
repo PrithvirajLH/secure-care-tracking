@@ -188,7 +188,13 @@ export default function Completions() {
         <div className="text-red-600">Failed to load aggregates</div>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
+        <Card className="shadow-sm bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
+          <CardHeader className="pb-2"><CardTitle className="text-sm text-purple-700">Total Employees</CardTitle></CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-purple-700">{data?.totals?.total ?? 0}</div>
+          </CardContent>
+        </Card>
         <Card className="shadow-sm bg-gradient-to-br from-green-50 to-green-100 border-green-200">
           <CardHeader className="pb-2"><CardTitle className="text-sm text-green-700">Completed</CardTitle></CardHeader>
           <CardContent>

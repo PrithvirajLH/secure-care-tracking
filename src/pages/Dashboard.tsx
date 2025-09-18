@@ -831,10 +831,10 @@ export default function Dashboard() {
                           boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
                         }}
                       />
-                      <Bar dataKey="completedRatio" fill="#10b981" radius={[0, 6, 6, 0]} name="Completed">
+                      <Bar dataKey="completedRatio" fill="#059669" radius={[0, 6, 6, 0]} name="Completed">
                         <LabelList dataKey="completedRatio" position="center" formatter={(v: number) => v > 5 ? `${v}%` : ''} style={{ fill: 'white', fontSize: 11, fontWeight: 'bold' }} />
                       </Bar>
-                      <Bar dataKey="inProgressRatio" fill="#8b5cf6" radius={[0, 6, 6, 0]} name="In Progress">
+                      <Bar dataKey="inProgressRatio" fill="#2563eb" radius={[0, 6, 6, 0]} name="In Progress">
                         <LabelList dataKey="inProgressRatio" position="center" formatter={(v: number) => v > 5 ? `${v}%` : ''} style={{ fill: 'white', fontSize: 11, fontWeight: 'bold' }} />
                       </Bar>
                       <Legend 
@@ -860,25 +860,32 @@ export default function Dashboard() {
                       <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 12 }} hide={false} />
                       <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} width={140} />
                       <Tooltip 
-                        formatter={(value, name, props) => {
-                          if (name === 'Completed') {
-                            return [`${value}% (${props.payload.completedCount}/${props.payload.completedCount + props.payload.inProgressCount} completed/in-progress)`, 'Completed Ratio'];
-                          } else if (name === 'In Progress') {
-                            return [`${value}% (${props.payload.inProgressCount}/${props.payload.totalCount} in-progress/total)`, 'In Progress Ratio'];
+                        content={({ active, payload, label }) => {
+                          if (active && payload && payload.length) {
+                            const data = payload[0].payload;
+                            return (
+                              <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg max-w-xs">
+                                <p className="font-semibold text-gray-900 mb-2 break-words">
+                                 {label}
+                                </p>
+                                <div className="space-y-1">
+                                  <p className="text-sm text-green-600">
+                                    Completed: {data.completedRatio}% ({data.completedCount}/{data.completedCount + data.inProgressCount} completed/in-progress)
+                                  </p>
+                                  <p className="text-sm text-purple-600">
+                                    In Progress: {data.inProgressRatio}% ({data.inProgressCount}/{data.totalCount} in-progress/total)
+                                  </p>
+                                </div>
+                              </div>
+                            );
                           }
-                          return [value, name];
-                        }}
-                        contentStyle={{ 
-                          backgroundColor: '#f9fafb', 
-                          border: '1px solid #e5e7eb',
-                          borderRadius: '8px',
-                          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                          return null;
                         }}
                       />
-                      <Bar dataKey="completedRatio" fill="#ef4444" radius={[0, 6, 6, 0]} name="Completed">
+                      <Bar dataKey="completedRatio" fill="#dc2626" radius={[0, 6, 6, 0]} name="Completed">
                         <LabelList dataKey="completedRatio" position="center" formatter={(v: number) => v > 5 ? `${v}%` : ''} style={{ fill: 'white', fontSize: 11, fontWeight: 'bold' }} />
                       </Bar>
-                      <Bar dataKey="inProgressRatio" fill="#8b5cf6" radius={[0, 6, 6, 0]} name="In Progress">
+                      <Bar dataKey="inProgressRatio" fill="#ea580c" radius={[0, 6, 6, 0]} name="In Progress">
                         <LabelList dataKey="inProgressRatio" position="center" formatter={(v: number) => v > 5 ? `${v}%` : ''} style={{ fill: 'white', fontSize: 11, fontWeight: 'bold' }} />
                       </Bar>
                       <Legend 
