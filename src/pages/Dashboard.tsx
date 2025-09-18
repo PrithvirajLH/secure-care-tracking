@@ -386,7 +386,12 @@ export default function Dashboard() {
     }
 
     const facilityStats = validEmployees.reduce((acc, employee) => {
-      const facilityName = (employee.facility || employee.Facility).trim();
+      // Normalize facility name: trim, lowercase, and remove extra spaces only
+      const facilityName = (employee.facility || employee.Facility)
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, ' '); // Replace multiple spaces with single space
+      
       if (!acc[facilityName]) {
         acc[facilityName] = { total: 0, completed: 0, inProgress: 0, awaiting: 0 };
       }
@@ -401,22 +406,43 @@ export default function Dashboard() {
       return acc;
     }, {} as Record<string, { total: number; completed: number; inProgress: number; awaiting: number }>);
 
-    // Compute ratios
-    const WEIGHT_COMPLETED = 0.7; // give more weight to completed ratio
-    const WEIGHT_INPROGRESS = 0.3;
+
+    // Calculate percentages and scores for all facilities
+    const WEIGHT_COMPLETED = 0.8; // give more weight to completed ratio
+    const WEIGHT_INPROGRESS = 0.2; // give less weight to in-progress count comparison
+
+    // Get max in-progress count for normalization
+    const maxInProgressCount = Math.max(...Object.values(facilityStats).map(s => (s as { total: number; completed: number; inProgress: number; awaiting: number }).inProgress), 1);
 
     const facilityDataArray = Object.entries(facilityStats)
-      .map(([name, stats]) => {
+      .map(([normalizedName, stats]) => {
         const typedStats = stats as { total: number; completed: number; inProgress: number; awaiting: number };
-        const completedDenom = Math.max(typedStats.completed + typedStats.inProgress, 0);
-        const completedRatio = completedDenom > 0 ? (typedStats.completed / completedDenom) * 100 : 0;
-        const inProgressRatio = Math.max(typedStats.total, 1) > 0 ? (typedStats.inProgress / Math.max(typedStats.total, 1)) * 100 : 0;
-        const combinedScore = WEIGHT_COMPLETED * completedRatio + WEIGHT_INPROGRESS * inProgressRatio;
+        
+        // Calculate completed percentage: completed / (completed + inProgress) * 100
+        const completedDenom = Math.max(typedStats.completed + typedStats.inProgress, 1);
+        const completedRatio = (typedStats.completed / completedDenom) * 100;
+        
+        // Calculate in-progress percentage: inProgress / total * 100
+        const inProgressRatio = (typedStats.inProgress / Math.max(typedStats.total, 1)) * 100;
+        
+        // For in-progress comparison, use actual count normalized to 0-100 scale
+        // This allows facilities with more employees in progress to rank higher
+        const inProgressScore = maxInProgressCount > 0 ? (typedStats.inProgress / maxInProgressCount) * 100 : 0;
+        
+        const combinedScore = WEIGHT_COMPLETED * completedRatio + WEIGHT_INPROGRESS * inProgressScore;
+        
+        // Capitalize first letter of each word for display
+        const displayName = normalizedName
+          .split(' ')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ');
+        
         return {
-          name: name.length > 20 ? name.substring(0, 20) + '...' : name,
-          fullName: name,
+          name: displayName.length > 25 ? displayName.substring(0, 25) + '...' : displayName,
+          fullName: displayName,
           completedRatio: Math.round(completedRatio),
           inProgressRatio: Math.round(inProgressRatio),
+          inProgressScore: Math.round(inProgressScore), // New field for the actual comparison score
           combinedScore,
           completedCount: typedStats.completed,
           inProgressCount: typedStats.inProgress,
@@ -424,10 +450,14 @@ export default function Dashboard() {
           totalCount: typedStats.total,
         };
       })
-      .sort((a, b) => b.combinedScore - a.combinedScore);
+      .sort((a, b) => b.combinedScore - a.combinedScore); // Sort by combined score
 
+    // Top 5: highest combined scores
     const top = facilityDataArray.slice(0, 5);
-    const bottom = [...facilityDataArray].reverse().slice(0, 5);
+    
+    // Bottom 5: lowest combined scores
+    const bottom = facilityDataArray.slice(-5).reverse();
+
 
     return { top, bottom };
   }, [employees]);
@@ -797,7 +827,7 @@ export default function Dashboard() {
               Facility Performance (Top & Bottom 5)
             </CardTitle>
             <p className="text-sm text-gray-600 mt-1">
-              Completion rates by facility (all training records)
+              Performance by facility: completed ratio (80% weight) + in-progress count comparison (20% weight)
             </p>
           </CardHeader>
           <CardContent>
@@ -814,13 +844,13 @@ export default function Dashboard() {
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={facilityRankings.top} layout="vertical" margin={{ left: 24, right: 60, top: 8, bottom: 8 }}>
                       <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 12 }} hide={false} />
-                      <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} width={140} />
+                      <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} width={180} />
                       <Tooltip 
                         formatter={(value, name, props) => {
                           if (name === 'Completed') {
                             return [`${value}% (${props.payload.completedCount}/${props.payload.completedCount + props.payload.inProgressCount} completed/in-progress)`, 'Completed Ratio'];
                           } else if (name === 'In Progress') {
-                            return [`${value}% (${props.payload.inProgressCount}/${props.payload.totalCount} in-progress/total)`, 'In Progress Ratio'];
+                            return [`${value}% (${props.payload.inProgressCount} employees in progress)`, 'In Progress Count Score'];
                           }
                           return [value, name];
                         }}
@@ -834,8 +864,8 @@ export default function Dashboard() {
                       <Bar dataKey="completedRatio" fill="#059669" radius={[0, 6, 6, 0]} name="Completed">
                         <LabelList dataKey="completedRatio" position="center" formatter={(v: number) => v > 5 ? `${v}%` : ''} style={{ fill: 'white', fontSize: 11, fontWeight: 'bold' }} />
                       </Bar>
-                      <Bar dataKey="inProgressRatio" fill="#2563eb" radius={[0, 6, 6, 0]} name="In Progress">
-                        <LabelList dataKey="inProgressRatio" position="center" formatter={(v: number) => v > 5 ? `${v}%` : ''} style={{ fill: 'white', fontSize: 11, fontWeight: 'bold' }} />
+                      <Bar dataKey="inProgressScore" fill="#2563eb" radius={[0, 6, 6, 0]} name="In Progress">
+                        <LabelList dataKey="inProgressScore" position="center" formatter={(v: number) => v > 5 ? `${v}%` : ''} style={{ fill: 'white', fontSize: 11, fontWeight: 'bold' }} />
                       </Bar>
                       <Legend 
                         verticalAlign="bottom" 
@@ -858,7 +888,7 @@ export default function Dashboard() {
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={facilityRankings.bottom} layout="vertical" margin={{ left: 24, right: 60, top: 8, bottom: 8 }}>
                       <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 12 }} hide={false} />
-                      <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} width={140} />
+                      <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} width={180} />
                       <Tooltip 
                         content={({ active, payload, label }) => {
                           if (active && payload && payload.length) {
@@ -866,14 +896,14 @@ export default function Dashboard() {
                             return (
                               <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg max-w-xs">
                                 <p className="font-semibold text-gray-900 mb-2 break-words">
-                                 {label}
+                                 {data.fullName}
                                 </p>
                                 <div className="space-y-1">
                                   <p className="text-sm text-green-600">
                                     Completed: {data.completedRatio}% ({data.completedCount}/{data.completedCount + data.inProgressCount} completed/in-progress)
                                   </p>
                                   <p className="text-sm text-purple-600">
-                                    In Progress: {data.inProgressRatio}% ({data.inProgressCount}/{data.totalCount} in-progress/total)
+                                    In Progress: {data.inProgressScore}% ({data.inProgressCount} employees in progress)
                                   </p>
                                 </div>
                               </div>
@@ -885,8 +915,8 @@ export default function Dashboard() {
                       <Bar dataKey="completedRatio" fill="#dc2626" radius={[0, 6, 6, 0]} name="Completed">
                         <LabelList dataKey="completedRatio" position="center" formatter={(v: number) => v > 5 ? `${v}%` : ''} style={{ fill: 'white', fontSize: 11, fontWeight: 'bold' }} />
                       </Bar>
-                      <Bar dataKey="inProgressRatio" fill="#ea580c" radius={[0, 6, 6, 0]} name="In Progress">
-                        <LabelList dataKey="inProgressRatio" position="center" formatter={(v: number) => v > 5 ? `${v}%` : ''} style={{ fill: 'white', fontSize: 11, fontWeight: 'bold' }} />
+                      <Bar dataKey="inProgressScore" fill="#ea580c" radius={[0, 6, 6, 0]} name="In Progress">
+                        <LabelList dataKey="inProgressScore" position="center" formatter={(v: number) => v > 5 ? `${v}%` : ''} style={{ fill: 'white', fontSize: 11, fontWeight: 'bold' }} />
                       </Bar>
                       <Legend 
                         verticalAlign="bottom" 
