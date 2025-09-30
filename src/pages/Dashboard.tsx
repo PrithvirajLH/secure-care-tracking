@@ -244,10 +244,11 @@ export default function Dashboard() {
       return overdueDate < new Date();
     }).length;
 
-    // Awaiting approvals (L2+ conference completed but awaiting approval or simply flagged awaiting=0)
-    const awaitingApprovals = perLevelEmployees.filter(e => {
+    // Awaiting approvals (L2+ conference completed but awaiting approval)
+    // Match Completions page logic: count all records with awaiting = 1 (not just unique employees)
+    const awaitingApprovals = employees.filter(e => {
       if (e.awardType === 'Level 1') return false;
-        return e.awaiting === 1 || e.awaiting === true; // 1 or true => awaiting approval
+      return e.awaiting === 1 || e.awaiting === true; // 1 or true => awaiting approval
     }).length;
 
     // Rejected approvals (conference completed but awaiting=null, indicating rejection)
