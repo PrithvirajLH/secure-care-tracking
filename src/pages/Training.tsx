@@ -110,7 +110,12 @@ export default function Training() {
   const [facilityFilter, setFacilityFilter] = useState<string>("all");
   const [areaFilter, setAreaFilter] = useState<string>("all");
   const [reqStatusFilters, setReqStatusFilters] = useState<Record<string, string>>({});
-  const [sortBy, setSortBy] = useState<string>("latest");
+  
+  // Set default sort based on initial active tab (L1: latest, others: conference)
+  const [sortBy, setSortBy] = useState<string>(() => {
+    const initialLevel = getLevelFromTabKey(searchParams.get('level') || "level-1");
+    return initialLevel === 'Level 1' ? 'latest' : 'conference';
+  });
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>("desc");
 
   // Custom handler to update sortBy and sortOrder together
@@ -285,17 +290,49 @@ export default function Training() {
   
   // Training data hook for database operations
   const {
-    scheduleTraining,
-    completeTraining,
-    rescheduleTraining,
-    approveConference,
-    rejectConference,
+    scheduleTraining: baseScheduleTraining,
+    completeTraining: baseCompleteTraining,
+    rescheduleTraining: baseRescheduleTraining,
+    approveConference: baseApproveConference,
+    rejectConference: baseRejectConference,
     isScheduling,
     isCompleting,
     isRescheduling,
     isApprovingConference,
     isRejectingConference,
   } = useTrainingData();
+
+  // Wrapper functions to trigger refetch after mutations
+  const scheduleTraining = async (params: any) => {
+    baseScheduleTraining(params);
+    // Wait a bit for the mutation to complete and trigger its refetch, then force our local refetch
+    await new Promise(resolve => setTimeout(resolve, 500));
+    refetch();
+  };
+
+  const completeTraining = async (params: any) => {
+    baseCompleteTraining(params);
+    await new Promise(resolve => setTimeout(resolve, 500));
+    refetch();
+  };
+
+  const rescheduleTraining = async (params: any) => {
+    baseRescheduleTraining(params);
+    await new Promise(resolve => setTimeout(resolve, 500));
+    refetch();
+  };
+
+  const approveConference = async (params: any) => {
+    baseApproveConference(params);
+    await new Promise(resolve => setTimeout(resolve, 500));
+    refetch();
+  };
+
+  const rejectConference = async (params: any) => {
+    baseRejectConference(params);
+    await new Promise(resolve => setTimeout(resolve, 500));
+    refetch();
+  };
 
 
 
@@ -845,7 +882,7 @@ export default function Training() {
     return () => {
       isCancelled = true;
     };
-  }, [isAnyFilterActive, facilityFilter, areaFilter, dateFilter, activeTab, searchQuery, reqStatusFilters, filteredColumns]);
+  }, [isAnyFilterActive, facilityFilter, areaFilter, dateFilter, activeTab, searchQuery, reqStatusFilters, filteredColumns, totalPages, itemsPerPage, currentFieldMapping, sortBy, sortOrder, allEmployees]);
 
   // Ensure pagination and counts update immediately when any filter changes
   useEffect(() => {
@@ -962,7 +999,7 @@ export default function Training() {
       const endIdx = startIdx + itemsPerPage;
       return filtered.slice(startIdx, endIdx);
     }
-  }, [isAnyFilterActive, filteredEmployees, baseEmployees, searchQuery, reqStatusFilters, filteredColumns, currentFieldMapping, dateFilter, currentPage, itemsPerPage, sortBy]);
+  }, [isAnyFilterActive, filteredEmployees, baseEmployees, searchQuery, reqStatusFilters, filteredColumns, currentFieldMapping, dateFilter, currentPage, itemsPerPage, sortBy, currentEmployees, mergedEmployees, allEmployees]);
 
   const activeFilterCount = useMemo(() => {
     let count = 0;

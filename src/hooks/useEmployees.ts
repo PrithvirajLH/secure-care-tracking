@@ -95,9 +95,10 @@ export const useTrainingEmployees = (filters: EmployeeFilters, pageSize: number 
         limit: pageSize
       });
     },
-    staleTime: 3 * 60 * 1000,
+    staleTime: 0, // Set to 0 to ensure fresh data after mutations
     gcTime: 10 * 60 * 1000,
-    placeholderData: (prev) => prev,
+    refetchOnMount: 'always', // Always refetch when component mounts
+    refetchOnWindowFocus: true, // Refetch when window gains focus
   });
 
   const totalPages = data?.pagination?.totalPages || 0;

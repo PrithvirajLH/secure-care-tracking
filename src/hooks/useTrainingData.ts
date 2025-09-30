@@ -38,12 +38,24 @@ export const useTrainingData = () => {
       
       return trainingAPI.scheduleTraining(employeeId, scheduleColumn, date);
     },
-    onSuccess: (data, variables) => {
-      // Invalidate and refetch relevant queries
+    onSuccess: async (data, variables) => {
+      // Invalidate and refetch relevant queries - force refetch to ensure UI updates with filters
       queryClient.invalidateQueries({ queryKey: trainingKeys.employee(variables.employeeId) });
       queryClient.invalidateQueries({ queryKey: ['employee-levels', variables.employeeId] });
-      queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === 'employees-unique' });
-      queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === 'employees-training' });
+      
+      // Force immediate refetch of all active employee queries
+      await queryClient.refetchQueries({ 
+        predicate: (query) => query.queryKey[0] === 'employees-unique',
+        type: 'active'
+      });
+      await queryClient.refetchQueries({ 
+        predicate: (query) => query.queryKey[0] === 'employees-training',
+        type: 'active'
+      });
+      await queryClient.refetchQueries({ 
+        predicate: (query) => query.queryKey[0] === 'employees-stats',
+        type: 'active'
+      });
       
       toast.success('Training scheduled successfully!', {
         description: `Scheduled for ${variables.date.toLocaleDateString()}`,
@@ -75,12 +87,24 @@ export const useTrainingData = () => {
       // Backend will handle copying the scheduled date to completion field
       return trainingAPI.completeTraining(employeeId, scheduleColumn, completeColumn);
     },
-    onSuccess: (data, variables) => {
-      // Invalidate and refetch relevant queries
+    onSuccess: async (data, variables) => {
+      // Invalidate and refetch relevant queries - force refetch to ensure UI updates with filters
       queryClient.invalidateQueries({ queryKey: trainingKeys.employee(variables.employeeId) });
       queryClient.invalidateQueries({ queryKey: ['employee-levels', variables.employeeId] });
-      queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === 'employees-unique' });
-      queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === 'employees-training' });
+      
+      // Force immediate refetch of all active employee queries
+      await queryClient.refetchQueries({ 
+        predicate: (query) => query.queryKey[0] === 'employees-unique',
+        type: 'active'
+      });
+      await queryClient.refetchQueries({ 
+        predicate: (query) => query.queryKey[0] === 'employees-training',
+        type: 'active'
+      });
+      await queryClient.refetchQueries({ 
+        predicate: (query) => query.queryKey[0] === 'employees-stats',
+        type: 'active'
+      });
       
       toast.success('Training marked as complete!', {
         description: 'Completed using scheduled date',
@@ -105,12 +129,24 @@ export const useTrainingData = () => {
       
       return trainingAPI.rescheduleTraining(employeeId, scheduleColumn, date);
     },
-    onSuccess: (data, variables) => {
-      // Invalidate and refetch relevant queries
+    onSuccess: async (data, variables) => {
+      // Invalidate and refetch relevant queries - force refetch to ensure UI updates with filters
       queryClient.invalidateQueries({ queryKey: trainingKeys.employee(variables.employeeId) });
       queryClient.invalidateQueries({ queryKey: ['employee-levels', variables.employeeId] });
-      queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === 'employees-unique' });
-      queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === 'employees-training' });
+      
+      // Force immediate refetch of all active employee queries
+      await queryClient.refetchQueries({ 
+        predicate: (query) => query.queryKey[0] === 'employees-unique',
+        type: 'active'
+      });
+      await queryClient.refetchQueries({ 
+        predicate: (query) => query.queryKey[0] === 'employees-training',
+        type: 'active'
+      });
+      await queryClient.refetchQueries({ 
+        predicate: (query) => query.queryKey[0] === 'employees-stats',
+        type: 'active'
+      });
       
       toast.success('Training rescheduled successfully!', {
         description: `Rescheduled for ${variables.date.toLocaleDateString()}`,
@@ -140,11 +176,23 @@ export const useTrainingData = () => {
     mutationFn: ({ employeeId, notes }: { employeeId: string; notes?: string }) => {
       return trainingAPI.approveConference(employeeId, notes);
     },
-    onSuccess: (data, variables) => {
+    onSuccess: async (data, variables) => {
       queryClient.invalidateQueries({ queryKey: trainingKeys.employee(variables.employeeId) });
       queryClient.invalidateQueries({ queryKey: ['employee-levels', variables.employeeId] });
-      queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === 'employees-unique' });
-      queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === 'employees-training' });
+      
+      // Force immediate refetch of all active employee queries
+      await queryClient.refetchQueries({ 
+        predicate: (query) => query.queryKey[0] === 'employees-unique',
+        type: 'active'
+      });
+      await queryClient.refetchQueries({ 
+        predicate: (query) => query.queryKey[0] === 'employees-training',
+        type: 'active'
+      });
+      await queryClient.refetchQueries({ 
+        predicate: (query) => query.queryKey[0] === 'employees-stats',
+        type: 'active'
+      });
       toast.success('Conference approved successfully!');
     },
     onError: (error) => {
@@ -159,11 +207,23 @@ export const useTrainingData = () => {
     mutationFn: ({ employeeId, notes }: { employeeId: string; notes?: string }) => {
       return trainingAPI.rejectConference(employeeId, notes);
     },
-    onSuccess: (data, variables) => {
+    onSuccess: async (data, variables) => {
       queryClient.invalidateQueries({ queryKey: trainingKeys.employee(variables.employeeId) });
       queryClient.invalidateQueries({ queryKey: ['employee-levels', variables.employeeId] });
-      queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === 'employees-unique' });
-      queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === 'employees-training' });
+      
+      // Force immediate refetch of all active employee queries
+      await queryClient.refetchQueries({ 
+        predicate: (query) => query.queryKey[0] === 'employees-unique',
+        type: 'active'
+      });
+      await queryClient.refetchQueries({ 
+        predicate: (query) => query.queryKey[0] === 'employees-training',
+        type: 'active'
+      });
+      await queryClient.refetchQueries({ 
+        predicate: (query) => query.queryKey[0] === 'employees-stats',
+        type: 'active'
+      });
       toast.success('Conference rejected successfully!');
     },
     onError: (error) => {
