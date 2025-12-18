@@ -6,8 +6,25 @@ const secureCareService = require('../services/secureCareService');
 router.get('/employees/:level', async (req, res) => {
   try {
     const { level } = req.params;
+    // Handle facility as array (Express parses multiple query params with same name as array)
+    // Also handle comma-separated values for backward compatibility
+    let facility = req.query.facility;
+    if (facility) {
+      // Handle array of values from Express
+      if (Array.isArray(facility)) {
+        facility = facility.map(f => f.trim()).filter(f => f);
+      } else if (typeof facility === 'string') {
+        // Handle comma-separated or single value
+        if (facility.includes(',')) {
+          facility = facility.split(',').map(f => f.trim()).filter(f => f);
+        } else {
+          facility = facility.trim();
+        }
+      }
+    }
+    
     const filters = {
-      facility: req.query.facility,
+      facility: facility, // Can be string, array, or undefined
       area: req.query.area,
       search: req.query.search,
       status: req.query.status,
@@ -36,8 +53,25 @@ router.get('/employees/:level', async (req, res) => {
 router.get('/employees-unique/:level', async (req, res) => {
   try {
     const { level } = req.params;
+    // Handle facility as array (Express parses multiple query params with same name as array)
+    // Also handle comma-separated values for backward compatibility
+    let facility = req.query.facility;
+    if (facility) {
+      // Handle array of values from Express
+      if (Array.isArray(facility)) {
+        facility = facility.map(f => f.trim()).filter(f => f);
+      } else if (typeof facility === 'string') {
+        // Handle comma-separated or single value
+        if (facility.includes(',')) {
+          facility = facility.split(',').map(f => f.trim()).filter(f => f);
+        } else {
+          facility = facility.trim();
+        }
+      }
+    }
+    
     const filters = {
-      facility: req.query.facility,
+      facility: facility, // Can be string, array, or undefined
       area: req.query.area,
       search: req.query.search,
       status: req.query.status,

@@ -1,8 +1,9 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { MultiSelectCombobox, type MultiSelectOption } from "@/components/ui/multi-select-combobox";
 import { Filter, X, Users2 } from "lucide-react";
 import { ShineBorder } from "@/components/magicui/shine-border";
 import { motion } from "framer-motion";
@@ -10,8 +11,8 @@ import { motion } from "framer-motion";
 interface EmployeeFiltersProps {
   query: string;
   onQueryChange: (value: string) => void;
-  selectedFacility: string;
-  onFacilityChange: (value: string) => void;
+  selectedFacilities: string[];
+  onFacilitiesChange: (value: string[]) => void;
   selectedArea: string;
   onAreaChange: (value: string) => void;
   selectedStatus: string;
@@ -34,8 +35,8 @@ interface EmployeeFiltersProps {
 export default function EmployeeFilters({
   query,
   onQueryChange,
-  selectedFacility,
-  onFacilityChange,
+  selectedFacilities,
+  onFacilitiesChange,
   selectedArea,
   onAreaChange,
   selectedStatus,
@@ -53,10 +54,17 @@ export default function EmployeeFilters({
   apiCurrentPage,
   totalPages
 }: EmployeeFiltersProps) {
-  const hasActiveFilters = selectedFacility !== "all" || selectedArea !== "all" || selectedStatus !== "all" || selectedJobTitle !== "all" || query.trim();
+  // Convert facilities array to MultiSelectOption format
+  const facilityOptions: MultiSelectOption[] = useMemo(() => 
+    facilities.map(f => ({ value: f, label: f })),
+    [facilities]
+  );
+
+  const hasFacilityFilter = selectedFacilities.length > 0;
+  const hasActiveFilters = hasFacilityFilter || selectedArea !== "all" || selectedStatus !== "all" || selectedJobTitle !== "all" || query.trim();
   
   const activeFilterCount = [
-    selectedFacility !== "all",
+    hasFacilityFilter,
     selectedArea !== "all", 
     selectedStatus !== "all",
     selectedJobTitle !== "all",
@@ -110,19 +118,15 @@ export default function EmployeeFilters({
               <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                 <div className="relative inline-block">
                   <ShineBorder borderWidth={1} duration={20} shineColor={["#8b5cf6", "#a855f7", "#c084fc"]} className="rounded-md" />
-                  <Select value={selectedFacility} onValueChange={onFacilityChange}>
-                    <SelectTrigger id="facility-filter" className="w-[140px] h-10 text-sm bg-white border-purple-200 shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
-                      <SelectValue placeholder="All Facilities" />
-                    </SelectTrigger>
-                    <SelectContent className="max-h-[300px] bg-white/95 backdrop-blur-sm border border-purple-200 shadow-lg">
-                      <SelectItem value="all">All Facilities</SelectItem>
-                      {facilities.map((facility) => (
-                        <SelectItem key={facility} value={facility}>
-                          {facility}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <MultiSelectCombobox
+                    options={facilityOptions}
+                    selected={selectedFacilities}
+                    onChange={onFacilitiesChange}
+                    placeholder="All Facilities"
+                    emptyText="No facilities found."
+                    className="w-[180px]"
+                    maxDisplayItems={1}
+                  />
                 </div>
               </motion.div>
 
@@ -211,11 +215,20 @@ export default function EmployeeFilters({
             <>
               <div className="w-px h-8 bg-purple-300" />
               <div className="flex items-center gap-2 flex-wrap">
-                {selectedFacility !== "all" && (
-                  <motion.span initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} className="inline-flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-medium shadow-sm border border-purple-200">
-                    <Filter className="w-3 h-3" />
-                    {selectedFacility}
-                  </motion.span>
+                {selectedFacilities.length > 0 && (
+                  selectedFacilities.length <= 2 ? (
+                    selectedFacilities.map((facility) => (
+                      <motion.span key={facility} initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} className="inline-flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-medium shadow-sm border border-purple-200">
+                        <Filter className="w-3 h-3" />
+                        {facility}
+                      </motion.span>
+                    ))
+                  ) : (
+                    <motion.span initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} className="inline-flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-medium shadow-sm border border-purple-200">
+                      <Filter className="w-3 h-3" />
+                      {selectedFacilities.length} facilities
+                    </motion.span>
+                  )
                 )}
                 {selectedArea !== "all" && (
                   <motion.span initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} className="inline-flex items-center gap-1 px-2 py-1 bg-indigo-100 text-indigo-700 rounded-full text-xs font-medium shadow-sm border border-indigo-200">

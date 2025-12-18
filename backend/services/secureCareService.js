@@ -78,9 +78,21 @@ class SecureCareService {
     }
     
     // Apply additional filters
+    // Handle facility filter - can be string or array
     if (filters.facility && filters.facility !== 'all') {
-      query += ` ${isAllLevels ? 'WHERE' : 'AND'} e.facility = @facility`;
-      request.input('facility', sql.VarChar, filters.facility);
+      const facilities = Array.isArray(filters.facility) ? filters.facility : [filters.facility];
+      if (facilities.length === 1) {
+        // Single facility - use simple equality
+        query += ` ${isAllLevels ? 'WHERE' : 'AND'} e.facility = @facility0`;
+        request.input('facility0', sql.VarChar, facilities[0]);
+      } else if (facilities.length > 1) {
+        // Multiple facilities - use IN clause with parameterized values
+        const facilityParams = facilities.map((f, i) => `@facility${i}`).join(', ');
+        query += ` ${isAllLevels ? 'WHERE' : 'AND'} e.facility IN (${facilityParams})`;
+        facilities.forEach((f, i) => {
+          request.input(`facility${i}`, sql.VarChar, f);
+        });
+      }
     }
     
     if (filters.area && filters.area !== 'all') {
@@ -239,9 +251,19 @@ class SecureCareService {
       countQuery += ` WHERE e.awardType = @level`;
     }
     
+    // Handle facility filter - can be string or array
     if (filters.facility && filters.facility !== 'all') {
-      countQuery += ` ${countQuery.includes('WHERE') ? 'AND' : 'WHERE'} e.facility = @facility`;
-      countRequest.input('facility', sql.VarChar, filters.facility);
+      const facilities = Array.isArray(filters.facility) ? filters.facility : [filters.facility];
+      if (facilities.length === 1) {
+        countQuery += ` ${countQuery.includes('WHERE') ? 'AND' : 'WHERE'} e.facility = @facilityCount0`;
+        countRequest.input('facilityCount0', sql.VarChar, facilities[0]);
+      } else if (facilities.length > 1) {
+        const facilityParams = facilities.map((f, i) => `@facilityCount${i}`).join(', ');
+        countQuery += ` ${countQuery.includes('WHERE') ? 'AND' : 'WHERE'} e.facility IN (${facilityParams})`;
+        facilities.forEach((f, i) => {
+          countRequest.input(`facilityCount${i}`, sql.VarChar, f);
+        });
+      }
     }
     
     if (filters.area && filters.area !== 'all') {
@@ -710,9 +732,19 @@ class SecureCareService {
     }
     
     // Apply additional filters
+    // Handle facility filter - can be string or array
     if (filters.facility && filters.facility !== 'all') {
-      query += ` AND e.facility = @facility`;
-      request.input('facility', sql.VarChar, filters.facility);
+      const facilities = Array.isArray(filters.facility) ? filters.facility : [filters.facility];
+      if (facilities.length === 1) {
+        query += ` AND e.facility = @facility0`;
+        request.input('facility0', sql.VarChar, facilities[0]);
+      } else if (facilities.length > 1) {
+        const facilityParams = facilities.map((f, i) => `@facility${i}`).join(', ');
+        query += ` AND e.facility IN (${facilityParams})`;
+        facilities.forEach((f, i) => {
+          request.input(`facility${i}`, sql.VarChar, f);
+        });
+      }
     }
     
     if (filters.area && filters.area !== 'all') {
@@ -830,8 +862,15 @@ class SecureCareService {
       if (!isAllLevels) {
         countQuery += ` AND e.awardType = @level`;
       }
+      // Handle facility filter - can be string or array (uses same request params)
       if (filters.facility && filters.facility !== 'all') {
-        countQuery += ` AND e.facility = @facility`;
+        const facilities = Array.isArray(filters.facility) ? filters.facility : [filters.facility];
+        if (facilities.length === 1) {
+          countQuery += ` AND e.facility = @facility0`;
+        } else if (facilities.length > 1) {
+          const facilityParams = facilities.map((f, i) => `@facility${i}`).join(', ');
+          countQuery += ` AND e.facility IN (${facilityParams})`;
+        }
       }
       if (filters.area && filters.area !== 'all') {
         countQuery += ` AND e.area = @area`;
@@ -955,9 +994,19 @@ class SecureCareService {
     }
     
     // Apply additional filters within the CTE
+    // Handle facility filter - can be string or array
     if (filters.facility && filters.facility !== 'all') {
-      request.input('facility', sql.VarChar, filters.facility);
-      query = query.replace('WHERE 1=1', 'WHERE 1=1 AND e.facility = @facility');
+      const facilities = Array.isArray(filters.facility) ? filters.facility : [filters.facility];
+      if (facilities.length === 1) {
+        request.input('facility0', sql.VarChar, facilities[0]);
+        query = query.replace('WHERE 1=1', 'WHERE 1=1 AND e.facility = @facility0');
+      } else if (facilities.length > 1) {
+        const facilityParams = facilities.map((f, i) => `@facility${i}`).join(', ');
+        facilities.forEach((f, i) => {
+          request.input(`facility${i}`, sql.VarChar, f);
+        });
+        query = query.replace('WHERE 1=1', `WHERE 1=1 AND e.facility IN (${facilityParams})`);
+      }
     }
     
     if (filters.area && filters.area !== 'all') {
@@ -1055,9 +1104,19 @@ class SecureCareService {
       countQuery += ` AND e.awardType = @level`;
     }
     
+    // Handle facility filter - can be string or array
     if (filters.facility && filters.facility !== 'all') {
-      countRequest.input('facility', sql.VarChar, filters.facility);
-      countQuery += ` AND e.facility = @facility`;
+      const facilities = Array.isArray(filters.facility) ? filters.facility : [filters.facility];
+      if (facilities.length === 1) {
+        countRequest.input('facility0', sql.VarChar, facilities[0]);
+        countQuery += ` AND e.facility = @facility0`;
+      } else if (facilities.length > 1) {
+        const facilityParams = facilities.map((f, i) => `@facility${i}`).join(', ');
+        facilities.forEach((f, i) => {
+          countRequest.input(`facility${i}`, sql.VarChar, f);
+        });
+        countQuery += ` AND e.facility IN (${facilityParams})`;
+      }
     }
     
     if (filters.area && filters.area !== 'all') {
@@ -1233,9 +1292,19 @@ class SecureCareService {
     let whereClause = '';
     const conditions = [];
     
+    // Handle facility filter - can be string or array
     if (filters.facility && filters.facility !== 'all') {
-      conditions.push('e.facility = @facility');
-      request.input('facility', sql.VarChar, filters.facility);
+      const facilities = Array.isArray(filters.facility) ? filters.facility : [filters.facility];
+      if (facilities.length === 1) {
+        conditions.push('e.facility = @facility0');
+        request.input('facility0', sql.VarChar, facilities[0]);
+      } else if (facilities.length > 1) {
+        const facilityParams = facilities.map((f, i) => `@facility${i}`).join(', ');
+        facilities.forEach((f, i) => {
+          request.input(`facility${i}`, sql.VarChar, f);
+        });
+        conditions.push(`e.facility IN (${facilityParams})`);
+      }
     }
     
     if (filters.area && filters.area !== 'all') {
@@ -1400,9 +1469,19 @@ class SecureCareService {
       let whereClause = '';
       const conditions = [];
       
+      // Handle facility filter - can be string or array
       if (filters.facility && filters.facility !== 'all') {
-        conditions.push('e.facility = @facility');
-        request.input('facility', sql.VarChar, filters.facility);
+        const facilities = Array.isArray(filters.facility) ? filters.facility : [filters.facility];
+        if (facilities.length === 1) {
+          conditions.push('e.facility = @facility0');
+          request.input('facility0', sql.VarChar, facilities[0]);
+        } else if (facilities.length > 1) {
+          const facilityParams = facilities.map((f, i) => `@facility${i}`).join(', ');
+          facilities.forEach((f, i) => {
+            request.input(`facility${i}`, sql.VarChar, f);
+          });
+          conditions.push(`e.facility IN (${facilityParams})`);
+        }
       }
       
       if (filters.area && filters.area !== 'all') {
@@ -1438,8 +1517,15 @@ class SecureCareService {
       
       // Query for in-progress data (assigned but not completed)
       const inProgressConditions = [];
+      // Handle facility filter for in-progress - reuse same params
       if (filters.facility && filters.facility !== 'all') {
-        inProgressConditions.push('e.facility = @facility');
+        const facilities = Array.isArray(filters.facility) ? filters.facility : [filters.facility];
+        if (facilities.length === 1) {
+          inProgressConditions.push('e.facility = @facility0');
+        } else if (facilities.length > 1) {
+          const facilityParams = facilities.map((f, i) => `@facility${i}`).join(', ');
+          inProgressConditions.push(`e.facility IN (${facilityParams})`);
+        }
       }
       if (filters.area && filters.area !== 'all') {
         inProgressConditions.push('e.area = @area');
@@ -1501,9 +1587,19 @@ class SecureCareService {
     let whereClause = '';
     const conditions = [];
     
+    // Handle facility filter - can be string or array
     if (filters.facility && filters.facility !== 'all') {
-      conditions.push('e.facility = @facility');
-      request.input('facility', sql.VarChar, filters.facility);
+      const facilities = Array.isArray(filters.facility) ? filters.facility : [filters.facility];
+      if (facilities.length === 1) {
+        conditions.push('e.facility = @facility0');
+        request.input('facility0', sql.VarChar, facilities[0]);
+      } else if (facilities.length > 1) {
+        const facilityParams = facilities.map((f, i) => `@facility${i}`).join(', ');
+        facilities.forEach((f, i) => {
+          request.input(`facility${i}`, sql.VarChar, f);
+        });
+        conditions.push(`e.facility IN (${facilityParams})`);
+      }
     }
     
     if (filters.area && filters.area !== 'all') {
@@ -1568,9 +1664,19 @@ class SecureCareService {
       let whereClause = '';
       const conditions = [];
       
+      // Handle facility filter - can be string or array
       if (filters.facility && filters.facility !== 'all') {
-        conditions.push('e.facility = @facility');
-        request.input('facility', sql.VarChar, filters.facility);
+        const facilities = Array.isArray(filters.facility) ? filters.facility : [filters.facility];
+        if (facilities.length === 1) {
+          conditions.push('e.facility = @facility0');
+          request.input('facility0', sql.VarChar, facilities[0]);
+        } else if (facilities.length > 1) {
+          const facilityParams = facilities.map((f, i) => `@facility${i}`).join(', ');
+          facilities.forEach((f, i) => {
+            request.input(`facility${i}`, sql.VarChar, f);
+          });
+          conditions.push(`e.facility IN (${facilityParams})`);
+        }
       }
       
       if (filters.area && filters.area !== 'all') {
@@ -1635,9 +1741,19 @@ class SecureCareService {
     let whereClause = '';
     const conditions = [];
     
+    // Handle facility filter - can be string or array
     if (filters.facility && filters.facility !== 'all') {
-      conditions.push('e.facility = @facility');
-      request.input('facility', sql.VarChar, filters.facility);
+      const facilities = Array.isArray(filters.facility) ? filters.facility : [filters.facility];
+      if (facilities.length === 1) {
+        conditions.push('e.facility = @facility0');
+        request.input('facility0', sql.VarChar, facilities[0]);
+      } else if (facilities.length > 1) {
+        const facilityParams = facilities.map((f, i) => `@facility${i}`).join(', ');
+        facilities.forEach((f, i) => {
+          request.input(`facility${i}`, sql.VarChar, f);
+        });
+        conditions.push(`e.facility IN (${facilityParams})`);
+      }
     }
     
     if (filters.area && filters.area !== 'all') {
@@ -1686,9 +1802,19 @@ class SecureCareService {
     const request = pool.request();
 
     const conditions = [];
+    // Handle facility filter - can be string or array
     if (filters.facility && filters.facility !== 'all') {
-      conditions.push('e.facility = @facility');
-      request.input('facility', sql.VarChar, filters.facility);
+      const facilities = Array.isArray(filters.facility) ? filters.facility : [filters.facility];
+      if (facilities.length === 1) {
+        conditions.push('e.facility = @facility0');
+        request.input('facility0', sql.VarChar, facilities[0]);
+      } else if (facilities.length > 1) {
+        const facilityParams = facilities.map((f, i) => `@facility${i}`).join(', ');
+        facilities.forEach((f, i) => {
+          request.input(`facility${i}`, sql.VarChar, f);
+        });
+        conditions.push(`e.facility IN (${facilityParams})`);
+      }
     }
     if (filters.area && filters.area !== 'all') {
       conditions.push('e.area = @area');
@@ -1848,7 +1974,13 @@ class SecureCareService {
     `;
 
     const breakdownReq = pool.request();
-    if (filters.facility && filters.facility !== 'all') breakdownReq.input('facility', sql.VarChar, filters.facility);
+    // Handle facility filter - can be string or array (uses same params as main request)
+    if (filters.facility && filters.facility !== 'all') {
+      const facilities = Array.isArray(filters.facility) ? filters.facility : [filters.facility];
+      facilities.forEach((f, i) => {
+        breakdownReq.input(`facility${i}`, sql.VarChar, f);
+      });
+    }
     if (filters.area && filters.area !== 'all') breakdownReq.input('area', sql.VarChar, filters.area);
     if (filters.level && filters.level !== 'all') breakdownReq.input('level', sql.VarChar, filters.level);
     breakdownReq.input('startDate', sql.Date, filters.startDate || null);

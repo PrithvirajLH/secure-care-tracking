@@ -41,8 +41,15 @@ class SecureCareAPI {
       limit: (filters.limit || 50).toString()
     });
     
-    if (filters.facility && filters.facility !== 'all') {
-      params.append('facility', filters.facility);
+    // Handle facility filter - can be a string or array
+    if (filters.facility) {
+      const facilities = Array.isArray(filters.facility) ? filters.facility : [filters.facility];
+      // Append each facility as a separate query param for array support
+      facilities.forEach(f => {
+        if (f && f !== 'all') {
+          params.append('facility', f);
+        }
+      });
     }
     
     if (filters.area && filters.area !== 'all') {
@@ -92,8 +99,14 @@ class SecureCareAPI {
       limit: (filters.limit || 50).toString()
     });
     
-    if (filters.facility && filters.facility !== 'all') {
-      params.append('facility', filters.facility);
+    // Handle facility filter - can be a string or array
+    if (filters.facility) {
+      const facilities = Array.isArray(filters.facility) ? filters.facility : [filters.facility];
+      facilities.forEach(f => {
+        if (f && f !== 'all') {
+          params.append('facility', f);
+        }
+      });
     }
     
     if (filters.area && filters.area !== 'all') {

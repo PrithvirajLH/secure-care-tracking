@@ -25,7 +25,7 @@ export default function Employees() {
   const { state, dispatch } = useApp();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const [selectedFacility, setSelectedFacility] = useState<string>("all");
+  const [selectedFacilities, setSelectedFacilities] = useState<string[]>([]);
   const [selectedArea, setSelectedArea] = useState<string>("all");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [sortField, setSortField] = useState<string>("name");
@@ -43,16 +43,16 @@ export default function Employees() {
 
   // Use the same data source as Training page for consistency
   const filters = useMemo(() => ({
-    facility: selectedFacility !== "all" ? selectedFacility : undefined,
+    facility: selectedFacilities.length > 0 ? selectedFacilities : undefined,
     area: selectedArea !== "all" ? selectedArea : undefined,
     status: selectedStatus !== "all" ? selectedStatus : undefined,
     search: state.filters.query || undefined
-  }), [selectedFacility, selectedArea, selectedStatus, state.filters.query]);
+  }), [selectedFacilities, selectedArea, selectedStatus, state.filters.query]);
 
   // Create a stable filter object for the API call
   const stableFilters = useMemo(() => {
     const filterObj: any = {};
-    if (selectedFacility !== "all") filterObj.facility = selectedFacility;
+    if (selectedFacilities.length > 0) filterObj.facility = selectedFacilities;
     if (selectedArea !== "all") filterObj.area = selectedArea;
     if (selectedStatus !== "all") filterObj.status = selectedStatus;
     if (selectedJobTitle !== "all") filterObj.jobTitle = selectedJobTitle;
@@ -61,7 +61,7 @@ export default function Employees() {
     filterObj.sortBy = sortField;
     filterObj.sortOrder = sortDirection;
     return filterObj;
-  }, [selectedFacility, selectedArea, selectedStatus, selectedJobTitle, state.filters.query, sortField, sortDirection]);
+  }, [selectedFacilities, selectedArea, selectedStatus, selectedJobTitle, state.filters.query, sortField, sortDirection]);
 
   const {
     employees: currentEmployees,
@@ -100,7 +100,9 @@ export default function Employees() {
   // Load initial state from URL
   useEffect(() => {
     const q = searchParams.get("q") ?? "";
-    const fac = searchParams.get("facility") ?? "all";
+    // Handle comma-separated facility values from URL
+    const facParam = searchParams.get("facility") ?? "";
+    const fac = facParam && facParam !== "all" ? facParam.split(",").filter(f => f.trim()) : [];
     const ar = searchParams.get("area") ?? "all";
     const st = searchParams.get("status") ?? "all";
     const jt = searchParams.get("jobTitle") ?? "all";
@@ -108,7 +110,7 @@ export default function Employees() {
     const sd = (searchParams.get("dir") as "asc" | "desc") ?? "asc";
     const pg = Number(searchParams.get("page") ?? 1);
     if (q) dispatch({ type: "setQuery", payload: q });
-    setSelectedFacility(fac);
+    setSelectedFacilities(fac);
     setSelectedArea(ar);
     setSelectedStatus(st);
     setSelectedJobTitle(jt);
@@ -123,7 +125,8 @@ export default function Employees() {
   useEffect(() => {
     const params = new URLSearchParams(searchParams);
     params.set("q", state.filters.query ?? "");
-    params.set("facility", selectedFacility);
+    // Store facilities as comma-separated values or empty string
+    params.set("facility", selectedFacilities.length > 0 ? selectedFacilities.join(",") : "");
     params.set("area", selectedArea);
     params.set("status", selectedStatus);
     params.set("jobTitle", selectedJobTitle);
@@ -131,7 +134,7 @@ export default function Employees() {
     params.set("dir", sortDirection);
     params.set("page", String(apiCurrentPage));
     setSearchParams(params, { replace: true });
-  }, [state.filters.query, selectedFacility, selectedArea, selectedStatus, selectedJobTitle, sortField, sortDirection, apiCurrentPage]);
+  }, [state.filters.query, selectedFacilities, selectedArea, selectedStatus, selectedJobTitle, sortField, sortDirection, apiCurrentPage]);
 
   // Auto-refresh when page becomes visible (user switches back to tab)
   useEffect(() => {
@@ -413,7 +416,7 @@ export default function Employees() {
   // Reset to first page when filters or sorting change
   useEffect(() => {
     setApiCurrentPage(1);
-  }, [state.filters.query, selectedFacility, selectedArea, selectedStatus, selectedJobTitle, sortField, sortDirection]);
+  }, [state.filters.query, selectedFacilities, selectedArea, selectedStatus, selectedJobTitle, sortField, sortDirection]);
 
   // Get filter options from API or use fallback
   const facilities = useMemo(() => {
@@ -493,8 +496,8 @@ export default function Employees() {
         <EmployeeFilters
           query={state.filters.query || ""}
           onQueryChange={(value) => dispatch({ type: "setQuery", payload: value })}
-          selectedFacility={selectedFacility}
-          onFacilityChange={setSelectedFacility}
+          selectedFacilities={selectedFacilities}
+          onFacilitiesChange={setSelectedFacilities}
           selectedArea={selectedArea}
           onAreaChange={setSelectedArea}
           selectedStatus={selectedStatus}
@@ -502,7 +505,7 @@ export default function Employees() {
           selectedJobTitle={selectedJobTitle}
           onJobTitleChange={setSelectedJobTitle}
           onClearFilters={() => {
-            setSelectedFacility("all");
+            setSelectedFacilities([]);
             setSelectedArea("all");
             setSelectedStatus("all");
             setSelectedJobTitle("all");

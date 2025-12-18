@@ -1,14 +1,13 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Award, FileText, UsersRound, Clock, CheckCircle, AlertCircle, TrendingUp, Home, Calendar } from "lucide-react";
 import { Pie, PieChart, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, LabelList } from "recharts";
 import { motion } from "framer-motion";
 import { useApp } from "@/context/AppContext";
-import { useTrainingEmployees } from "@/hooks/useEmployees";
-import { useTrainingData } from "@/hooks/useTrainingData";
 import { parseDate } from "@/config/awardTypes";
 import PageHeader from "@/components/PageHeader";
+import { trainingAPI } from "@/services/api";
 
 // Refreshed palette for certification progress pie
 const COLORS = ["#4f46e5", "#14b8a6", "#f59e0b", "#ec4899", "#22c55e"];
@@ -52,11 +51,71 @@ const formatActivityDate = (dateString: string): string => {
 export default function Dashboard() {
   const { state } = useApp();
 
-  // For Dashboard, we need all employee records to calculate accurate stats
-  const { employees: apiEmployees, isLoading, error, isFetching, refetch } = useTrainingEmployees({ level: 'all' }, 10000);
-  
-  // Note: allTrainingData not available in useTrainingData hook, using employee data instead
-  const isLoadingAll = false;
+  // State for fetching ALL employee records across all pages
+  const [allEmployees, setAllEmployees] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+  const [loadingProgress, setLoadingProgress] = useState({ current: 0, total: 0 });
+
+  // Function to fetch all pages of employee data
+  const fetchAllEmployees = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    setAllEmployees([]);
+    
+    try {
+      // First, fetch page 1 to get total pages
+      const firstPageResult = await trainingAPI.getEmployeesByLevel('all', {
+        page: 1,
+        limit: 500 // Use 500 per page for efficiency
+      });
+      
+      const totalPages = firstPageResult.pagination.totalPages;
+      setLoadingProgress({ current: 1, total: totalPages });
+      
+      // Start with first page results
+      let accumulated = [...firstPageResult.employees];
+      
+      // Fetch remaining pages if there are more
+      if (totalPages > 1) {
+        const pagePromises: Promise<any>[] = [];
+        
+        // Fetch pages 2 through totalPages in parallel batches
+        for (let page = 2; page <= totalPages; page++) {
+          pagePromises.push(
+            trainingAPI.getEmployeesByLevel('all', {
+              page,
+              limit: 500
+            })
+          );
+        }
+        
+        // Process in batches of 5 to avoid overwhelming the server
+        const batchSize = 5;
+        for (let i = 0; i < pagePromises.length; i += batchSize) {
+          const batch = pagePromises.slice(i, i + batchSize);
+          const batchResults = await Promise.all(batch);
+          
+          batchResults.forEach(result => {
+            accumulated = [...accumulated, ...result.employees];
+          });
+          
+          setLoadingProgress({ current: Math.min(i + batchSize + 1, totalPages), total: totalPages });
+        }
+      }
+      
+      setAllEmployees(accumulated);
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error('Failed to fetch employees'));
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Initial fetch on mount
+  useEffect(() => {
+    fetchAllEmployees();
+  }, [fetchAllEmployees]);
 
   useEffect(() => {
     document.title = "SecureCare Training Dashboard";
@@ -66,51 +125,50 @@ export default function Dashboard() {
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (!document.hidden) {
-        refetch();
+        fetchAllEmployees();
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [refetch]);
+  }, [fetchAllEmployees]);
 
   // Also refresh on window focus to capture rapid changes (e.g., awarded toggled)
   useEffect(() => {
     const handleFocus = () => {
-      refetch();
+      fetchAllEmployees();
     };
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
-  }, [refetch]);
+  }, [fetchAllEmployees]);
 
-  // Use API employees if available, otherwise fall back to state employees
-  // This ensures the Dashboard always has data to display
+  // Use accumulated employees from all pages
   const employees = useMemo(() => {
-    if (apiEmployees && apiEmployees.length > 0) {
-      return apiEmployees;
+    if (allEmployees && allEmployees.length > 0) {
+      return allEmployees;
     } else if (state.employees && state.employees.length > 0) {
       return state.employees;
     } else {
       return [];
     }
-  }, [apiEmployees, state.employees]);
-
-  // Debug logging
-  useEffect(() => {
-    // Employee count tracking removed
-  }, [apiEmployees, state.employees, employees]);
+  }, [allEmployees, state.employees]);
 
   const stats = useMemo(() => {
     // Get unique employees count (one record per employeeNumber)
     const uniqueEmployeeNumbers = new Set(employees.map(e => e.employeeNumber));
     const total = uniqueEmployeeNumbers.size;
     
+    // Helper function to check if secureCareAwarded is truthy (handles boolean, number, string)
+    const checkAwarded = (e: any) => {
+      return e.secureCareAwarded === true || e.secureCareAwarded === 1 || e.secureCareAwarded === '1';
+    };
+
     // Get unique employees prioritized by current, highest-status record per employeeNumber
     const uniqueEmployees = (() => {
       const employeeMap = new Map<string, any>();
       const getRank = (e: any) => {
         // Prefer awarded > approved conference > in progress > assigned
-        if (e.secureCareAwarded === 1 || e.secureCareAwarded === true) return 4;
+        if (checkAwarded(e)) return 4;
         const hasApprovedConf = e.conferenceCompleted && String(e.conferenceCompleted).trim() !== '' && (e.awaiting === 0 || e.awaiting === false);
         if (hasApprovedConf) return 3;
         const hasInProgress = e.conferenceCompleted && String(e.conferenceCompleted).trim() !== '' && (e.awaiting !== 1 && e.awaiting !== true);
@@ -187,57 +245,63 @@ export default function Dashboard() {
     })();
 
     // Calculate completion rates for each level using per-level deduped records
-    const level1Completed = perLevelEmployees.filter(e => e.awardType === 'Level 1' && e.secureCareAwarded).length;
-    const level2Completed = perLevelEmployees.filter(e => e.awardType === 'Level 2' && e.secureCareAwarded).length;
-    const level3Completed = perLevelEmployees.filter(e => e.awardType === 'Level 3' && e.secureCareAwarded).length;
-    const consultantCompleted = perLevelEmployees.filter(e => e.awardType === 'Consultant' && e.secureCareAwarded).length;
-    const coachCompleted = perLevelEmployees.filter(e => e.awardType === 'Coach' && e.secureCareAwarded).length;
+    const level1Completed = perLevelEmployees.filter(e => e.awardType === 'Level 1' && checkAwarded(e)).length;
+    const level2Completed = perLevelEmployees.filter(e => e.awardType === 'Level 2' && checkAwarded(e)).length;
+    const level3Completed = perLevelEmployees.filter(e => e.awardType === 'Level 3' && checkAwarded(e)).length;
+    const consultantCompleted = perLevelEmployees.filter(e => e.awardType === 'Consultant' && checkAwarded(e)).length;
+    const coachCompleted = perLevelEmployees.filter(e => e.awardType === 'Coach' && checkAwarded(e)).length;
 
     // In-progress counts per level
+    // Level 1: Has assignedDate but not awarded
     const level1InProgress = perLevelEmployees.filter(e => 
-      e.awardType === 'Level 1' && !e.secureCareAwarded && !!e.assignedDate
+      e.awardType === 'Level 1' && !checkAwarded(e) && !!e.assignedDate
     ).length;
+    // Level 2+: Has conference completed, approved (awaiting=0), but not awarded
     const level2InProgress = perLevelEmployees.filter(e => 
-      e.awardType === 'Level 2' && !e.secureCareAwarded && e.conferenceCompleted && String(e.conferenceCompleted).trim() !== '' && 
+      e.awardType === 'Level 2' && !checkAwarded(e) && 
+      e.conferenceCompleted && String(e.conferenceCompleted).trim() !== '' && 
       (e.awaiting === 0 || e.awaiting === false)
     ).length;
     const level3InProgress = perLevelEmployees.filter(e => 
-      e.awardType === 'Level 3' && !e.secureCareAwarded && e.conferenceCompleted && String(e.conferenceCompleted).trim() !== '' && 
+      e.awardType === 'Level 3' && !checkAwarded(e) && 
+      e.conferenceCompleted && String(e.conferenceCompleted).trim() !== '' && 
       (e.awaiting === 0 || e.awaiting === false)
     ).length;
     const consultantInProgress = perLevelEmployees.filter(e => 
-      e.awardType === 'Consultant' && !e.secureCareAwarded && e.conferenceCompleted && String(e.conferenceCompleted).trim() !== '' && 
+      e.awardType === 'Consultant' && !checkAwarded(e) && 
+      e.conferenceCompleted && String(e.conferenceCompleted).trim() !== '' && 
       (e.awaiting === 0 || e.awaiting === false)
     ).length;
     const coachInProgress = perLevelEmployees.filter(e => 
-      e.awardType === 'Coach' && !e.secureCareAwarded && e.conferenceCompleted && String(e.conferenceCompleted).trim() !== '' && 
+      e.awardType === 'Coach' && !checkAwarded(e) && 
+      e.conferenceCompleted && String(e.conferenceCompleted).trim() !== '' && 
       (e.awaiting === 0 || e.awaiting === false)
     ).length;
 
     // Calculate pending counts (no award type assigned yet)
     const level1Pending = employees.filter(e => !e.awardType || e.awardType === 'Level 1' && !e.assignedDate).length;
-    const level2Pending = employees.filter(e => e.awardType === 'Level 1' && e.secureCareAwarded && !employees.some(emp => emp.employeeId === e.employeeId && emp.awardType === 'Level 2')).length;
-    const level3Pending = employees.filter(e => e.awardType === 'Level 2' && e.secureCareAwarded && !employees.some(emp => emp.employeeId === e.employeeId && emp.awardType === 'Level 3')).length;
-    const consultantPending = employees.filter(e => e.awardType === 'Level 3' && e.secureCareAwarded && !employees.some(emp => emp.employeeId === e.employeeId && emp.awardType === 'Consultant')).length;
-    const coachPending = employees.filter(e => e.awardType === 'Consultant' && e.secureCareAwarded && !employees.some(emp => emp.employeeId === e.employeeId && emp.awardType === 'Coach')).length;
+    const level2Pending = employees.filter(e => e.awardType === 'Level 1' && checkAwarded(e) && !employees.some(emp => emp.employeeId === e.employeeId && emp.awardType === 'Level 2')).length;
+    const level3Pending = employees.filter(e => e.awardType === 'Level 2' && checkAwarded(e) && !employees.some(emp => emp.employeeId === e.employeeId && emp.awardType === 'Level 3')).length;
+    const consultantPending = employees.filter(e => e.awardType === 'Level 3' && checkAwarded(e) && !employees.some(emp => emp.employeeId === e.employeeId && emp.awardType === 'Consultant')).length;
+    const coachPending = employees.filter(e => e.awardType === 'Consultant' && checkAwarded(e) && !employees.some(emp => emp.employeeId === e.employeeId && emp.awardType === 'Coach')).length;
 
     // Calculate overdue (assigned but not completed within expected timeframe)
     const level1Overdue = employees.filter(e => {
-      if (e.awardType !== 'Level 1' || !e.assignedDate || e.secureCareAwarded) return false;
+      if (e.awardType !== 'Level 1' || !e.assignedDate || checkAwarded(e)) return false;
       const assignedDate = parseDate(e.assignedDate);
       if (!assignedDate) return false;
       const overdueDate = new Date(assignedDate.getTime() + 30 * 24 * 60 * 60 * 1000);
       return overdueDate < new Date();
     }).length;
     const level2Overdue = employees.filter(e => {
-      if (e.awardType !== 'Level 2' || !e.assignedDate || e.secureCareAwarded) return false;
+      if (e.awardType !== 'Level 2' || !e.assignedDate || checkAwarded(e)) return false;
       const assignedDate = parseDate(e.assignedDate);
       if (!assignedDate) return false;
       const overdueDate = new Date(assignedDate.getTime() + 45 * 24 * 60 * 60 * 1000);
       return overdueDate < new Date();
     }).length;
     const level3Overdue = employees.filter(e => {
-      if (e.awardType !== 'Level 3' || !e.assignedDate || e.secureCareAwarded) return false;
+      if (e.awardType !== 'Level 3' || !e.assignedDate || checkAwarded(e)) return false;
       const assignedDate = parseDate(e.assignedDate);
       if (!assignedDate) return false;
       const overdueDate = new Date(assignedDate.getTime() + 60 * 24 * 60 * 60 * 1000);
@@ -397,7 +461,9 @@ export default function Dashboard() {
         acc[facilityName] = { total: 0, completed: 0, inProgress: 0, awaiting: 0 };
       }
       acc[facilityName].total++;
-      if (employee.secureCareAwarded === 1 || employee.secureCareAwarded === true) {
+      // Check if awarded using consistent logic (handles true, 1, '1')
+      const isEmployeeAwarded = employee.secureCareAwarded === true || employee.secureCareAwarded === 1 || employee.secureCareAwarded === '1';
+      if (isEmployeeAwarded) {
         acc[facilityName].completed++;
       } else if (employee.awaiting === 1 || employee.awaiting === true) {
         acc[facilityName].awaiting++;
@@ -586,8 +652,9 @@ export default function Dashboard() {
         }
       });
 
-      // Awarded
-      if (employee.secureCareAwarded === 1 || employee.secureCareAwarded === true) {
+      // Awarded - check using consistent logic (handles true, 1, '1')
+      const isAwarded = employee.secureCareAwarded === true || employee.secureCareAwarded === 1 || employee.secureCareAwarded === '1';
+      if (isAwarded) {
         activities.push({
           id: `${employee.employeeId}-${level}-awarded`,
           type: 'awarded',
@@ -609,13 +676,18 @@ export default function Dashboard() {
     return sortedActivities;
   }, [employees]);
 
-  // Loading state
-  if (isLoading || isLoadingAll) {
+  // Loading state with progress indicator
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
           <p className="text-gray-600">Loading dashboard data...</p>
+          {loadingProgress.total > 1 && (
+            <p className="text-sm text-gray-500 mt-2">
+              Fetching page {loadingProgress.current} of {loadingProgress.total}
+            </p>
+          )}
         </div>
       </div>
     );
@@ -628,7 +700,8 @@ export default function Dashboard() {
         <div className="text-center">
           <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
           <p className="text-red-600">Failed to load employees</p>
-          <Button onClick={() => window.location.reload()} className="mt-2">
+          <p className="text-sm text-gray-500 mt-1">{error.message}</p>
+          <Button onClick={() => fetchAllEmployees()} className="mt-2">
             Retry
           </Button>
         </div>

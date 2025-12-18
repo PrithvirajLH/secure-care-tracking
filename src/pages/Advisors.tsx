@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { useApp } from "@/context/AppContext";
-import { useEmployees, useAdvisors } from "@/hooks/useEmployees";
+import { useTrainingEmployees, useAdvisors } from "@/hooks/useEmployees";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -44,7 +44,8 @@ export default function Advisors() {
   const [isAdding, setIsAdding] = useState<boolean>(false);
 
   // Use React Query for both employees and advisors data
-  const { employees: currentEmployees, isLoading: employeesLoading, error: employeesError, refetch: refetchEmployees } = useEmployees({}, 50);
+  // Fetch all employee records (up to 10000) to calculate accurate counts per advisor per level
+  const { employees: currentEmployees, isLoading: employeesLoading, error: employeesError, refetch: refetchEmployees } = useTrainingEmployees({ level: 'all' }, 10000);
   const { data: apiAdvisors = [], isLoading: advisorsLoading, error: advisorsError, refetch: refetchAdvisors } = useAdvisors();
   const employees = currentEmployees && currentEmployees.length > 0 ? currentEmployees : state.employees;
 
@@ -425,22 +426,16 @@ export default function Advisors() {
                       </div>
                     </TableCell>
                     
-                    {/* Level columns */}
+                    {/* Level columns - show count instead of individual names */}
                     {['Level 1', 'Level 2', 'Level 3', 'Consultant', 'Coach'].map((level) => (
-                      <TableCell key={level} className="py-4">
-                        <div className="space-y-1">
-                          {advisor.assignments[level].employees.length > 0 ? (
-                            <div className="flex flex-wrap gap-1">
-                              {advisor.assignments[level].employees.map(emp => (
-                                <Badge key={emp.employeeId} variant="outline" className={`${getLevelColor(level)} text-sm font-medium`}>
-                                  {emp.employeeName}
-                                </Badge>
-                              ))}
-                            </div>
-                          ) : (
-                            <div className="text-sm text-muted-foreground">No assignments</div>
-                          )}
-                        </div>
+                      <TableCell key={level} className="py-4 text-center">
+                        <span className={`inline-block px-4 py-2 rounded-lg font-bold text-lg whitespace-nowrap ${
+                          advisor.assignments[level].count > 0 
+                            ? getLevelColor(level)
+                            : 'bg-gray-50 text-gray-400 border border-gray-200'
+                        }`}>
+                          {advisor.assignments[level].count}
+                        </span>
                       </TableCell>
                     ))}
                     

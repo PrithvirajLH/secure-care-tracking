@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect, useRef, useCallback } from "react";
+import React, { useMemo, useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -27,7 +27,12 @@ import {
   UserCheck,
   Edit3,
   Save,
-  ChevronDown
+  ChevronDown,
+  ListChecks,
+  CalendarPlus,
+  Square,
+  CheckSquare,
+  Check
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -39,6 +44,7 @@ import { Label } from "@/components/ui/label";
 import { ShineBorder } from "@/components/magicui/shine-border";
 import { motion, AnimatePresence } from "framer-motion";
 import { EnhancedSelect } from "@/components/ui/enhanced-select";
+import { MultiSelectCombobox, type MultiSelectOption } from "@/components/ui/multi-select-combobox";
 
 import { toast } from "sonner";
 import { useTrainingData } from "@/hooks/useTrainingData";
@@ -107,7 +113,7 @@ export default function Training() {
   };
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [itemsPerPage] = useState(100);
-  const [facilityFilter, setFacilityFilter] = useState<string>("all");
+  const [facilityFilter, setFacilityFilter] = useState<string[]>([]);
   const [areaFilter, setAreaFilter] = useState<string>("all");
   const [reqStatusFilters, setReqStatusFilters] = useState<Record<string, string>>({});
   
@@ -193,6 +199,12 @@ export default function Training() {
   
   // New simple search state
   const [searchQuery, setSearchQuery] = useState<string>('');
+  
+  // Bulk scheduling state
+  const [isBulkMode, setIsBulkMode] = useState<boolean>(false);
+  const [selectedPendingItems, setSelectedPendingItems] = useState<Set<string>>(new Set());
+  const [bulkScheduleDate, setBulkScheduleDate] = useState<Date | null>(null);
+  const [isBulkScheduling, setIsBulkScheduling] = useState<boolean>(false);
   
   // Date filtering state
   const [dateFilter, setDateFilter] = useState<{
@@ -291,6 +303,7 @@ export default function Training() {
   // Training data hook for database operations
   const {
     scheduleTraining: baseScheduleTraining,
+    scheduleTrainingAsync: baseScheduleTrainingAsync,
     completeTraining: baseCompleteTraining,
     rescheduleTraining: baseRescheduleTraining,
     approveConference: baseApproveConference,
@@ -334,8 +347,119 @@ export default function Training() {
     refetch();
   };
 
+  // Toggle bulk mode handler - clears selections when toggling off
+  const toggleBulkMode = () => {
+    if (isBulkMode) {
+      // Clear selections when toggling off
+      setSelectedPendingItems(new Set());
+      setBulkScheduleDate(null);
+    }
+    setIsBulkMode(!isBulkMode);
+  };
 
+  // Toggle selection of a pending item
+  const togglePendingItemSelection = (employeeId: string, fieldKey: string) => {
+    const key = `${employeeId}-${fieldKey}`;
+    setSelectedPendingItems(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(key)) {
+        newSet.delete(key);
+      } else {
+        newSet.add(key);
+      }
+      return newSet;
+    });
+  };
 
+  // Bulk schedule training function
+  const bulkScheduleTraining = async () => {
+    if (!bulkScheduleDate || selectedPendingItems.size === 0) {
+      toast.error('Please select a date and at least one item to schedule');
+      return;
+    }
+
+    setIsBulkScheduling(true);
+    let successCount = 0;
+    let errorCount = 0;
+
+    try {
+      // Convert selected items to array and process each
+      // IMPORTANT: Call API directly to avoid mutation onSuccess race conditions
+      // This prevents each mutation's onSuccess from refetching individually,
+      // which causes race conditions and prevents proper UI updates with filters
+      const itemsToSchedule = Array.from(selectedPendingItems);
+      
+      for (const item of itemsToSchedule) {
+        const [employeeId, fieldKey] = item.split('-');
+        try {
+          // Map frontend requirement key to database column name
+          let scheduleColumn = ScheduleFieldMapping[fieldKey] || `schedule${fieldKey}`;
+          
+          // Convert frontend field names to database column names for API calls
+          if (scheduleColumn === 'scheduleSession1') scheduleColumn = 'scheduleSession#1';
+          if (scheduleColumn === 'scheduleSession2') scheduleColumn = 'scheduleSession#2';
+          if (scheduleColumn === 'scheduleSession3') scheduleColumn = 'scheduleSession#3';
+          
+          // Call API directly (bypassing mutation to avoid onSuccess race conditions)
+          await trainingAPI.scheduleTraining(employeeId, scheduleColumn, bulkScheduleDate);
+          successCount++;
+        } catch (error) {
+          console.error(`Failed to schedule ${item}:`, error);
+          errorCount++;
+        }
+      }
+
+      // Wait a moment for all backend operations to fully complete
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      // Construct the exact query key for the current query (with filters)
+      const currentFiltersString = JSON.stringify(filters);
+      const exactQueryKey = ['employees-training', filters.level, currentPage, currentFiltersString];
+      
+      // Remove the exact query from cache to force a fresh fetch
+      // This ensures we get the latest data from the server
+      queryClient.removeQueries({ queryKey: exactQueryKey });
+      
+      // Also invalidate all training queries to ensure consistency
+      queryClient.invalidateQueries({
+        queryKey: ['employees-training']
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['employees-unique']
+      });
+      
+      // Wait a moment for cache operations to complete
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Explicitly refetch the exact query using the query key
+      // Use 'all' type to refetch even if query is not currently active
+      await queryClient.refetchQueries({ 
+        queryKey: exactQueryKey,
+        type: 'all'
+      });
+      
+      // Also trigger the local refetch to ensure UI updates
+      // This will use the current filters automatically
+      await refetch();
+
+      // Show results (single toast for bulk operation)
+      if (errorCount === 0) {
+        toast.success(`Successfully scheduled ${successCount} item${successCount !== 1 ? 's' : ''}`);
+      } else {
+        toast.warning(`Scheduled ${successCount} items, ${errorCount} failed`);
+      }
+
+      // Clear selections and exit bulk mode
+      setSelectedPendingItems(new Set());
+      setBulkScheduleDate(null);
+      setIsBulkMode(false);
+    } catch (error) {
+      console.error('Bulk scheduling error:', error);
+      toast.error('Failed to complete bulk scheduling');
+    } finally {
+      setIsBulkScheduling(false);
+    }
+  };
 
   // Advisors are now loaded via React Query useAdvisors hook
 
@@ -416,7 +540,7 @@ export default function Training() {
   const filters = useMemo(() => ({
     level: activeTab,
     status: 'all', // Changed from 'active' to 'all' to show all employees
-    facility: facilityFilter !== 'all' ? facilityFilter : undefined,
+    facility: facilityFilter.length > 0 ? facilityFilter : undefined,
     area: areaFilter !== 'all' ? areaFilter : undefined,
     sortBy: sortBy,
     sortOrder: sortOrder,
@@ -447,6 +571,21 @@ export default function Training() {
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [refetch]);
+
+  // Scroll to top of page when page changes
+  useEffect(() => {
+    // Small delay to ensure new data is rendered
+    const timeoutId = setTimeout(() => {
+      // Scroll to absolute top of the page
+      window.scrollTo({ 
+        top: 0, 
+        left: 0,
+        behavior: 'smooth' 
+      });
+    }, 100);
+    
+    return () => clearTimeout(timeoutId);
+  }, [currentPage]);
 
   // Remove duplicate employees - keep one record per employeeNumber + awardType (newest/most relevant)
   // Exception: Show both approved and rejected records for the same employee if they exist
@@ -530,7 +669,7 @@ export default function Training() {
     const event = new CustomEvent('levelChange', { detail: { level: activeTab } });
     window.dispatchEvent(event);
     setCurrentPage(1);
-    setFacilityFilter('all');
+    setFacilityFilter([]);
     setAreaFilter('all');
     
     // Set level-specific default sorting
@@ -746,7 +885,7 @@ export default function Training() {
   }, [currentEmployees, searchQuery, reqStatusFilters, filteredColumns, currentFieldMapping, scheduledDates, completedDates, dateFilter]);
 
   const isAnyFilterActive = useMemo(() => {
-    if (facilityFilter !== 'all' || areaFilter !== 'all' || searchQuery.trim()) return true;
+    if (facilityFilter.length > 0 || areaFilter !== 'all' || searchQuery.trim()) return true;
     if (dateFilter.column && dateFilter.date) return true;
     return filteredColumns.some(col => {
       const fieldKey = currentFieldMapping[col];
@@ -853,7 +992,7 @@ export default function Training() {
           const resp = await trainingAPI.getEmployeesByLevel(level, {
             level: activeTab,
             status: 'all', // Changed from 'active' to 'all' to show all employees
-            facility: facilityFilter !== 'all' ? facilityFilter : undefined,
+            facility: facilityFilter.length > 0 ? facilityFilter : undefined,
             area: areaFilter !== 'all' ? areaFilter : undefined,
             sortBy: sortBy,
             sortOrder: sortOrder,
@@ -1003,7 +1142,7 @@ export default function Training() {
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
-    if (facilityFilter !== 'all') count++;
+    if (facilityFilter.length > 0) count++;
     if (areaFilter !== 'all') count++;
     if (searchQuery.trim()) count++;
     if (dateFilter.column && dateFilter.date) count++;
@@ -1015,7 +1154,7 @@ export default function Training() {
   }, [facilityFilter, areaFilter, searchQuery, dateFilter, reqStatusFilters, filteredColumns, currentFieldMapping]);
 
   const clearFilters = () => {
-    setFacilityFilter('all');
+    setFacilityFilter([]);
     setAreaFilter('all');
     setSearchQuery('');
     // Reset to level-specific default sorting
@@ -1211,6 +1350,38 @@ export default function Training() {
         );
       }
       
+      // In bulk mode, show prominent checkbox next to conference pending badge
+      if (isBulkMode && !employee.awaiting) {
+        const isSelected = selectedPendingItems.has(key);
+        return (
+          <div className="flex items-center gap-2">
+            <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                togglePendingItemSelection(employee.employeeId, fieldKey);
+              }}
+              className={`flex items-center justify-center w-6 h-6 rounded-md border-2 transition-all duration-150 cursor-pointer ${
+                isSelected 
+                  ? 'bg-purple-600 border-purple-600 text-white shadow-lg ring-2 ring-purple-300' 
+                  : 'bg-purple-50 border-purple-400 hover:border-purple-600 hover:bg-purple-100 ring-1 ring-purple-200'
+              }`}
+              title="Click to select for bulk scheduling"
+            >
+              {isSelected ? <Check className="w-4 h-4" /> : <Square className="w-3.5 h-3.5 text-purple-400" />}
+            </motion.button>
+            <StatusBadge
+              variant="pending"
+              icon={Clock}
+              text="Pending"
+              disabled={true}
+            />
+          </div>
+        );
+      }
+
       return (
         <StatusBadge
           variant="pending"
@@ -1291,6 +1462,38 @@ export default function Training() {
       );
     }
          
+    // In bulk mode, show prominent checkbox next to pending badge
+    if (isBulkMode && !conferenceRejected && !employee.awaiting) {
+      const isSelected = selectedPendingItems.has(key);
+      return (
+        <div className="flex items-center gap-2">
+          <motion.button
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              togglePendingItemSelection(employee.employeeId, fieldKey);
+            }}
+            className={`flex items-center justify-center w-6 h-6 rounded-md border-2 transition-all duration-150 cursor-pointer ${
+              isSelected 
+                ? 'bg-purple-600 border-purple-600 text-white shadow-lg ring-2 ring-purple-300' 
+                : 'bg-purple-50 border-purple-400 hover:border-purple-600 hover:bg-purple-100 ring-1 ring-purple-200'
+            }`}
+            title="Click to select for bulk scheduling"
+          >
+            {isSelected ? <Check className="w-4 h-4" /> : <Square className="w-3.5 h-3.5 text-purple-400" />}
+          </motion.button>
+          <StatusBadge
+            variant="pending"
+            icon={Clock}
+            text="Pending"
+            disabled={true}
+          />
+        </div>
+      );
+    }
+
     return (
       <StatusBadge
         variant="pending"
@@ -1376,9 +1579,9 @@ export default function Training() {
         
         {/* Sticky Table Header */}
           <div className="sticky top-0 z-20 bg-purple-100 border-b border-purple-200 shadow-md">
-           <div className="px-3 sm:px-4 md:px-6 py-2 flex items-center justify-between gap-2 sm:gap-3">
-             {/* Left side - Search Field */}
-             <div className="flex items-center pt-5">
+           <div className="px-3 sm:px-4 md:px-6 py-3 flex items-center justify-between gap-2 sm:gap-3">
+             {/* Left side - Search Field and Bulk Schedule */}
+             <div className="flex items-center gap-3">
                <div className="relative">
                  <ShineBorder
                    borderWidth={1}
@@ -1434,14 +1637,35 @@ export default function Training() {
                            </>
                          )}
                        </SelectContent>
-                     </Select>
-                   </div>
-                 </div>
-               </div>
-             </div>
-             
-             {/* Right side - Show Columns section moved down */}
-             <div className="flex flex-col items-end pt-5 space-y-3">
+                    </Select>
+                  </div>
+                </div>
+              </div>
+              {/* Bulk Schedule Toggle Button - separate from filter box */}
+              {currentLevel !== 'Level 1' && (
+                <motion.div
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <Button
+                    onClick={toggleBulkMode}
+                    variant={isBulkMode ? "default" : "outline"}
+                    size="sm"
+                    className={`h-8 px-4 gap-2 font-medium transition-all duration-200 ${
+                      isBulkMode 
+                        ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-700 hover:to-indigo-700 shadow-md border-0' 
+                        : 'bg-white border-purple-300 text-purple-700 hover:bg-purple-100 hover:border-purple-500 hover:text-purple-800 hover:shadow-sm'
+                    }`}
+                  >
+                    <ListChecks className="w-4 h-4" />
+                    {isBulkMode ? 'Exit Bulk Mode' : 'Bulk Schedule'}
+                  </Button>
+                </motion.div>
+              )}
+            </div>
+            
+            {/* Right side - Show Columns section */}
+             <div className="flex flex-col items-end space-y-3">
                {/* Enhanced Column Visibility Controls (only for levels 2-5) */}
                {currentLevel !== 'Level 1' && (
                  <div className="relative">
@@ -1552,6 +1776,82 @@ export default function Training() {
                </div>
              </div>
           </div>
+
+          {/* Bulk Action Bar - Sticky below header */}
+          <AnimatePresence>
+            {isBulkMode && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.2 }}
+                className="sticky top-0 z-10 bg-gradient-to-r from-purple-50 via-indigo-50 to-purple-50 border-b border-purple-200 px-6 py-2.5 shadow-sm"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    {/* Instruction text when no items selected */}
+                    {selectedPendingItems.size === 0 && (
+                      <div className="flex items-center gap-2 text-purple-600">
+                        <Square className="w-5 h-5" />
+                        <span className="text-sm font-medium">Click the checkboxes next to "Pending" items to select them</span>
+                      </div>
+                    )}
+                    {/* Selection count when items are selected */}
+                    {selectedPendingItems.size > 0 && (
+                      <>
+                        <div className="flex items-center gap-2 bg-purple-100/80 px-3 py-1.5 rounded-full border border-purple-200">
+                          <ListChecks className="w-4 h-4 text-purple-600" />
+                          <span className="text-sm font-semibold text-purple-800">
+                            {selectedPendingItems.size} selected
+                          </span>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setSelectedPendingItems(new Set())}
+                          className="h-7 px-2 text-xs text-purple-600 hover:text-purple-800 hover:bg-purple-100"
+                        >
+                          <X className="w-3.5 h-3.5 mr-1" />
+                          Clear
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-purple-500" />
+                      <span className="text-sm text-purple-700">Date:</span>
+                      <DatePicker
+                        date={bulkScheduleDate || undefined}
+                        onDateChange={(date) => setBulkScheduleDate(date || null)}
+                        placeholder="Select date"
+                        className="w-[140px] h-8 text-sm bg-white border-purple-200 focus:ring-purple-500 focus:border-purple-500"
+                      />
+                    </div>
+                    <Button
+                      onClick={bulkScheduleTraining}
+                      disabled={selectedPendingItems.size === 0 || !bulkScheduleDate || isBulkScheduling}
+                      size="sm"
+                      className="h-8 px-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white shadow-sm gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isBulkScheduling ? (
+                        <>
+                          <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          <span>Scheduling...</span>
+                        </>
+                      ) : (
+                        <>
+                          <CalendarPlus className="w-4 h-4" />
+                          <span>Schedule {selectedPendingItems.size > 0 ? selectedPendingItems.size : ''}</span>
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           <div className="px-6">
                      <Table className="table-fixed w-full">
                        <TableHeader>
@@ -1569,24 +1869,16 @@ export default function Training() {
                     >
                       <div className="flex items-center justify-center gap-1">
                         <span className="whitespace-pre-line">{column}</span>
-                        {index === 1 && ( // Facility column
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm" className="h-6 px-1">
-                            <Filter className="w-4 h-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                                                 <DropdownMenuContent align="end" className="w-80 max-h-[600px] overflow-y-auto scrollbar-hide">
-                           <DropdownMenuLabel>Filter by Facility ({uniqueFacilities.length} total)</DropdownMenuLabel>
-                          <DropdownMenuSeparator />
-                                                     <DropdownMenuRadioGroup value={facilityFilter} onValueChange={(v) => setFacilityFilter(v)}>
-                             <DropdownMenuRadioItem value="all">All</DropdownMenuRadioItem>
-                             {uniqueFacilities.map(f => (
-                               <DropdownMenuRadioItem key={f} value={f} className="py-2">{f}</DropdownMenuRadioItem>
-                             ))}
-                           </DropdownMenuRadioGroup>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                        {index === 1 && ( // Facility column - Multi-select with filter icon
+                          <MultiSelectCombobox
+                            options={uniqueFacilities.map(f => ({ value: f, label: f }))}
+                            selected={facilityFilter}
+                            onChange={setFacilityFilter}
+                            placeholder="All"
+                            emptyText="No facilities found."
+                            iconOnly={true}
+                            dropdownWidth="320px"
+                          />
                         )}
                         {index === 2 && ( // Area column
                       <DropdownMenu>
@@ -1599,9 +1891,9 @@ export default function Training() {
                           <DropdownMenuLabel>Filter by Area</DropdownMenuLabel>
                           <DropdownMenuSeparator />
                                                      <DropdownMenuRadioGroup value={areaFilter} onValueChange={(v) => {
-                             setAreaFilter(v);
-                             setFacilityFilter('all');
-                           }}>
+                            setAreaFilter(v);
+                            setFacilityFilter([]);
+                          }}>
                             <DropdownMenuRadioItem value="all">All</DropdownMenuRadioItem>
                             {uniqueAreas.map(a => (
                               <DropdownMenuRadioItem key={a} value={a}>{a}</DropdownMenuRadioItem>
@@ -1892,7 +2184,7 @@ export default function Training() {
                      </Table>
                    </div>
 
-                                      {/* Compact Pagination */}
+                                     {/* Compact Pagination */}
                    <div className="flex-shrink-0 border-t border-gray-200 bg-white px-6 py-2">
                       <div className="flex items-center justify-between">
                         <div className="text-sm text-gray-600">
