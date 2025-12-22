@@ -6,7 +6,7 @@ import { getLevelFromTabKey } from '@/config/awardTypes';
 
 interface EmployeeFilters {
   level?: string;
-  facility?: string;
+  facility?: string | string[];
   area?: string;
   status?: string;
   jobTitle?: string;

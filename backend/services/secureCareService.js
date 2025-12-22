@@ -111,6 +111,7 @@ class SecureCareService {
       }
       
       // Server-side date filter (exact match on specified field)
+      // For training fields, check both completed and scheduled dates
       if (filters.dateField && filters.date) {
         const df = String(filters.dateField);
         const date = filters.date; // YYYY-MM-DD
@@ -133,9 +134,33 @@ class SecureCareService {
           scheduleSession2: 'e.[scheduleSession#2]',
           scheduleSession3: 'e.[scheduleSession#3]'
         };
+        
+        // Map training fields to their scheduled counterparts
+        const scheduleFieldMap = {
+          'standingVideo': 'scheduleStandingVideo',
+          'sleepingVideo': 'scheduleSleepingVideo',
+          'feedGradVideo': 'scheduleFeedGradVideo',
+          'noHandnoSpeak': 'schedulenoHandnoSpeak',
+          'session1': 'scheduleSession1',
+          'session2': 'scheduleSession2',
+          'session3': 'scheduleSession3'
+        };
+        
         const column = fieldMap[df];
+        const scheduleColumn = scheduleFieldMap[df] ? fieldMap[scheduleFieldMap[df]] : null;
+        
         if (column) {
-          query += ` ${query.includes('WHERE') ? 'AND' : 'WHERE'} CAST(${column} AS DATE) = @filterDate`;
+          // For training fields that have both completed and scheduled versions, check both
+          if (scheduleColumn) {
+            // Use ISNULL to handle NULL values properly - check if either field matches the date
+            query += ` ${query.includes('WHERE') ? 'AND' : 'WHERE'} (
+              (${column} IS NOT NULL AND CAST(${column} AS DATE) = @filterDate) OR 
+              (${scheduleColumn} IS NOT NULL AND CAST(${scheduleColumn} AS DATE) = @filterDate)
+            )`;
+          } else {
+            // For fields without scheduled versions (like conferenceCompleted, secureCareAwardedDate), only check the one field
+            query += ` ${query.includes('WHERE') ? 'AND' : 'WHERE'} ${column} IS NOT NULL AND CAST(${column} AS DATE) = @filterDate`;
+          }
           request.input('filterDate', sql.Date, date);
         }
       }
@@ -282,6 +307,7 @@ class SecureCareService {
       }
       
       // Server-side date filter for count query
+      // For training fields, check both completed and scheduled dates
       if (filters.dateField && filters.date) {
         const df = String(filters.dateField);
         const date = filters.date; // YYYY-MM-DD
@@ -304,10 +330,34 @@ class SecureCareService {
           scheduleSession2: 'e.[scheduleSession#2]',
           scheduleSession3: 'e.[scheduleSession#3]'
         };
+        
+        // Map training fields to their scheduled counterparts
+        const scheduleFieldMap = {
+          'standingVideo': 'scheduleStandingVideo',
+          'sleepingVideo': 'scheduleSleepingVideo',
+          'feedGradVideo': 'scheduleFeedGradVideo',
+          'noHandnoSpeak': 'schedulenoHandnoSpeak',
+          'session1': 'scheduleSession1',
+          'session2': 'scheduleSession2',
+          'session3': 'scheduleSession3'
+        };
+        
         const column = fieldMap[df];
+        const scheduleColumn = scheduleFieldMap[df] ? fieldMap[scheduleFieldMap[df]] : null;
+        
         if (column) {
-          countQuery += ` ${countQuery.includes('WHERE') ? 'AND' : 'WHERE'} CAST(${column} AS DATE) = @filterDate`;
-          countRequest.input('filterDate', sql.Date, date);
+          // For training fields that have both completed and scheduled versions, check both
+          if (scheduleColumn) {
+            // Use ISNULL to handle NULL values properly - check if either field matches the date
+            countQuery += ` ${countQuery.includes('WHERE') ? 'AND' : 'WHERE'} (
+              (${column} IS NOT NULL AND CAST(${column} AS DATE) = @filterDateCount) OR 
+              (${scheduleColumn} IS NOT NULL AND CAST(${scheduleColumn} AS DATE) = @filterDateCount)
+            )`;
+          } else {
+            // For fields without scheduled versions (like conferenceCompleted, secureCareAwardedDate), only check the one field
+            countQuery += ` ${countQuery.includes('WHERE') ? 'AND' : 'WHERE'} ${column} IS NOT NULL AND CAST(${column} AS DATE) = @filterDateCount`;
+          }
+          countRequest.input('filterDateCount', sql.Date, date);
         }
       }
 

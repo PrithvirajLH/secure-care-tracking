@@ -58,14 +58,25 @@
 
   /* Advisor dropdown specific styling - shows exactly 5 options */
   .dropdown-menu.advisor-dropdown {
-    height: 200px; /* Fixed height for exactly 5 options */
+    /* Modern dropdown with dynamic height */
   }
 
-  .dropdown-menu.advisor-dropdown > div {
-    height: 40px; /* Each option is 40px tall */
-    display: flex;
-    align-items: center;
-    padding: 0 12px;
+  .dropdown-menu.advisor-dropdown::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .dropdown-menu.advisor-dropdown::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 3px;
+  }
+
+  .dropdown-menu.advisor-dropdown::-webkit-scrollbar-thumb {
+    background: #c084fc;
+    border-radius: 3px;
+  }
+
+  .dropdown-menu.advisor-dropdown::-webkit-scrollbar-thumb:hover {
+    background: #a855f7;
   }
 
   .dropdown-menu::-webkit-scrollbar {
