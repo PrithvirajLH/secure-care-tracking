@@ -653,27 +653,28 @@ export default function Dashboard() {
       });
 
       // Awarded - check using consistent logic (handles true, 1, '1')
+      // Only include awarded activities that have a valid date to ensure accurate "latest awarded" display
       const isAwarded = employee.secureCareAwarded === true || employee.secureCareAwarded === 1 || employee.secureCareAwarded === '1';
-      if (isAwarded) {
-        activities.push({
-          id: `${employee.employeeId}-${level}-awarded`,
-          type: 'awarded',
-          employeeName,
-          level,
-          date: employee.secureCareAwardedDate || new Date().toISOString().split('T')[0],
-          description: `Has been awarded ${level}`,
-          icon: Award,
-          color: 'text-purple-600'
-        });
+      if (isAwarded && employee.secureCareAwardedDate) {
+        // Ensure the date is valid and not null/undefined/empty string
+        const awardedDate = employee.secureCareAwardedDate;
+        if (awardedDate && String(awardedDate).trim() !== '' && awardedDate !== 'null' && awardedDate !== 'undefined') {
+          activities.push({
+            id: `${employee.employeeId}-${level}-awarded`,
+            type: 'awarded',
+            employeeName,
+            level,
+            date: awardedDate,
+            description: `Has been awarded ${level}`,
+            icon: Award,
+            color: 'text-purple-600'
+          });
+        }
       }
     });
 
-    // Sort by date (most recent first) and take top 200 to ensure we have enough for each group
-    const sortedActivities = activities
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-      .slice(0, 200);
-
-    return sortedActivities;
+    // Return all activities - we'll sort and filter by group later to ensure accurate "latest" for each type
+    return activities;
   }, [employees]);
 
   // Loading state with progress indicator
@@ -1029,6 +1030,7 @@ export default function Dashboard() {
             <div className="space-y-4">
               {/* Group activities by type - Horizontal Layout */}
               {(() => {
+                // Group activities by type first
                 const groupedActivities = recentActivity.reduce((acc, activity) => {
                   if (!acc[activity.type]) {
                     acc[activity.type] = [];
@@ -1038,11 +1040,16 @@ export default function Dashboard() {
                 }, {} as Record<string, typeof recentActivity>);
 
                 // Sort each group by date (most recent first) and take latest 5
+                // This ensures we get the truly latest items for each type, not just from a pre-filtered subset
                 Object.keys(groupedActivities).forEach(type => {
                   groupedActivities[type] = groupedActivities[type]
                     .sort((a, b) => {
                       const dateA = new Date(a.date);
                       const dateB = new Date(b.date);
+                      // Handle invalid dates by putting them at the end
+                      if (isNaN(dateA.getTime()) && isNaN(dateB.getTime())) return 0;
+                      if (isNaN(dateA.getTime())) return 1;
+                      if (isNaN(dateB.getTime())) return -1;
                       return dateB.getTime() - dateA.getTime();
                     })
                     .slice(0, 5);
