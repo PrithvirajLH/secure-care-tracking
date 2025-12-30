@@ -497,6 +497,7 @@ export default function Dashboard() {
         // This allows facilities with more employees in progress to rank higher
         const inProgressScore = maxInProgressCount > 0 ? (typedStats.inProgress / maxInProgressCount) * 100 : 0;
         
+        // Calculate combined score using weighted combination
         const combinedScore = WEIGHT_COMPLETED * completedRatio + WEIGHT_INPROGRESS * inProgressScore;
         
         // Capitalize first letter of each word for display
@@ -518,12 +519,29 @@ export default function Dashboard() {
           totalCount: typedStats.total,
         };
       })
-      .sort((a, b) => b.combinedScore - a.combinedScore); // Sort by combined score
+      .sort((a, b) => {
+        // Primary sort: by completion ratio (highest first)
+        // This ensures facilities with 100% completion rank together
+        if (Math.abs(b.completedRatio - a.completedRatio) > 0.01) {
+          return b.completedRatio - a.completedRatio;
+        }
+        // Secondary sort: by combined score when completion ratios are very close
+        if (Math.abs(b.combinedScore - a.combinedScore) > 0.01) {
+          return b.combinedScore - a.combinedScore;
+        }
+        // Tertiary sort: by total employees (larger facilities first when scores are equal)
+        if (b.totalCount !== a.totalCount) {
+          return b.totalCount - a.totalCount;
+        }
+        // Final sort: by name for consistency
+        return a.name.localeCompare(b.name);
+      });
 
-    // Top 5: highest combined scores
+    // Top 5: highest combined scores (already in descending order)
     const top = facilityDataArray.slice(0, 5);
     
     // Bottom 5: lowest combined scores
+    // slice(-5) gets last 5, reverse() puts worst performer first for display
     const bottom = facilityDataArray.slice(-5).reverse();
 
 
@@ -906,7 +924,7 @@ export default function Dashboard() {
               Facility Performance (Top & Bottom 5)
             </CardTitle>
             <p className="text-sm text-gray-600 mt-1">
-              Performance by facility: completed ratio (80% weight) + in-progress count comparison (20% weight)
+              Performance by facility: completed ratio (80% weight) + in-progress normalized score (20% weight)
             </p>
           </CardHeader>
           <CardContent>
