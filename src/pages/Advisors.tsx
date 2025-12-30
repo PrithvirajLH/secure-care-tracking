@@ -402,12 +402,12 @@ export default function Advisors() {
               <TableHeader>
                 <TableRow className="border-b-2">
                   <TableHead className="w-32 text-lg font-semibold text-gray-700">Advisor</TableHead>
-                  <TableHead className="w-20 text-lg font-semibold text-gray-700">Level 1</TableHead>
-                  <TableHead className="w-20 text-lg font-semibold text-gray-700">Level 2</TableHead>
-                  <TableHead className="w-20 text-lg font-semibold text-gray-700">Level 3</TableHead>
-                  <TableHead className="w-20 text-lg font-semibold text-gray-700">Consultant</TableHead>
-                  <TableHead className="w-20 text-lg font-semibold text-gray-700">Coach</TableHead>
-                  <TableHead className="w-16 text-lg font-semibold text-gray-700">Total</TableHead>
+                  <TableHead className="w-20 text-lg font-semibold text-gray-700 text-center">Level 1</TableHead>
+                  <TableHead className="w-20 text-lg font-semibold text-gray-700 text-center">Level 2</TableHead>
+                  <TableHead className="w-20 text-lg font-semibold text-gray-700 text-center">Level 3</TableHead>
+                  <TableHead className="w-20 text-lg font-semibold text-gray-700 text-center">Consultant</TableHead>
+                  <TableHead className="w-20 text-lg font-semibold text-gray-700 text-center">Coach</TableHead>
+                  <TableHead className="w-16 text-lg font-semibold text-gray-700 text-center">Total</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

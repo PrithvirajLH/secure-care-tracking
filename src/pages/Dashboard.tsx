@@ -673,18 +673,23 @@ export default function Dashboard() {
       });
 
       // Awarded - check using consistent logic (handles true, 1, '1')
+      // Only include awarded activities that have a valid date to ensure accurate "latest awarded" display
       const isAwarded = employee.secureCareAwarded === true || employee.secureCareAwarded === 1 || employee.secureCareAwarded === '1';
-      if (isAwarded && employee.secureCareAwardedDate) {
-        activities.push({
-          id: `${employee.employeeId || employee.employeeNumber}-${level}-awarded-${employee.secureCareAwardedDate}`,
-          type: 'awarded',
-          employeeName,
-          level,
-          date: employee.secureCareAwardedDate,
-          description: `Awarded ${level}`,
-          icon: Award,
-          color: 'text-purple-600'
-        });
+      if (isAwarded) {
+        // Ensure the date is valid and not null/undefined/empty string
+        const awardedDate = employee.secureCareAwardedDate;
+        if (awardedDate && String(awardedDate).trim() !== '' && awardedDate !== 'null' && awardedDate !== 'undefined') {
+          activities.push({
+            id: `${employee.employeeId || employee.employeeNumber}-${level}-awarded-${awardedDate}`,
+            type: 'awarded',
+            employeeName,
+            level,
+            date: awardedDate,
+            description: `Awarded ${level}`,
+            icon: Award,
+            color: 'text-purple-600'
+          });
+        }
       }
     });
 
@@ -1059,6 +1064,10 @@ export default function Dashboard() {
                   .sort((a, b) => {
                     const dateA = new Date(a.date).getTime();
                     const dateB = new Date(b.date).getTime();
+                    // Handle invalid dates by putting them at the end
+                    if (isNaN(dateA) && isNaN(dateB)) return 0;
+                    if (isNaN(dateA)) return 1;
+                    if (isNaN(dateB)) return -1;
                     return dateB - dateA;
                   })
                   .slice(0, 5);

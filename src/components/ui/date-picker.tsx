@@ -18,6 +18,7 @@ interface DatePickerProps {
   disabled?: boolean
   open?: boolean
   onOpenChange?: (open: boolean) => void
+  className?: string
 }
 
 export function DatePicker({ 
@@ -26,7 +27,8 @@ export function DatePicker({
   placeholder = "Pick a date", 
   disabled = false,
   open: controlledOpen,
-  onOpenChange: controlledOnOpenChange
+  onOpenChange: controlledOnOpenChange,
+  className
 }: DatePickerProps) {
   const [internalOpen, setInternalOpen] = React.useState(false)
   
@@ -41,7 +43,8 @@ export function DatePicker({
           variant={"outline"}
           className={cn(
             "w-full justify-start text-left font-normal",
-            !date && "text-muted-foreground"
+            !date && "text-muted-foreground",
+            className
           )}
           disabled={disabled}
         >

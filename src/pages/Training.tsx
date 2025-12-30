@@ -151,7 +151,7 @@ export default function Training() {
   const [notesDropdownOpen, setNotesDropdownOpen] = useState<string | null>(null);
   const [advisorDropdownOpen, setAdvisorDropdownOpen] = useState<string | null>(null);
   const [notesDropdownPosition, setNotesDropdownPosition] = useState<{x: number, y: number} | null>(null);
-  const [advisorDropdownPosition, setAdvisorDropdownPosition] = useState<{x: number, y: number} | null>(null);
+  const [advisorDropdownPosition, setAdvisorDropdownPosition] = useState<{x: number, y: number, positionAbove?: boolean} | null>(null);
   const [scheduledDates, setScheduledDates] = useState<{[key: string]: Date}>({});
   const [completedDates, setCompletedDates] = useState<{[key: string]: Date}>({});
   const [openDatePicker, setOpenDatePicker] = useState<string | null>(null);
@@ -1779,7 +1779,7 @@ export default function Training() {
 
           {/* Bulk Action Bar - Sticky below header */}
           <AnimatePresence>
-            {isBulkMode && (
+            {isBulkMode && activeTab !== 'level-1' && (
               <motion.div
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -2153,9 +2153,17 @@ export default function Training() {
                                                e.preventDefault();
                                                e.stopPropagation();
                                                const rect = (e.target as HTMLElement).getBoundingClientRect();
+                                               const dropdownHeight = Math.min(400, (advisors.length + 1) * 60 + 60); // Estimate: header + items + padding
+                                               const spaceBelow = window.innerHeight - rect.bottom;
+                                               const spaceAbove = rect.top;
+                                               const shouldShowAbove = spaceBelow < dropdownHeight && spaceAbove > spaceBelow;
+                                               
                                                const position = {
                                                  x: rect.left + rect.width / 2,
-                                                 y: rect.bottom + 4 // margin-top: 4px from original CSS
+                                                 y: shouldShowAbove 
+                                                   ? rect.top - 4 // Position above with 4px margin
+                                                   : rect.bottom + 4, // Position below with 4px margin
+                                                 positionAbove: shouldShowAbove
                                                };
                                                setAdvisorDropdownPosition(position);
                                                setAdvisorDropdownOpen(isAdvisorDropdownOpen ? null : employee.employeeId.toString());
@@ -2466,18 +2474,44 @@ export default function Training() {
        )}
        
        {/* Fixed positioned Advisor dropdown */}
-       {advisorDropdownOpen && advisorDropdownPosition && (
-         <div 
-           className="fixed z-[9999] bg-white border border-gray-300 rounded-lg shadow-xl dropdown-menu advisor-dropdown min-w-[200px]"
-           data-advisor-dropdown
-           style={{
-             left: advisorDropdownPosition.x,
-             top: Math.min(advisorDropdownPosition.y, window.innerHeight - 250), // Prevent going off bottom of viewport
-             transform: 'translateX(-50%)'
-           }}
-         >
-           <div
-             className="text-sm cursor-pointer hover:bg-purple-50 transition-colors px-3 py-2"
+       {advisorDropdownOpen && advisorDropdownPosition && (() => {
+         const estimatedHeight = Math.min(400, (advisors.length + 1) * 60 + 60);
+         const spaceBelow = window.innerHeight - advisorDropdownPosition.y;
+         const spaceAbove = advisorDropdownPosition.y;
+         const useBottomPosition = advisorDropdownPosition.positionAbove || spaceBelow < estimatedHeight;
+         
+         return (
+           <div 
+             className="fixed z-[9999] bg-white border border-purple-200 rounded-xl shadow-2xl dropdown-menu advisor-dropdown min-w-[240px] max-w-[280px] overflow-hidden"
+             data-advisor-dropdown
+             style={{
+               left: advisorDropdownPosition.x,
+               ...(useBottomPosition 
+                 ? {
+                     bottom: Math.max(20, window.innerHeight - advisorDropdownPosition.y + 4),
+                     maxHeight: `${Math.min(spaceAbove - 20, 400)}px`
+                   }
+                 : {
+                     top: Math.min(advisorDropdownPosition.y, window.innerHeight - estimatedHeight - 20),
+                     maxHeight: `${Math.min(spaceBelow - 20, 400)}px`
+                   }
+               ),
+               transform: 'translateX(-50%)',
+               overflowY: 'auto'
+             }}
+           >
+           {/* Header */}
+           <div className="bg-gradient-to-r from-purple-50 to-purple-100 border-b border-purple-200 px-4 py-2.5">
+             <div className="flex items-center gap-2">
+               <UserCheck className="w-4 h-4 text-purple-600" />
+               <span className="text-sm font-semibold text-purple-900">Select Advisor</span>
+             </div>
+           </div>
+           
+           {/* Options */}
+           <div className="py-1">
+             <div
+               className="flex items-center gap-3 cursor-pointer hover:bg-purple-50 transition-all duration-150 px-4 py-2.5 group border-b border-gray-100"
                onClick={(e) => {
                  e.preventDefault();
                  e.stopPropagation();
@@ -2486,27 +2520,55 @@ export default function Training() {
                  setAdvisorDropdownOpen(null);
                  setAdvisorDropdownPosition(null);
                }}
-           >
-             No advisor assigned
-           </div>
-           {advisors.map((advisor) => (
-             <div
-               key={advisor.advisorId}
-               className="text-sm cursor-pointer hover:bg-purple-50 transition-colors px-3 py-2"
-               onClick={(e) => {
-                 e.preventDefault();
-                 e.stopPropagation();
-                 const employeeId = advisorDropdownOpen;
-                 handleSaveAdvisor(employeeId, advisor.advisorId.toString());
-                 setAdvisorDropdownOpen(null);
-                 setAdvisorDropdownPosition(null);
-               }}
              >
-               {advisor.fullName}
+               <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center group-hover:bg-gray-200 transition-colors">
+                 <X className="w-4 h-4 text-gray-500" />
+               </div>
+               <div className="flex-1 min-w-0">
+                 <div className="text-sm font-medium text-gray-700 group-hover:text-purple-700 transition-colors">
+                   No advisor assigned
+                 </div>
+                 <div className="text-xs text-gray-500 mt-0.5">Clear assignment</div>
+               </div>
              </div>
-           ))}
+             
+             {advisors.map((advisor) => {
+               const initials = advisor.fullName
+                 .split(' ')
+                 .map(n => n[0])
+                 .join('')
+                 .toUpperCase()
+                 .slice(0, 2);
+               
+               return (
+                 <div
+                   key={advisor.advisorId}
+                   className="flex items-center gap-3 cursor-pointer hover:bg-purple-50 transition-all duration-150 px-4 py-2.5 group"
+                   onClick={(e) => {
+                     e.preventDefault();
+                     e.stopPropagation();
+                     const employeeId = advisorDropdownOpen;
+                     handleSaveAdvisor(employeeId, advisor.advisorId.toString());
+                     setAdvisorDropdownOpen(null);
+                     setAdvisorDropdownPosition(null);
+                   }}
+                 >
+                   <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center shadow-sm group-hover:shadow-md transition-shadow">
+                     <span className="text-xs font-semibold text-white">{initials}</span>
+                   </div>
+                   <div className="flex-1 min-w-0">
+                     <div className="text-sm font-medium text-gray-900 group-hover:text-purple-700 transition-colors truncate">
+                       {advisor.fullName}
+                     </div>
+                   </div>
+                   <UserCheck className="w-4 h-4 text-transparent group-hover:text-purple-500 transition-colors flex-shrink-0" />
+                 </div>
+               );
+             })}
+           </div>
          </div>
-       )}
+         );
+       })()}
      </TooltipProvider>
    );
  }

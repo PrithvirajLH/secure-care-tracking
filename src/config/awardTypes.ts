@@ -234,5 +234,6 @@ export const NOTES_OPTIONS = [
   { value: 'PRN', label: 'PRN' },
   { value: 'FMLA', label: 'FMLA' },
   { value: 'Spanish', label: 'Spanish' },
-  { value: 'Exempt ADA', label: 'Exempt ADA' }
+  { value: 'Exempt ADA', label: 'Exempt ADA' },
+  { value: 'Re-Do', label: 'Re-Do' }
 ];
