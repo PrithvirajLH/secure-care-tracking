@@ -489,8 +489,9 @@ export default function Dashboard() {
         const completedDenom = Math.max(typedStats.completed + typedStats.inProgress, 1);
         const completedRatio = (typedStats.completed / completedDenom) * 100;
         
-        // Calculate in-progress percentage: inProgress / total * 100
-        const inProgressRatio = (typedStats.inProgress / Math.max(typedStats.total, 1)) * 100;
+        // Calculate in-progress percentage: inProgress / (completed + inProgress) * 100
+        // This ensures completedRatio + inProgressRatio = 100%
+        const inProgressRatio = (typedStats.inProgress / completedDenom) * 100;
         
         // For in-progress comparison, use actual count normalized to 0-100 scale
         // This allows facilities with more employees in progress to rank higher
@@ -546,11 +547,24 @@ export default function Dashboard() {
       const employeeName = employee.Employee || employee.name || 'Unknown Employee';
       const level = employee.awardType || 'Unknown Level';
       
+      // Assigned Date - add as scheduled activity
+      if (employee.assignedDate) {
+        activities.push({
+          id: `${employee.employeeId || employee.employeeNumber}-${level}-assigned-${employee.assignedDate}`,
+          type: 'scheduled',
+          employeeName,
+          level,
+          date: employee.assignedDate,
+          description: `Assigned to ${level}`,
+          icon: Calendar,
+          color: 'text-blue-600'
+        });
+      }
 
       // Relias Training Completion
       if (employee.completedDate) {
         activities.push({
-          id: `${employee.employeeId}-${level}-relias-completed`,
+          id: `${employee.employeeId || employee.employeeNumber}-${level}-relias-completed-${employee.completedDate}`,
           type: 'completed',
           employeeName,
           level,
@@ -565,7 +579,7 @@ export default function Dashboard() {
       if (employee.conferenceCompleted) {
         if (employee.awaiting === 1 || employee.awaiting === true) {
           activities.push({
-            id: `${employee.employeeId}-${level}-conference-awaiting`,
+            id: `${employee.employeeId || employee.employeeNumber}-${level}-conference-awaiting-${employee.conferenceCompleted}`,
             type: 'awaiting',
             employeeName,
             level,
@@ -574,9 +588,9 @@ export default function Dashboard() {
             icon: AlertCircle,
             color: 'text-amber-600'
           });
-        } else if (employee.awaiting === false || employee.awaiting === 0) {
+        } else if (employee.awaiting === false || employee.awaiting === 0 || employee.awaiting === null) {
           activities.push({
-            id: `${employee.employeeId}-${level}-conference-approved`,
+            id: `${employee.employeeId || employee.employeeNumber}-${level}-conference-approved-${employee.conferenceCompleted}`,
             type: 'conference',
             employeeName,
             level,
@@ -585,20 +599,8 @@ export default function Dashboard() {
             icon: CheckCircle,
             color: 'text-green-600'
           });
-        } else if (employee.awaiting === null) {
-          activities.push({
-            id: `${employee.employeeId}-${level}-conference-rejected`,
-            type: 'rejected',
-            employeeName,
-            level,
-            date: employee.conferenceCompleted,
-            description: `Conference rejected for ${level}`,
-            icon: AlertCircle,
-            color: 'text-red-600'
-          });
         }
       }
-
 
       // Scheduled activities
       const scheduledFields = [
@@ -614,7 +616,7 @@ export default function Dashboard() {
       scheduledFields.forEach(({ field, name }) => {
         if (employee[field]) {
           activities.push({
-            id: `${employee.employeeId}-${level}-${field}`,
+            id: `${employee.employeeId || employee.employeeNumber}-${level}-${field}-${employee[field]}`,
             type: 'scheduled',
             employeeName,
             level,
@@ -640,7 +642,7 @@ export default function Dashboard() {
       completedFields.forEach(({ field, name }) => {
         if (employee[field]) {
           activities.push({
-            id: `${employee.employeeId}-${level}-${field}`,
+            id: `${employee.employeeId || employee.employeeNumber}-${level}-${field}-${employee[field]}`,
             type: 'completed',
             employeeName,
             level,
@@ -654,24 +656,27 @@ export default function Dashboard() {
 
       // Awarded - check using consistent logic (handles true, 1, '1')
       const isAwarded = employee.secureCareAwarded === true || employee.secureCareAwarded === 1 || employee.secureCareAwarded === '1';
-      if (isAwarded) {
+      if (isAwarded && employee.secureCareAwardedDate) {
         activities.push({
-          id: `${employee.employeeId}-${level}-awarded`,
+          id: `${employee.employeeId || employee.employeeNumber}-${level}-awarded-${employee.secureCareAwardedDate}`,
           type: 'awarded',
           employeeName,
           level,
-          date: employee.secureCareAwardedDate || new Date().toISOString().split('T')[0],
-          description: `Has been awarded ${level}`,
+          date: employee.secureCareAwardedDate,
+          description: `Awarded ${level}`,
           icon: Award,
           color: 'text-purple-600'
         });
       }
     });
 
-    // Sort by date (most recent first) and take top 200 to ensure we have enough for each group
+    // Sort by date (most recent first) - don't limit here, let grouping handle it
     const sortedActivities = activities
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-      .slice(0, 200);
+      .sort((a, b) => {
+        const dateA = new Date(a.date).getTime();
+        const dateB = new Date(b.date).getTime();
+        return dateB - dateA;
+      });
 
     return sortedActivities;
   }, [employees]);
@@ -924,7 +929,7 @@ export default function Dashboard() {
                           if (name === 'Completed') {
                             return [`${value}% (${props.payload.completedCount}/${props.payload.completedCount + props.payload.inProgressCount} completed/in-progress)`, 'Completed Ratio'];
                           } else if (name === 'In Progress') {
-                            return [`${value}% (${props.payload.inProgressCount} employees in progress)`, 'In Progress Count Score'];
+                            return [`${value}% (${props.payload.inProgressCount}/${props.payload.completedCount + props.payload.inProgressCount} in-progress/total)`, 'In Progress Ratio'];
                           }
                           return [value, name];
                         }}
@@ -935,11 +940,11 @@ export default function Dashboard() {
                           boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
                         }}
                       />
-                      <Bar dataKey="completedRatio" fill="#059669" radius={[0, 6, 6, 0]} name="Completed">
+                      <Bar dataKey="completedRatio" stackId="status" fill="#059669" radius={[0, 0, 0, 0]} name="Completed">
                         <LabelList dataKey="completedRatio" position="center" formatter={(v: number) => v > 5 ? `${v}%` : ''} style={{ fill: 'white', fontSize: 11, fontWeight: 'bold' }} />
                       </Bar>
-                      <Bar dataKey="inProgressScore" fill="#2563eb" radius={[0, 6, 6, 0]} name="In Progress">
-                        <LabelList dataKey="inProgressScore" position="center" formatter={(v: number) => v > 5 ? `${v}%` : ''} style={{ fill: 'white', fontSize: 11, fontWeight: 'bold' }} />
+                      <Bar dataKey="inProgressRatio" stackId="status" fill="#2563eb" radius={[0, 6, 6, 0]} name="In Progress">
+                        <LabelList dataKey="inProgressRatio" position="center" formatter={(v: number) => v > 5 ? `${v}%` : ''} style={{ fill: 'white', fontSize: 11, fontWeight: 'bold' }} />
                       </Bar>
                       <Legend 
                         verticalAlign="bottom" 
@@ -977,7 +982,7 @@ export default function Dashboard() {
                                     Completed: {data.completedRatio}% ({data.completedCount}/{data.completedCount + data.inProgressCount} completed/in-progress)
                                   </p>
                                   <p className="text-sm text-purple-600">
-                                    In Progress: {data.inProgressScore}% ({data.inProgressCount} employees in progress)
+                                    In Progress: {data.inProgressRatio}% ({data.inProgressCount}/{data.completedCount + data.inProgressCount} in-progress/total)
                                   </p>
                                 </div>
                               </div>
@@ -986,11 +991,11 @@ export default function Dashboard() {
                           return null;
                         }}
                       />
-                      <Bar dataKey="completedRatio" fill="#dc2626" radius={[0, 6, 6, 0]} name="Completed">
+                      <Bar dataKey="completedRatio" stackId="status" fill="#dc2626" radius={[0, 0, 0, 0]} name="Completed">
                         <LabelList dataKey="completedRatio" position="center" formatter={(v: number) => v > 5 ? `${v}%` : ''} style={{ fill: 'white', fontSize: 11, fontWeight: 'bold' }} />
                       </Bar>
-                      <Bar dataKey="inProgressScore" fill="#ea580c" radius={[0, 6, 6, 0]} name="In Progress">
-                        <LabelList dataKey="inProgressScore" position="center" formatter={(v: number) => v > 5 ? `${v}%` : ''} style={{ fill: 'white', fontSize: 11, fontWeight: 'bold' }} />
+                      <Bar dataKey="inProgressRatio" stackId="status" fill="#ea580c" radius={[0, 6, 6, 0]} name="In Progress">
+                        <LabelList dataKey="inProgressRatio" position="center" formatter={(v: number) => v > 5 ? `${v}%` : ''} style={{ fill: 'white', fontSize: 11, fontWeight: 'bold' }} />
                       </Bar>
                       <Legend 
                         verticalAlign="bottom" 
@@ -1018,35 +1023,28 @@ export default function Dashboard() {
           </p>
         </CardHeader>
         <CardContent>
-          {recentActivity.length === 0 ? (
-            <div className="flex items-center justify-center py-8 text-gray-500">
-              <div className="text-center">
-                <Clock className="w-8 h-8 mx-auto mb-2 text-gray-400" />
-                <p className="text-sm">No recent activity found</p>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {/* Group activities by type - Horizontal Layout */}
-              {(() => {
-                const groupedActivities = recentActivity.reduce((acc, activity) => {
-                  if (!acc[activity.type]) {
-                    acc[activity.type] = [];
-                  }
-                  acc[activity.type].push(activity);
-                  return acc;
-                }, {} as Record<string, typeof recentActivity>);
+          <div className="space-y-4">
+            {/* Group activities by type - Horizontal Layout */}
+            {(() => {
+              const groupedActivities = recentActivity.reduce((acc, activity) => {
+                if (!acc[activity.type]) {
+                  acc[activity.type] = [];
+                }
+                acc[activity.type].push(activity);
+                return acc;
+              }, {} as Record<string, typeof recentActivity>);
 
-                // Sort each group by date (most recent first) and take latest 5
-                Object.keys(groupedActivities).forEach(type => {
-                  groupedActivities[type] = groupedActivities[type]
-                    .sort((a, b) => {
-                      const dateA = new Date(a.date);
-                      const dateB = new Date(b.date);
-                      return dateB.getTime() - dateA.getTime();
-                    })
-                    .slice(0, 5);
-                });
+              // Sort each group by date (most recent first) and take latest 5
+              // Note: awaiting can have 0 items if all are approved
+              Object.keys(groupedActivities).forEach(type => {
+                groupedActivities[type] = groupedActivities[type]
+                  .sort((a, b) => {
+                    const dateA = new Date(a.date).getTime();
+                    const dateB = new Date(b.date).getTime();
+                    return dateB - dateA;
+                  })
+                  .slice(0, 5);
+              });
 
                 const groupConfig = {
                   scheduled: { title: 'Scheduled', icon: Calendar, color: 'blue', bgColor: 'from-blue-50 to-blue-100', borderColor: 'border-blue-200', textColor: 'text-blue-700' },
@@ -1141,8 +1139,7 @@ export default function Dashboard() {
                   </div>
                 );
               })()}
-            </div>
-          )}
+          </div>
         </CardContent>
       </Card>
 
