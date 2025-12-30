@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { Users2, GraduationCap, CalendarClock, Home, FileText } from "lucide-react";
+import { Users2, GraduationCap, CalendarClock, Home, FileText, Database } from "lucide-react";
 import { useSidebar } from "@/components/ui/sidebar";
 import { motion } from "motion/react";
 
@@ -11,6 +11,7 @@ export default function AppSidebar() {
     { title: "Training", to: "/training", Icon: GraduationCap },
     { title: "Advisors", to: "/advisors", Icon: CalendarClock },
     { title: "Completions", to: "/completions", Icon: FileText },
+    { title: "Award Readiness", to: "/employee-data", Icon: Database },
   ];
 
   return (

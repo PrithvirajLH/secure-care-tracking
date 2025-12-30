@@ -410,6 +410,58 @@ class SecureCareAPI {
     throw new Error('Awards are read-only in this version');
   }
 
+  // Get all employee data (aggregated by employeeNumber with all levels)
+  async getAllEmployeeData(filters: any = {}): Promise<EmployeeResponse> {
+    const params = new URLSearchParams({
+      page: (filters.page || 1).toString(),
+      limit: (filters.limit || 100).toString()
+    });
+    
+    // Add view type (all or ready-for-level2)
+    if (filters.viewType) {
+      params.append('viewType', filters.viewType);
+    }
+    
+    // Handle facility filter - can be a string or array
+    if (filters.facility) {
+      const facilities = Array.isArray(filters.facility) ? filters.facility : [filters.facility];
+      facilities.forEach(f => {
+        if (f && f !== 'all') {
+          params.append('facility', f);
+        }
+      });
+    }
+    
+    if (filters.area && filters.area !== 'all') {
+      params.append('area', filters.area);
+    }
+    
+    if (filters.search) {
+      params.append('search', filters.search);
+    }
+    
+    if (filters.jobTitle && filters.jobTitle !== 'all') {
+      params.append('jobTitle', filters.jobTitle);
+    }
+    
+    // Add sorting parameters
+    if (filters.sortBy) {
+      params.append('sortBy', filters.sortBy);
+    }
+    
+    if (filters.sortOrder) {
+      params.append('sortOrder', filters.sortOrder);
+    }
+    
+    const response = await fetch(`${this.baseURL}/securecare/employee-data?${params}`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch all employee data: ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+
 }
 
 // Create and export a singleton instance

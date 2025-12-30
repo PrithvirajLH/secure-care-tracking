@@ -523,4 +523,80 @@ router.get('/aggregates/completions', async (req, res) => {
   }
 });
 
+// Get all employee data (aggregated by employeeNumber with all levels)
+router.get('/employee-data', async (req, res) => {
+  try {
+    // Handle facility as array (Express parses multiple query params with same name as array)
+    let facility = req.query.facility;
+    if (facility) {
+      if (Array.isArray(facility)) {
+        facility = facility.map(f => f.trim()).filter(f => f);
+      } else if (typeof facility === 'string') {
+        if (facility.includes(',')) {
+          facility = facility.split(',').map(f => f.trim()).filter(f => f);
+        } else {
+          facility = facility.trim();
+        }
+      }
+    }
+    
+    const filters = {
+      facility: facility,
+      area: req.query.area,
+      search: req.query.search,
+      jobTitle: req.query.jobTitle,
+      sortBy: req.query.sortBy,
+      sortOrder: req.query.sortOrder,
+      page: req.query.page || 1,
+      limit: req.query.limit || 100
+    };
+    
+    // Check which view type we want
+    const viewType = req.query.viewType || 'ready-for-level2';
+    
+    let result;
+    try {
+      if (viewType === 'ready-for-level2') {
+        result = await secureCareService.getEmployeesReadyForLevel2Award(filters);
+      } else if (viewType === 'ready-for-level3') {
+        result = await secureCareService.getEmployeesReadyForLevel3Award(filters);
+      } else if (viewType === 'ready-for-consultant') {
+        result = await secureCareService.getEmployeesReadyForConsultantAward(filters);
+      } else if (viewType === 'ready-for-coach') {
+        result = await secureCareService.getEmployeesReadyForCoachAward(filters);
+      } else {
+        result = await secureCareService.getAllEmployeeData(filters);
+      }
+      
+      // Ensure result has the expected structure
+      if (!result || !result.employees) {
+        console.warn(`No employees found for viewType: ${viewType}`);
+        result = { employees: [], pagination: { currentPage: 1, totalPages: 0, totalEmployees: 0, itemsPerPage: 0 } };
+      }
+      
+      res.json(result);
+    } catch (queryError) {
+      console.error(`Error fetching data for viewType ${viewType}:`, queryError);
+      // Return empty result instead of error to prevent frontend hanging
+      res.json({ 
+        employees: [], 
+        pagination: { 
+          currentPage: 1, 
+          totalPages: 0, 
+          totalEmployees: 0, 
+          itemsPerPage: 0 
+        },
+        error: queryError.message 
+      });
+    }
+    
+  } catch (error) {
+    console.error('Get all employee data error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: error.message 
+    });
+  }
+});
+
 module.exports = router;

@@ -1993,6 +1993,1277 @@ class SecureCareService {
       byLevel: byLevel.recordset || []
     };
   }
+
+  // Get all employee data aggregated by employeeNumber (one row per employee with all levels)
+  async getAllEmployeeData(filters = {}) {
+    const pool = await getPool();
+    
+    // First, get all unique employees by employeeNumber
+    let query = `
+      SELECT DISTINCT
+        e.employeeNumber,
+        MAX(e.employeeId) as employeeId,
+        MAX(e.name) as name,
+        MAX(e.facility) as facility,
+        MAX(e.area) as area,
+        MAX(e.staffRoll) as staffRoll
+      FROM dbo.SecureCareEmployee e
+      WHERE 1=1
+    `;
+    
+    const request = pool.request();
+    
+    // Apply filters
+    if (filters.facility && filters.facility !== 'all') {
+      const facilities = Array.isArray(filters.facility) ? filters.facility : [filters.facility];
+      if (facilities.length === 1) {
+        query += ` AND e.facility = @facility0`;
+        request.input('facility0', sql.VarChar, facilities[0]);
+      } else if (facilities.length > 1) {
+        const facilityParams = facilities.map((f, i) => `@facility${i}`).join(', ');
+        query += ` AND e.facility IN (${facilityParams})`;
+        facilities.forEach((f, i) => {
+          request.input(`facility${i}`, sql.VarChar, f);
+        });
+      }
+    }
+    
+    if (filters.area && filters.area !== 'all') {
+      query += ` AND e.area = @area`;
+      request.input('area', sql.VarChar, filters.area);
+    }
+    
+    if (filters.search) {
+      query += ` AND (e.name LIKE @search OR e.employeeNumber LIKE @search)`;
+      request.input('search', sql.VarChar, `%${filters.search}%`);
+    }
+    
+    if (filters.jobTitle && filters.jobTitle !== 'all') {
+      query += ` AND e.staffRoll = @jobTitle`;
+      request.input('jobTitle', sql.VarChar, filters.jobTitle);
+    }
+    
+    query += ` GROUP BY e.employeeNumber`;
+    
+    // Add sorting
+    const sortBy = filters.sortBy || 'area';
+    const sortOrder = filters.sortOrder || 'asc';
+    switch (sortBy) {
+      case 'name':
+        query += ` ORDER BY MAX(e.name) ${sortOrder.toUpperCase()}`;
+        break;
+      case 'facility':
+        query += ` ORDER BY MAX(e.facility) ${sortOrder.toUpperCase()}`;
+        break;
+      case 'area':
+        // Sort by area first, then name
+        query += ` ORDER BY MAX(e.area) ${sortOrder.toUpperCase()}, MAX(e.name) ${sortOrder.toUpperCase()}`;
+        break;
+      case 'employeeId':
+        query += ` ORDER BY MAX(e.employeeNumber) ${sortOrder.toUpperCase()}`;
+        break;
+      default:
+        // Default: sort by area first, then name
+        query += ` ORDER BY MAX(e.area) ${sortOrder.toUpperCase()}, MAX(e.name) ${sortOrder.toUpperCase()}`;
+    }
+    
+    // Add pagination - allow large limits to show all data
+    const page = parseInt(filters.page) || 1;
+    const requestedLimit = parseInt(filters.limit) || 1000;
+    // Allow up to 10,000 records to show all data
+    const limit = requestedLimit > 10000 ? 10000 : requestedLimit;
+    const offset = (page - 1) * limit;
+    query += ` OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY`;
+    
+    const uniqueEmployeesResult = await request.query(query);
+    
+    // Get total count
+    let countQuery = `
+      SELECT COUNT(DISTINCT e.employeeNumber) as total
+      FROM dbo.SecureCareEmployee e
+      WHERE 1=1
+    `;
+    const countRequest = pool.request();
+    
+    if (filters.facility && filters.facility !== 'all') {
+      const facilities = Array.isArray(filters.facility) ? filters.facility : [filters.facility];
+      if (facilities.length === 1) {
+        countQuery += ` AND e.facility = @facilityCount0`;
+        countRequest.input('facilityCount0', sql.VarChar, facilities[0]);
+      } else if (facilities.length > 1) {
+        const facilityParams = facilities.map((f, i) => `@facilityCount${i}`).join(', ');
+        countQuery += ` AND e.facility IN (${facilityParams})`;
+        facilities.forEach((f, i) => {
+          countRequest.input(`facilityCount${i}`, sql.VarChar, f);
+        });
+      }
+    }
+    
+    if (filters.area && filters.area !== 'all') {
+      countQuery += ` AND e.area = @area`;
+      countRequest.input('area', sql.VarChar, filters.area);
+    }
+    
+    if (filters.search) {
+      countQuery += ` AND (e.name LIKE @search OR e.employeeNumber LIKE @search)`;
+      countRequest.input('search', sql.VarChar, `%${filters.search}%`);
+    }
+    
+    if (filters.jobTitle && filters.jobTitle !== 'all') {
+      countQuery += ` AND e.staffRoll = @jobTitle`;
+      countRequest.input('jobTitle', sql.VarChar, filters.jobTitle);
+    }
+    
+    const countResult = await countRequest.query(countQuery);
+    const total = countResult.recordset[0].total;
+    
+    // For each unique employee, get all their level records
+    const aggregatedEmployees = [];
+    
+    for (const uniqueEmp of uniqueEmployeesResult.recordset) {
+      const levelsRequest = pool.request();
+      levelsRequest.input('employeeNumber', sql.VarChar, uniqueEmp.employeeNumber);
+      
+      const levelsResult = await levelsRequest.query(`
+        SELECT 
+          e.employeeId,
+          e.employeeNumber,
+          e.name,
+          e.facility,
+          e.area,
+          e.staffRoll,
+          e.awardType,
+          FORMAT(e.assignedDate, 'yyyy-MM-dd') AS assignedDate,
+          FORMAT(e.completedDate, 'yyyy-MM-dd') AS completedDate,
+          FORMAT(e.conferenceCompleted, 'yyyy-MM-dd') AS conferenceCompleted,
+          FORMAT(e.scheduleStandingVideo, 'yyyy-MM-dd') AS scheduleStandingVideo,
+          FORMAT(e.standingVideo, 'yyyy-MM-dd') AS standingVideo,
+          FORMAT(e.scheduleSleepingVideo, 'yyyy-MM-dd') AS scheduleSleepingVideo,
+          FORMAT(e.sleepingVideo, 'yyyy-MM-dd') AS sleepingVideo,
+          FORMAT(e.scheduleFeedGradVideo, 'yyyy-MM-dd') AS scheduleFeedGradVideo,
+          FORMAT(e.feedGradVideo, 'yyyy-MM-dd') AS feedGradVideo,
+          FORMAT(e.schedulenoHandnoSpeak, 'yyyy-MM-dd') AS schedulenoHandnoSpeak,
+          FORMAT(e.noHandnoSpeak, 'yyyy-MM-dd') AS noHandnoSpeak,
+          FORMAT(e.[scheduleSession#1], 'yyyy-MM-dd') AS scheduleSession1,
+          FORMAT(e.[session#1], 'yyyy-MM-dd') AS session1,
+          FORMAT(e.[scheduleSession#2], 'yyyy-MM-dd') AS scheduleSession2,
+          FORMAT(e.[session#2], 'yyyy-MM-dd') AS session2,
+          FORMAT(e.[scheduleSession#3], 'yyyy-MM-dd') AS scheduleSession3,
+          FORMAT(e.[session#3], 'yyyy-MM-dd') AS session3,
+          e.secureCareAwarded,
+          FORMAT(e.secureCareAwardedDate, 'yyyy-MM-dd') AS secureCareAwardedDate,
+          e.awaiting,
+          e.notes,
+          e.advisorId,
+          a.firstName + ' ' + ISNULL(a.lastName, '') as advisorName
+        FROM dbo.SecureCareEmployee e
+        LEFT JOIN dbo.Advisor a ON e.advisorId = a.advisorId
+        WHERE e.employeeNumber = @employeeNumber
+        ORDER BY 
+          CASE 
+            WHEN e.awardType = 'Level 1' THEN 1
+            WHEN e.awardType = 'Level 2' THEN 2
+            WHEN e.awardType = 'Level 3' THEN 3
+            WHEN e.awardType = 'Consultant' THEN 4
+            WHEN e.awardType = 'Coach' THEN 5
+            ELSE 99
+          END
+      `);
+      
+      // Aggregate all level records into a single object
+      const aggregated = {
+        employeeId: uniqueEmp.employeeId,
+        employeeNumber: uniqueEmp.employeeNumber,
+        name: uniqueEmp.name,
+        facility: uniqueEmp.facility,
+        area: uniqueEmp.area,
+        staffRoll: uniqueEmp.staffRoll,
+        // Level 1 fields
+        level1AssignedDate: null,
+        level1CompletedDate: null,
+        level1SecureCareAwarded: null,
+        level1SecureCareAwardedDate: null,
+        // Level 2 fields
+        level2ConferenceCompleted: null,
+        level2Notes: null,
+        level2AdvisorId: null,
+        level2AdvisorName: null,
+        level2StandingVideo: null,
+        level2SleepingVideo: null,
+        level2FeedGradVideo: null,
+        level2SecureCareAwarded: null,
+        level2SecureCareAwardedDate: null,
+        level2Awaiting: null,
+        // Level 3 fields
+        level3ConferenceCompleted: null,
+        level3StandingVideo: null,
+        level3NoHandnoSpeak: null,
+        level3SleepingVideo: null,
+        level3SecureCareAwarded: null,
+        level3SecureCareAwardedDate: null,
+        level3Awaiting: null,
+        // Consultant fields
+        consultantConferenceCompleted: null,
+        consultantSession1: null,
+        consultantSession2: null,
+        consultantSession3: null,
+        consultantSecureCareAwarded: null,
+        consultantSecureCareAwardedDate: null,
+        consultantAwaiting: null,
+        // Coach fields
+        coachConferenceCompleted: null,
+        coachSession1: null,
+        coachSession2: null,
+        coachSession3: null,
+        coachSecureCareAwarded: null,
+        coachSecureCareAwardedDate: null,
+        coachAwaiting: null
+      };
+      
+      // Populate fields from each level record
+      for (const record of levelsResult.recordset) {
+        if (record.awardType === 'Level 1') {
+          aggregated.level1AssignedDate = record.assignedDate;
+          aggregated.level1CompletedDate = record.completedDate;
+          aggregated.level1SecureCareAwarded = record.secureCareAwarded;
+          aggregated.level1SecureCareAwardedDate = record.secureCareAwardedDate;
+        } else if (record.awardType === 'Level 2') {
+          aggregated.level2ConferenceCompleted = record.conferenceCompleted;
+          aggregated.level2Notes = record.notes;
+          aggregated.level2AdvisorId = record.advisorId;
+          aggregated.level2AdvisorName = record.advisorName;
+          aggregated.level2StandingVideo = record.standingVideo;
+          aggregated.level2SleepingVideo = record.sleepingVideo;
+          aggregated.level2FeedGradVideo = record.feedGradVideo;
+          aggregated.level2SecureCareAwarded = record.secureCareAwarded;
+          aggregated.level2SecureCareAwardedDate = record.secureCareAwardedDate;
+          aggregated.level2Awaiting = record.awaiting;
+        } else if (record.awardType === 'Level 3') {
+          aggregated.level3ConferenceCompleted = record.conferenceCompleted;
+          aggregated.level3StandingVideo = record.standingVideo;
+          aggregated.level3NoHandnoSpeak = record.noHandnoSpeak;
+          aggregated.level3SleepingVideo = record.sleepingVideo;
+          aggregated.level3SecureCareAwarded = record.secureCareAwarded;
+          aggregated.level3SecureCareAwardedDate = record.secureCareAwardedDate;
+          aggregated.level3Awaiting = record.awaiting;
+        } else if (record.awardType === 'Consultant') {
+          aggregated.consultantConferenceCompleted = record.conferenceCompleted;
+          aggregated.consultantSession1 = record.session1;
+          aggregated.consultantSession2 = record.session2;
+          aggregated.consultantSession3 = record.session3;
+          aggregated.consultantSecureCareAwarded = record.secureCareAwarded;
+          aggregated.consultantSecureCareAwardedDate = record.secureCareAwardedDate;
+          aggregated.consultantAwaiting = record.awaiting;
+        } else if (record.awardType === 'Coach') {
+          aggregated.coachConferenceCompleted = record.conferenceCompleted;
+          aggregated.coachSession1 = record.session1;
+          aggregated.coachSession2 = record.session2;
+          aggregated.coachSession3 = record.session3;
+          aggregated.coachSecureCareAwarded = record.secureCareAwarded;
+          aggregated.coachSecureCareAwardedDate = record.secureCareAwardedDate;
+          aggregated.coachAwaiting = record.awaiting;
+        }
+      }
+      
+      aggregatedEmployees.push(aggregated);
+    }
+    
+    return {
+      employees: aggregatedEmployees,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
+        totalEmployees: total,
+        itemsPerPage: limit
+      }
+    };
+  }
+
+  // Get employees ready for Level 2 award (Level 1 awarded, all Level 2 videos completed, Level 2 not awarded)
+  async getEmployeesReadyForLevel2Award(filters = {}) {
+    const pool = await getPool();
+    
+    let query = `
+      SELECT DISTINCT
+        l1.employeeNumber,
+        l1.employeeId,
+        l1.[name],
+        l1.[area],
+        l1.[facility],
+        l1.staffRoll,
+        FORMAT(l1.assignedDate, 'yyyy-MM-dd') AS level1AssignedDate,
+        FORMAT(l1.completedDate, 'yyyy-MM-dd') AS level1CompletedDate,
+        l1.secureCareAwarded AS level1SecureCareAwarded,
+        FORMAT(l1.secureCareAwardedDate, 'yyyy-MM-dd') AS level1SecureCareAwardedDate,
+        FORMAT(l2.conferenceCompleted, 'yyyy-MM-dd') AS level2ConferenceCompleted,
+        l2.notes AS level2Notes,
+        l2.advisorId AS level2AdvisorId,
+        a.firstName + ' ' + ISNULL(a.lastName, '') AS level2AdvisorName,
+        FORMAT(l2.standingVideo, 'yyyy-MM-dd') AS level2StandingVideo,
+        FORMAT(l2.sleepingVideo, 'yyyy-MM-dd') AS level2SleepingVideo,
+        FORMAT(l2.feedGradVideo, 'yyyy-MM-dd') AS level2FeedGradVideo,
+        l2.secureCareAwarded AS level2SecureCareAwarded,
+        FORMAT(l2.secureCareAwardedDate, 'yyyy-MM-dd') AS level2SecureCareAwardedDate,
+        l2.awaiting AS level2Awaiting
+      FROM [dbo].[SecureCareEmployee] l1
+      JOIN [dbo].[SecureCareEmployee] l2
+        ON l2.employeeNumber = l1.employeeNumber
+      LEFT JOIN dbo.Advisor a ON l2.advisorId = a.advisorId
+      WHERE l1.awardType = 'Level 1'
+        AND (l1.secureCareAwarded = 1 OR l1.secureCareAwardedDate IS NOT NULL)
+        AND l1.assignedDate IS NOT NULL
+        AND l1.completedDate IS NOT NULL
+        AND l2.awardType = 'Level 2'
+        AND (l2.secureCareAwarded = 0 OR l2.secureCareAwarded IS NULL)
+        AND l2.secureCareAwardedDate IS NULL
+        AND l2.standingVideo IS NOT NULL
+        AND l2.sleepingVideo IS NOT NULL
+        AND l2.feedGradVideo IS NOT NULL
+    `;
+    
+    const request = pool.request();
+    
+    // Apply additional filters
+    if (filters.facility && filters.facility !== 'all') {
+      const facilities = Array.isArray(filters.facility) ? filters.facility : [filters.facility];
+      if (facilities.length === 1) {
+        query += ` AND l1.facility = @facility0`;
+        request.input('facility0', sql.VarChar, facilities[0]);
+      } else if (facilities.length > 1) {
+        const facilityParams = facilities.map((f, i) => `@facility${i}`).join(', ');
+        query += ` AND l1.facility IN (${facilityParams})`;
+        facilities.forEach((f, i) => {
+          request.input(`facility${i}`, sql.VarChar, f);
+        });
+      }
+    }
+    
+    if (filters.area && filters.area !== 'all') {
+      query += ` AND l1.area = @area`;
+      request.input('area', sql.VarChar, filters.area);
+    }
+    
+    if (filters.search) {
+      query += ` AND (l1.name LIKE @search OR l1.employeeNumber LIKE @search)`;
+      request.input('search', sql.VarChar, `%${filters.search}%`);
+    }
+    
+    if (filters.jobTitle && filters.jobTitle !== 'all') {
+      query += ` AND l1.staffRoll = @jobTitle`;
+      request.input('jobTitle', sql.VarChar, filters.jobTitle);
+    }
+    
+    // Add sorting
+    const sortBy = filters.sortBy || 'area';
+    const sortOrder = filters.sortOrder || 'asc';
+    switch (sortBy) {
+      case 'name':
+        query += ` ORDER BY l1.name ${sortOrder.toUpperCase()}`;
+        break;
+      case 'facility':
+        query += ` ORDER BY l1.facility ${sortOrder.toUpperCase()}`;
+        break;
+      case 'area':
+        // Sort by area first, then name
+        query += ` ORDER BY l1.area ${sortOrder.toUpperCase()}, l1.name ${sortOrder.toUpperCase()}`;
+        break;
+      case 'employeeId':
+        query += ` ORDER BY l1.employeeNumber ${sortOrder.toUpperCase()}`;
+        break;
+      default:
+        // Default: sort by area first, then name
+        query += ` ORDER BY l1.area ${sortOrder.toUpperCase()}, l1.name ${sortOrder.toUpperCase()}`;
+    }
+    
+    // Add pagination
+    const page = parseInt(filters.page) || 1;
+    const limit = parseInt(filters.limit) || 100;
+    const offset = (page - 1) * limit;
+    query += ` OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY`;
+    
+    const result = await request.query(query);
+    
+    // Get total count
+    let countQuery = `
+      SELECT COUNT(DISTINCT l1.employeeNumber) as total
+      FROM [dbo].[SecureCareEmployee] l1
+      JOIN [dbo].[SecureCareEmployee] l2
+        ON l2.employeeNumber = l1.employeeNumber
+      WHERE l1.awardType = 'Level 1'
+        AND (l1.secureCareAwarded = 1 OR l1.secureCareAwardedDate IS NOT NULL)
+        AND l2.awardType = 'Level 2'
+        AND (l2.secureCareAwarded = 0 OR l2.secureCareAwarded IS NULL)
+        AND l2.secureCareAwardedDate IS NULL
+        AND l2.standingVideo IS NOT NULL
+        AND l2.sleepingVideo IS NOT NULL
+        AND l2.feedGradVideo IS NOT NULL
+    `;
+    
+    const countRequest = pool.request();
+    
+    if (filters.facility && filters.facility !== 'all') {
+      const facilities = Array.isArray(filters.facility) ? filters.facility : [filters.facility];
+      if (facilities.length === 1) {
+        countQuery += ` AND l1.facility = @facilityCount0`;
+        countRequest.input('facilityCount0', sql.VarChar, facilities[0]);
+      } else if (facilities.length > 1) {
+        const facilityParams = facilities.map((f, i) => `@facilityCount${i}`).join(', ');
+        countQuery += ` AND l1.facility IN (${facilityParams})`;
+        facilities.forEach((f, i) => {
+          countRequest.input(`facilityCount${i}`, sql.VarChar, f);
+        });
+      }
+    }
+    
+    if (filters.area && filters.area !== 'all') {
+      countQuery += ` AND l1.area = @area`;
+      countRequest.input('area', sql.VarChar, filters.area);
+    }
+    
+    if (filters.search) {
+      countQuery += ` AND (l1.name LIKE @search OR l1.employeeNumber LIKE @search)`;
+      countRequest.input('search', sql.VarChar, `%${filters.search}%`);
+    }
+    
+    if (filters.jobTitle && filters.jobTitle !== 'all') {
+      countQuery += ` AND l1.staffRoll = @jobTitle`;
+      countRequest.input('jobTitle', sql.VarChar, filters.jobTitle);
+    }
+    
+    const countResult = await countRequest.query(countQuery);
+    const total = countResult.recordset[0].total;
+    
+    // Transform results to match the aggregated format
+    const employees = result.recordset.map(record => ({
+      employeeId: record.employeeId,
+      employeeNumber: record.employeeNumber,
+      name: record.name,
+      facility: record.facility,
+      area: record.area,
+      staffRoll: record.staffRoll,
+      // Level 1
+      level1AssignedDate: record.level1AssignedDate,
+      level1CompletedDate: record.level1CompletedDate,
+      level1SecureCareAwarded: record.level1SecureCareAwarded,
+      level1SecureCareAwardedDate: record.level1SecureCareAwardedDate,
+      // Level 2
+      level2ConferenceCompleted: record.level2ConferenceCompleted,
+      level2Notes: record.level2Notes,
+      level2AdvisorId: record.level2AdvisorId,
+      level2AdvisorName: record.level2AdvisorName,
+      level2StandingVideo: record.level2StandingVideo,
+      level2SleepingVideo: record.level2SleepingVideo,
+      level2FeedGradVideo: record.level2FeedGradVideo,
+      level2SecureCareAwarded: record.level2SecureCareAwarded,
+      level2SecureCareAwardedDate: record.level2SecureCareAwardedDate,
+      level2Awaiting: record.level2Awaiting,
+      // Other levels (null since we're only showing Level 1 and Level 2)
+      level3ConferenceCompleted: null,
+      level3StandingVideo: null,
+      level3NoHandnoSpeak: null,
+      level3SleepingVideo: null,
+      level3SecureCareAwarded: null,
+      level3SecureCareAwardedDate: null,
+      level3Awaiting: null,
+      consultantConferenceCompleted: null,
+      consultantSession1: null,
+      consultantSession2: null,
+      consultantSession3: null,
+      consultantSecureCareAwarded: null,
+      consultantSecureCareAwardedDate: null,
+      consultantAwaiting: null,
+      coachConferenceCompleted: null,
+      coachSession1: null,
+      coachSession2: null,
+      coachSession3: null,
+      coachSecureCareAwarded: null,
+      coachSecureCareAwardedDate: null,
+      coachAwaiting: null
+    }));
+    
+    return {
+      employees: employees,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
+        totalEmployees: total,
+        itemsPerPage: limit
+      }
+    };
+  }
+
+  // Get employees ready for Level 3 award (Level 2 awarded, all Level 3 videos completed, Level 3 not awarded)
+  async getEmployeesReadyForLevel3Award(filters = {}) {
+    const pool = await getPool();
+    
+    let query = `
+      SELECT DISTINCT
+        l2.employeeNumber,
+        l2.employeeId,
+        l2.[name],
+        l2.[area],
+        l2.[facility],
+        l2.staffRoll,
+        FORMAT(l1.assignedDate, 'yyyy-MM-dd') AS level1AssignedDate,
+        FORMAT(l1.completedDate, 'yyyy-MM-dd') AS level1CompletedDate,
+        l1.secureCareAwarded AS level1SecureCareAwarded,
+        FORMAT(l1.secureCareAwardedDate, 'yyyy-MM-dd') AS level1SecureCareAwardedDate,
+        FORMAT(l2.conferenceCompleted, 'yyyy-MM-dd') AS level2ConferenceCompleted,
+        l2.notes AS level2Notes,
+        l2.advisorId AS level2AdvisorId,
+        a2.firstName + ' ' + ISNULL(a2.lastName, '') AS level2AdvisorName,
+        FORMAT(l2.standingVideo, 'yyyy-MM-dd') AS level2StandingVideo,
+        FORMAT(l2.sleepingVideo, 'yyyy-MM-dd') AS level2SleepingVideo,
+        FORMAT(l2.feedGradVideo, 'yyyy-MM-dd') AS level2FeedGradVideo,
+        l2.secureCareAwarded AS level2SecureCareAwarded,
+        FORMAT(l2.secureCareAwardedDate, 'yyyy-MM-dd') AS level2SecureCareAwardedDate,
+        l2.awaiting AS level2Awaiting,
+        FORMAT(l3.conferenceCompleted, 'yyyy-MM-dd') AS level3ConferenceCompleted,
+        l3.notes AS level3Notes,
+        l3.advisorId AS level3AdvisorId,
+        a3.firstName + ' ' + ISNULL(a3.lastName, '') AS level3AdvisorName,
+        FORMAT(l3.standingVideo, 'yyyy-MM-dd') AS level3StandingVideo,
+        FORMAT(l3.noHandnoSpeak, 'yyyy-MM-dd') AS level3NoHandnoSpeak,
+        FORMAT(l3.sleepingVideo, 'yyyy-MM-dd') AS level3SleepingVideo,
+        l3.secureCareAwarded AS level3SecureCareAwarded,
+        FORMAT(l3.secureCareAwardedDate, 'yyyy-MM-dd') AS level3SecureCareAwardedDate,
+        l3.awaiting AS level3Awaiting
+      FROM [dbo].[SecureCareEmployee] l2
+      JOIN [dbo].[SecureCareEmployee] l3
+        ON l3.employeeNumber = l2.employeeNumber
+      LEFT JOIN [dbo].[SecureCareEmployee] l1
+        ON l1.employeeNumber = l2.employeeNumber AND l1.awardType = 'Level 1'
+      LEFT JOIN dbo.Advisor a2 ON l2.advisorId = a2.advisorId
+      LEFT JOIN dbo.Advisor a3 ON l3.advisorId = a3.advisorId
+      WHERE l2.awardType = 'Level 2'
+        AND (l2.secureCareAwarded = 1 OR l2.secureCareAwardedDate IS NOT NULL)
+        AND l3.awardType = 'Level 3'
+        AND (l3.secureCareAwarded = 0 OR l3.secureCareAwarded IS NULL)
+        AND l3.secureCareAwardedDate IS NULL
+        AND l3.standingVideo IS NOT NULL
+        AND l3.noHandnoSpeak IS NOT NULL
+        AND l3.sleepingVideo IS NOT NULL
+    `;
+    
+    const request = pool.request();
+    
+    // Apply additional filters
+    if (filters.facility && filters.facility !== 'all') {
+      const facilities = Array.isArray(filters.facility) ? filters.facility : [filters.facility];
+      if (facilities.length === 1) {
+        query += ` AND l2.facility = @facility0`;
+        request.input('facility0', sql.VarChar, facilities[0]);
+      } else if (facilities.length > 1) {
+        const facilityParams = facilities.map((f, i) => `@facility${i}`).join(', ');
+        query += ` AND l2.facility IN (${facilityParams})`;
+        facilities.forEach((f, i) => {
+          request.input(`facility${i}`, sql.VarChar, f);
+        });
+      }
+    }
+    
+    if (filters.area && filters.area !== 'all') {
+      query += ` AND l2.area = @area`;
+      request.input('area', sql.VarChar, filters.area);
+    }
+    
+    if (filters.search) {
+      query += ` AND (l2.name LIKE @search OR l2.employeeNumber LIKE @search)`;
+      request.input('search', sql.VarChar, `%${filters.search}%`);
+    }
+    
+    if (filters.jobTitle && filters.jobTitle !== 'all') {
+      query += ` AND l2.staffRoll = @jobTitle`;
+      request.input('jobTitle', sql.VarChar, filters.jobTitle);
+    }
+    
+    // Add sorting
+    const sortBy = filters.sortBy || 'area';
+    const sortOrder = filters.sortOrder || 'asc';
+    switch (sortBy) {
+      case 'name':
+        query += ` ORDER BY l2.name ${sortOrder.toUpperCase()}`;
+        break;
+      case 'facility':
+        query += ` ORDER BY l2.facility ${sortOrder.toUpperCase()}`;
+        break;
+      case 'area':
+        // Sort by area first, then name
+        query += ` ORDER BY l2.area ${sortOrder.toUpperCase()}, l2.name ${sortOrder.toUpperCase()}`;
+        break;
+      case 'employeeId':
+        query += ` ORDER BY l2.employeeNumber ${sortOrder.toUpperCase()}`;
+        break;
+      default:
+        // Default: sort by area first, then name
+        query += ` ORDER BY l2.area ${sortOrder.toUpperCase()}, l2.name ${sortOrder.toUpperCase()}`;
+    }
+    
+    // Add pagination
+    const page = parseInt(filters.page) || 1;
+    const limit = parseInt(filters.limit) || 100;
+    const offset = (page - 1) * limit;
+    query += ` OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY`;
+    
+    const result = await request.query(query);
+    
+    // Get total count
+    let countQuery = `
+      SELECT COUNT(DISTINCT l2.employeeNumber) as total
+      FROM [dbo].[SecureCareEmployee] l2
+      JOIN [dbo].[SecureCareEmployee] l3
+        ON l3.employeeNumber = l2.employeeNumber
+      WHERE l2.awardType = 'Level 2'
+        AND (l2.secureCareAwarded = 1 OR l2.secureCareAwardedDate IS NOT NULL)
+        AND l3.awardType = 'Level 3'
+        AND (l3.secureCareAwarded = 0 OR l3.secureCareAwarded IS NULL)
+        AND l3.secureCareAwardedDate IS NULL
+        AND l3.standingVideo IS NOT NULL
+        AND l3.noHandnoSpeak IS NOT NULL
+        AND l3.sleepingVideo IS NOT NULL
+    `;
+    
+    const countRequest = pool.request();
+    
+    if (filters.facility && filters.facility !== 'all') {
+      const facilities = Array.isArray(filters.facility) ? filters.facility : [filters.facility];
+      if (facilities.length === 1) {
+        countQuery += ` AND l2.facility = @facilityCount0`;
+        countRequest.input('facilityCount0', sql.VarChar, facilities[0]);
+      } else if (facilities.length > 1) {
+        const facilityParams = facilities.map((f, i) => `@facilityCount${i}`).join(', ');
+        countQuery += ` AND l2.facility IN (${facilityParams})`;
+        facilities.forEach((f, i) => {
+          countRequest.input(`facilityCount${i}`, sql.VarChar, f);
+        });
+      }
+    }
+    
+    if (filters.area && filters.area !== 'all') {
+      countQuery += ` AND l2.area = @area`;
+      countRequest.input('area', sql.VarChar, filters.area);
+    }
+    
+    if (filters.search) {
+      countQuery += ` AND (l2.name LIKE @search OR l2.employeeNumber LIKE @search)`;
+      countRequest.input('search', sql.VarChar, `%${filters.search}%`);
+    }
+    
+    if (filters.jobTitle && filters.jobTitle !== 'all') {
+      countQuery += ` AND l2.staffRoll = @jobTitle`;
+      countRequest.input('jobTitle', sql.VarChar, filters.jobTitle);
+    }
+    
+    const countResult = await countRequest.query(countQuery);
+    const total = countResult.recordset[0].total;
+    
+    // Transform results to match the aggregated format
+    const employees = result.recordset.map(record => ({
+      employeeId: record.employeeId,
+      employeeNumber: record.employeeNumber,
+      name: record.name,
+      facility: record.facility,
+      area: record.area,
+      staffRoll: record.staffRoll,
+      // Level 1
+      level1AssignedDate: record.level1AssignedDate,
+      level1CompletedDate: record.level1CompletedDate,
+      level1SecureCareAwarded: record.level1SecureCareAwarded,
+      level1SecureCareAwardedDate: record.level1SecureCareAwardedDate,
+      // Level 2
+      level2ConferenceCompleted: record.level2ConferenceCompleted,
+      level2Notes: record.level2Notes,
+      level2AdvisorId: record.level2AdvisorId,
+      level2AdvisorName: record.level2AdvisorName,
+      level2StandingVideo: record.level2StandingVideo,
+      level2SleepingVideo: record.level2SleepingVideo,
+      level2FeedGradVideo: record.level2FeedGradVideo,
+      level2SecureCareAwarded: record.level2SecureCareAwarded,
+      level2SecureCareAwardedDate: record.level2SecureCareAwardedDate,
+      level2Awaiting: record.level2Awaiting,
+      // Level 3
+      level3ConferenceCompleted: record.level3ConferenceCompleted,
+      level3Notes: record.level3Notes,
+      level3AdvisorId: record.level3AdvisorId,
+      level3AdvisorName: record.level3AdvisorName,
+      level3StandingVideo: record.level3StandingVideo,
+      level3NoHandnoSpeak: record.level3NoHandnoSpeak,
+      level3SleepingVideo: record.level3SleepingVideo,
+      level3SecureCareAwarded: record.level3SecureCareAwarded,
+      level3SecureCareAwardedDate: record.level3SecureCareAwardedDate,
+      level3Awaiting: record.level3Awaiting,
+      // Other levels (null)
+      consultantConferenceCompleted: null,
+      consultantSession1: null,
+      consultantSession2: null,
+      consultantSession3: null,
+      consultantSecureCareAwarded: null,
+      consultantSecureCareAwardedDate: null,
+      consultantAwaiting: null,
+      coachConferenceCompleted: null,
+      coachSession1: null,
+      coachSession2: null,
+      coachSession3: null,
+      coachSecureCareAwarded: null,
+      coachSecureCareAwardedDate: null,
+      coachAwaiting: null
+    }));
+    
+    return {
+      employees: employees,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
+        totalEmployees: total,
+        itemsPerPage: limit
+      }
+    };
+  }
+
+  // Get employees ready for Consultant award (Level 3 awarded, all Consultant sessions completed, Consultant not awarded)
+  async getEmployeesReadyForConsultantAward(filters = {}) {
+    console.log('getEmployeesReadyForConsultantAward called with filters:', filters);
+    const pool = await getPool();
+    
+    let query = `
+      SELECT DISTINCT
+        l3.employeeNumber,
+        l3.employeeId,
+        l3.[name],
+        l3.[area],
+        l3.[facility],
+        l3.staffRoll,
+        FORMAT(l1.assignedDate, 'yyyy-MM-dd') AS level1AssignedDate,
+        FORMAT(l1.completedDate, 'yyyy-MM-dd') AS level1CompletedDate,
+        l1.secureCareAwarded AS level1SecureCareAwarded,
+        FORMAT(l1.secureCareAwardedDate, 'yyyy-MM-dd') AS level1SecureCareAwardedDate,
+        FORMAT(l2.conferenceCompleted, 'yyyy-MM-dd') AS level2ConferenceCompleted,
+        l2.notes AS level2Notes,
+        l2.advisorId AS level2AdvisorId,
+        a2.firstName + ' ' + ISNULL(a2.lastName, '') AS level2AdvisorName,
+        FORMAT(l2.standingVideo, 'yyyy-MM-dd') AS level2StandingVideo,
+        FORMAT(l2.sleepingVideo, 'yyyy-MM-dd') AS level2SleepingVideo,
+        FORMAT(l2.feedGradVideo, 'yyyy-MM-dd') AS level2FeedGradVideo,
+        l2.secureCareAwarded AS level2SecureCareAwarded,
+        FORMAT(l2.secureCareAwardedDate, 'yyyy-MM-dd') AS level2SecureCareAwardedDate,
+        l2.awaiting AS level2Awaiting,
+        FORMAT(l3.conferenceCompleted, 'yyyy-MM-dd') AS level3ConferenceCompleted,
+        l3.notes AS level3Notes,
+        l3.advisorId AS level3AdvisorId,
+        a3.firstName + ' ' + ISNULL(a3.lastName, '') AS level3AdvisorName,
+        FORMAT(l3.standingVideo, 'yyyy-MM-dd') AS level3StandingVideo,
+        FORMAT(l3.noHandnoSpeak, 'yyyy-MM-dd') AS level3NoHandnoSpeak,
+        FORMAT(l3.sleepingVideo, 'yyyy-MM-dd') AS level3SleepingVideo,
+        l3.secureCareAwarded AS level3SecureCareAwarded,
+        FORMAT(l3.secureCareAwardedDate, 'yyyy-MM-dd') AS level3SecureCareAwardedDate,
+        l3.awaiting AS level3Awaiting,
+        FORMAT(consultant.conferenceCompleted, 'yyyy-MM-dd') AS consultantConferenceCompleted,
+        consultant.notes AS consultantNotes,
+        consultant.advisorId AS consultantAdvisorId,
+        aConsultant.firstName + ' ' + ISNULL(aConsultant.lastName, '') AS consultantAdvisorName,
+        FORMAT(consultant.[session#1], 'yyyy-MM-dd') AS consultantSession1,
+        FORMAT(consultant.[session#2], 'yyyy-MM-dd') AS consultantSession2,
+        FORMAT(consultant.[session#3], 'yyyy-MM-dd') AS consultantSession3,
+        consultant.secureCareAwarded AS consultantSecureCareAwarded,
+        FORMAT(consultant.secureCareAwardedDate, 'yyyy-MM-dd') AS consultantSecureCareAwardedDate,
+        consultant.awaiting AS consultantAwaiting
+      FROM [dbo].[SecureCareEmployee] l3
+      JOIN [dbo].[SecureCareEmployee] consultant
+        ON consultant.employeeNumber = l3.employeeNumber
+      LEFT JOIN [dbo].[SecureCareEmployee] l1
+        ON l1.employeeNumber = l3.employeeNumber AND l1.awardType = 'Level 1'
+      LEFT JOIN [dbo].[SecureCareEmployee] l2
+        ON l2.employeeNumber = l3.employeeNumber AND l2.awardType = 'Level 2'
+      LEFT JOIN dbo.Advisor a2 ON l2.advisorId = a2.advisorId
+      LEFT JOIN dbo.Advisor a3 ON l3.advisorId = a3.advisorId
+      LEFT JOIN dbo.Advisor aConsultant ON consultant.advisorId = aConsultant.advisorId
+      WHERE l3.awardType = 'Level 3'
+        AND (l3.secureCareAwarded = 1 OR l3.secureCareAwardedDate IS NOT NULL)
+        AND consultant.awardType = 'Consultant'
+        AND (consultant.secureCareAwarded = 0 OR consultant.secureCareAwarded IS NULL)
+        AND consultant.secureCareAwardedDate IS NULL
+        AND consultant.[session#1] IS NOT NULL
+        AND consultant.[session#2] IS NOT NULL
+        AND consultant.[session#3] IS NOT NULL
+    `;
+    
+    const request = pool.request();
+    
+    // Apply additional filters
+    if (filters.facility && filters.facility !== 'all') {
+      const facilities = Array.isArray(filters.facility) ? filters.facility : [filters.facility];
+      if (facilities.length === 1) {
+        query += ` AND l3.facility = @facility0`;
+        request.input('facility0', sql.VarChar, facilities[0]);
+      } else if (facilities.length > 1) {
+        const facilityParams = facilities.map((f, i) => `@facility${i}`).join(', ');
+        query += ` AND l3.facility IN (${facilityParams})`;
+        facilities.forEach((f, i) => {
+          request.input(`facility${i}`, sql.VarChar, f);
+        });
+      }
+    }
+    
+    if (filters.area && filters.area !== 'all') {
+      query += ` AND l3.area = @area`;
+      request.input('area', sql.VarChar, filters.area);
+    }
+    
+    if (filters.search) {
+      query += ` AND (l3.name LIKE @search OR l3.employeeNumber LIKE @search)`;
+      request.input('search', sql.VarChar, `%${filters.search}%`);
+    }
+    
+    if (filters.jobTitle && filters.jobTitle !== 'all') {
+      query += ` AND l3.staffRoll = @jobTitle`;
+      request.input('jobTitle', sql.VarChar, filters.jobTitle);
+    }
+    
+    // Add sorting
+    const sortBy = filters.sortBy || 'area';
+    const sortOrder = filters.sortOrder || 'asc';
+    switch (sortBy) {
+      case 'name':
+        query += ` ORDER BY l3.name ${sortOrder.toUpperCase()}`;
+        break;
+      case 'facility':
+        query += ` ORDER BY l3.facility ${sortOrder.toUpperCase()}`;
+        break;
+      case 'area':
+        query += ` ORDER BY l3.area ${sortOrder.toUpperCase()}, l3.name ${sortOrder.toUpperCase()}`;
+        break;
+      case 'employeeId':
+        query += ` ORDER BY l3.employeeNumber ${sortOrder.toUpperCase()}`;
+        break;
+      default:
+        query += ` ORDER BY l3.area ${sortOrder.toUpperCase()}, l3.name ${sortOrder.toUpperCase()}`;
+    }
+    
+    // Add pagination - allow large limits to show all data
+    const page = parseInt(filters.page) || 1;
+    const requestedLimit = parseInt(filters.limit) || 1000;
+    // Allow up to 10,000 records to show all data
+    const limit = requestedLimit > 10000 ? 10000 : requestedLimit;
+    const offset = (page - 1) * limit;
+    query += ` OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY`;
+    
+    let result;
+    try {
+      console.log('Executing Consultant query...');
+      result = await request.query(query);
+      console.log(`Consultant query returned ${result.recordset.length} records`);
+    } catch (error) {
+      console.error('Error in getEmployeesReadyForConsultantAward query:', error);
+      console.error('Query:', query);
+      throw error;
+    }
+    
+    // Get total count
+    let countQuery = `
+      SELECT COUNT(DISTINCT l3.employeeNumber) as total
+      FROM [dbo].[SecureCareEmployee] l3
+      JOIN [dbo].[SecureCareEmployee] consultant
+        ON consultant.employeeNumber = l3.employeeNumber
+      WHERE l3.awardType = 'Level 3'
+        AND (l3.secureCareAwarded = 1 OR l3.secureCareAwardedDate IS NOT NULL)
+        AND consultant.awardType = 'Consultant'
+        AND (consultant.secureCareAwarded = 0 OR consultant.secureCareAwarded IS NULL)
+        AND consultant.secureCareAwardedDate IS NULL
+        AND consultant.[session#1] IS NOT NULL
+        AND consultant.[session#2] IS NOT NULL
+        AND consultant.[session#3] IS NOT NULL
+    `;
+    
+    const countRequest = pool.request();
+    
+    if (filters.facility && filters.facility !== 'all') {
+      const facilities = Array.isArray(filters.facility) ? filters.facility : [filters.facility];
+      if (facilities.length === 1) {
+        countQuery += ` AND l3.facility = @facilityCount0`;
+        countRequest.input('facilityCount0', sql.VarChar, facilities[0]);
+      } else if (facilities.length > 1) {
+        const facilityParams = facilities.map((f, i) => `@facilityCount${i}`).join(', ');
+        countQuery += ` AND l3.facility IN (${facilityParams})`;
+        facilities.forEach((f, i) => {
+          countRequest.input(`facilityCount${i}`, sql.VarChar, f);
+        });
+      }
+    }
+    
+    if (filters.area && filters.area !== 'all') {
+      countQuery += ` AND l3.area = @area`;
+      countRequest.input('area', sql.VarChar, filters.area);
+    }
+    
+    if (filters.search) {
+      countQuery += ` AND (l3.name LIKE @search OR l3.employeeNumber LIKE @search)`;
+      countRequest.input('search', sql.VarChar, `%${filters.search}%`);
+    }
+    
+    if (filters.jobTitle && filters.jobTitle !== 'all') {
+      countQuery += ` AND l3.staffRoll = @jobTitle`;
+      countRequest.input('jobTitle', sql.VarChar, filters.jobTitle);
+    }
+    
+    let countResult;
+    try {
+      countResult = await countRequest.query(countQuery);
+      const total = countResult.recordset[0].total;
+      console.log(`Consultant total count: ${total}`);
+    } catch (error) {
+      console.error('Error getting Consultant count:', error);
+      throw error;
+    }
+    const total = countResult.recordset[0].total;
+    
+    // Transform results to match the aggregated format
+    console.log(`Transforming ${result.recordset.length} Consultant records...`);
+    const employees = result.recordset.map(record => ({
+      employeeId: record.employeeId,
+      employeeNumber: record.employeeNumber,
+      name: record.name,
+      facility: record.facility,
+      area: record.area,
+      staffRoll: record.staffRoll,
+      // Level 1
+      level1AssignedDate: record.level1AssignedDate,
+      level1CompletedDate: record.level1CompletedDate,
+      level1SecureCareAwarded: record.level1SecureCareAwarded,
+      level1SecureCareAwardedDate: record.level1SecureCareAwardedDate,
+      // Level 2
+      level2ConferenceCompleted: record.level2ConferenceCompleted,
+      level2Notes: record.level2Notes,
+      level2AdvisorId: record.level2AdvisorId,
+      level2AdvisorName: record.level2AdvisorName,
+      level2StandingVideo: record.level2StandingVideo,
+      level2SleepingVideo: record.level2SleepingVideo,
+      level2FeedGradVideo: record.level2FeedGradVideo,
+      level2SecureCareAwarded: record.level2SecureCareAwarded,
+      level2SecureCareAwardedDate: record.level2SecureCareAwardedDate,
+      level2Awaiting: record.level2Awaiting,
+      // Level 3
+      level3ConferenceCompleted: record.level3ConferenceCompleted,
+      level3Notes: record.level3Notes,
+      level3AdvisorId: record.level3AdvisorId,
+      level3AdvisorName: record.level3AdvisorName,
+      level3StandingVideo: record.level3StandingVideo,
+      level3NoHandnoSpeak: record.level3NoHandnoSpeak,
+      level3SleepingVideo: record.level3SleepingVideo,
+      level3SecureCareAwarded: record.level3SecureCareAwarded,
+      level3SecureCareAwardedDate: record.level3SecureCareAwardedDate,
+      level3Awaiting: record.level3Awaiting,
+      // Consultant
+      consultantConferenceCompleted: record.consultantConferenceCompleted,
+      consultantNotes: record.consultantNotes,
+      consultantAdvisorId: record.consultantAdvisorId,
+      consultantAdvisorName: record.consultantAdvisorName,
+      consultantSession1: record.consultantSession1,
+      consultantSession2: record.consultantSession2,
+      consultantSession3: record.consultantSession3,
+      consultantSecureCareAwarded: record.consultantSecureCareAwarded,
+      consultantSecureCareAwardedDate: record.consultantSecureCareAwardedDate,
+      consultantAwaiting: record.consultantAwaiting,
+      // Coach (null)
+      coachConferenceCompleted: null,
+      coachSession1: null,
+      coachSession2: null,
+      coachSession3: null,
+      coachSecureCareAwarded: null,
+      coachSecureCareAwardedDate: null,
+      coachAwaiting: null
+    }));
+    
+    return {
+      employees: employees,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
+        totalEmployees: total,
+        itemsPerPage: limit
+      }
+    };
+  }
+
+  // Get employees ready for Coach award (Consultant awarded, all Coach sessions completed, Coach not awarded)
+  async getEmployeesReadyForCoachAward(filters = {}) {
+    console.log('getEmployeesReadyForCoachAward called with filters:', filters);
+    const pool = await getPool();
+    
+    let query = `
+      SELECT DISTINCT
+        consultant.employeeNumber,
+        consultant.employeeId,
+        consultant.[name],
+        consultant.[area],
+        consultant.[facility],
+        consultant.staffRoll,
+        FORMAT(l1.assignedDate, 'yyyy-MM-dd') AS level1AssignedDate,
+        FORMAT(l1.completedDate, 'yyyy-MM-dd') AS level1CompletedDate,
+        l1.secureCareAwarded AS level1SecureCareAwarded,
+        FORMAT(l1.secureCareAwardedDate, 'yyyy-MM-dd') AS level1SecureCareAwardedDate,
+        FORMAT(l2.conferenceCompleted, 'yyyy-MM-dd') AS level2ConferenceCompleted,
+        l2.notes AS level2Notes,
+        l2.advisorId AS level2AdvisorId,
+        a2.firstName + ' ' + ISNULL(a2.lastName, '') AS level2AdvisorName,
+        FORMAT(l2.standingVideo, 'yyyy-MM-dd') AS level2StandingVideo,
+        FORMAT(l2.sleepingVideo, 'yyyy-MM-dd') AS level2SleepingVideo,
+        FORMAT(l2.feedGradVideo, 'yyyy-MM-dd') AS level2FeedGradVideo,
+        l2.secureCareAwarded AS level2SecureCareAwarded,
+        FORMAT(l2.secureCareAwardedDate, 'yyyy-MM-dd') AS level2SecureCareAwardedDate,
+        l2.awaiting AS level2Awaiting,
+        FORMAT(l3.conferenceCompleted, 'yyyy-MM-dd') AS level3ConferenceCompleted,
+        l3.notes AS level3Notes,
+        l3.advisorId AS level3AdvisorId,
+        a3.firstName + ' ' + ISNULL(a3.lastName, '') AS level3AdvisorName,
+        FORMAT(l3.standingVideo, 'yyyy-MM-dd') AS level3StandingVideo,
+        FORMAT(l3.noHandnoSpeak, 'yyyy-MM-dd') AS level3NoHandnoSpeak,
+        FORMAT(l3.sleepingVideo, 'yyyy-MM-dd') AS level3SleepingVideo,
+        l3.secureCareAwarded AS level3SecureCareAwarded,
+        FORMAT(l3.secureCareAwardedDate, 'yyyy-MM-dd') AS level3SecureCareAwardedDate,
+        l3.awaiting AS level3Awaiting,
+        FORMAT(consultant.conferenceCompleted, 'yyyy-MM-dd') AS consultantConferenceCompleted,
+        consultant.notes AS consultantNotes,
+        consultant.advisorId AS consultantAdvisorId,
+        aConsultant.firstName + ' ' + ISNULL(aConsultant.lastName, '') AS consultantAdvisorName,
+        FORMAT(consultant.[session#1], 'yyyy-MM-dd') AS consultantSession1,
+        FORMAT(consultant.[session#2], 'yyyy-MM-dd') AS consultantSession2,
+        FORMAT(consultant.[session#3], 'yyyy-MM-dd') AS consultantSession3,
+        consultant.secureCareAwarded AS consultantSecureCareAwarded,
+        FORMAT(consultant.secureCareAwardedDate, 'yyyy-MM-dd') AS consultantSecureCareAwardedDate,
+        consultant.awaiting AS consultantAwaiting,
+        FORMAT(coach.conferenceCompleted, 'yyyy-MM-dd') AS coachConferenceCompleted,
+        coach.notes AS coachNotes,
+        coach.advisorId AS coachAdvisorId,
+        aCoach.firstName + ' ' + ISNULL(aCoach.lastName, '') AS coachAdvisorName,
+        FORMAT(coach.[session#1], 'yyyy-MM-dd') AS coachSession1,
+        FORMAT(coach.[session#2], 'yyyy-MM-dd') AS coachSession2,
+        FORMAT(coach.[session#3], 'yyyy-MM-dd') AS coachSession3,
+        coach.secureCareAwarded AS coachSecureCareAwarded,
+        FORMAT(coach.secureCareAwardedDate, 'yyyy-MM-dd') AS coachSecureCareAwardedDate,
+        coach.awaiting AS coachAwaiting
+      FROM [dbo].[SecureCareEmployee] consultant
+      JOIN [dbo].[SecureCareEmployee] coach
+        ON coach.employeeNumber = consultant.employeeNumber
+      LEFT JOIN [dbo].[SecureCareEmployee] l1
+        ON l1.employeeNumber = consultant.employeeNumber AND l1.awardType = 'Level 1'
+      LEFT JOIN [dbo].[SecureCareEmployee] l2
+        ON l2.employeeNumber = consultant.employeeNumber AND l2.awardType = 'Level 2'
+      LEFT JOIN [dbo].[SecureCareEmployee] l3
+        ON l3.employeeNumber = consultant.employeeNumber AND l3.awardType = 'Level 3'
+      LEFT JOIN dbo.Advisor a2 ON l2.advisorId = a2.advisorId
+      LEFT JOIN dbo.Advisor a3 ON l3.advisorId = a3.advisorId
+      LEFT JOIN dbo.Advisor aConsultant ON consultant.advisorId = aConsultant.advisorId
+      LEFT JOIN dbo.Advisor aCoach ON coach.advisorId = aCoach.advisorId
+      WHERE consultant.awardType = 'Consultant'
+        AND (consultant.secureCareAwarded = 1 OR consultant.secureCareAwardedDate IS NOT NULL)
+        AND coach.awardType = 'Coach'
+        AND (coach.secureCareAwarded = 0 OR coach.secureCareAwarded IS NULL)
+        AND coach.secureCareAwardedDate IS NULL
+        AND coach.[session#1] IS NOT NULL
+        AND coach.[session#2] IS NOT NULL
+        AND coach.[session#3] IS NOT NULL
+    `;
+    
+    const request = pool.request();
+    
+    // Apply additional filters
+    if (filters.facility && filters.facility !== 'all') {
+      const facilities = Array.isArray(filters.facility) ? filters.facility : [filters.facility];
+      if (facilities.length === 1) {
+        query += ` AND consultant.facility = @facility0`;
+        request.input('facility0', sql.VarChar, facilities[0]);
+      } else if (facilities.length > 1) {
+        const facilityParams = facilities.map((f, i) => `@facility${i}`).join(', ');
+        query += ` AND consultant.facility IN (${facilityParams})`;
+        facilities.forEach((f, i) => {
+          request.input(`facility${i}`, sql.VarChar, f);
+        });
+      }
+    }
+    
+    if (filters.area && filters.area !== 'all') {
+      query += ` AND consultant.area = @area`;
+      request.input('area', sql.VarChar, filters.area);
+    }
+    
+    if (filters.search) {
+      query += ` AND (consultant.name LIKE @search OR consultant.employeeNumber LIKE @search)`;
+      request.input('search', sql.VarChar, `%${filters.search}%`);
+    }
+    
+    if (filters.jobTitle && filters.jobTitle !== 'all') {
+      query += ` AND consultant.staffRoll = @jobTitle`;
+      request.input('jobTitle', sql.VarChar, filters.jobTitle);
+    }
+    
+    // Add sorting
+    const sortBy = filters.sortBy || 'area';
+    const sortOrder = filters.sortOrder || 'asc';
+    switch (sortBy) {
+      case 'name':
+        query += ` ORDER BY consultant.name ${sortOrder.toUpperCase()}`;
+        break;
+      case 'facility':
+        query += ` ORDER BY consultant.facility ${sortOrder.toUpperCase()}`;
+        break;
+      case 'area':
+        query += ` ORDER BY consultant.area ${sortOrder.toUpperCase()}, consultant.name ${sortOrder.toUpperCase()}`;
+        break;
+      case 'employeeId':
+        query += ` ORDER BY consultant.employeeNumber ${sortOrder.toUpperCase()}`;
+        break;
+      default:
+        query += ` ORDER BY consultant.area ${sortOrder.toUpperCase()}, consultant.name ${sortOrder.toUpperCase()}`;
+    }
+    
+    // Add pagination - allow large limits to show all data
+    const page = parseInt(filters.page) || 1;
+    const requestedLimit = parseInt(filters.limit) || 1000;
+    // Allow up to 10,000 records to show all data
+    const limit = requestedLimit > 10000 ? 10000 : requestedLimit;
+    const offset = (page - 1) * limit;
+    query += ` OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY`;
+    
+    let result;
+    try {
+      console.log('Executing Coach query...');
+      result = await request.query(query);
+      console.log(`Coach query returned ${result.recordset.length} records`);
+    } catch (error) {
+      console.error('Error in getEmployeesReadyForCoachAward query:', error);
+      console.error('Query:', query);
+      throw error;
+    }
+    
+    // Get total count
+    let countQuery = `
+      SELECT COUNT(DISTINCT consultant.employeeNumber) as total
+      FROM [dbo].[SecureCareEmployee] consultant
+      JOIN [dbo].[SecureCareEmployee] coach
+        ON coach.employeeNumber = consultant.employeeNumber
+      WHERE consultant.awardType = 'Consultant'
+        AND (consultant.secureCareAwarded = 1 OR consultant.secureCareAwardedDate IS NOT NULL)
+        AND coach.awardType = 'Coach'
+        AND (coach.secureCareAwarded = 0 OR coach.secureCareAwarded IS NULL)
+        AND coach.secureCareAwardedDate IS NULL
+        AND coach.[session#1] IS NOT NULL
+        AND coach.[session#2] IS NOT NULL
+        AND coach.[session#3] IS NOT NULL
+    `;
+    
+    const countRequest = pool.request();
+    
+    if (filters.facility && filters.facility !== 'all') {
+      const facilities = Array.isArray(filters.facility) ? filters.facility : [filters.facility];
+      if (facilities.length === 1) {
+        countQuery += ` AND consultant.facility = @facilityCount0`;
+        countRequest.input('facilityCount0', sql.VarChar, facilities[0]);
+      } else if (facilities.length > 1) {
+        const facilityParams = facilities.map((f, i) => `@facilityCount${i}`).join(', ');
+        countQuery += ` AND consultant.facility IN (${facilityParams})`;
+        facilities.forEach((f, i) => {
+          countRequest.input(`facilityCount${i}`, sql.VarChar, f);
+        });
+      }
+    }
+    
+    if (filters.area && filters.area !== 'all') {
+      countQuery += ` AND consultant.area = @area`;
+      countRequest.input('area', sql.VarChar, filters.area);
+    }
+    
+    if (filters.search) {
+      countQuery += ` AND (consultant.name LIKE @search OR consultant.employeeNumber LIKE @search)`;
+      countRequest.input('search', sql.VarChar, `%${filters.search}%`);
+    }
+    
+    if (filters.jobTitle && filters.jobTitle !== 'all') {
+      countQuery += ` AND consultant.staffRoll = @jobTitle`;
+      countRequest.input('jobTitle', sql.VarChar, filters.jobTitle);
+    }
+    
+    let countResult;
+    try {
+      countResult = await countRequest.query(countQuery);
+      const total = countResult.recordset[0].total;
+      console.log(`Coach total count: ${total}`);
+    } catch (error) {
+      console.error('Error getting Coach count:', error);
+      throw error;
+    }
+    const total = countResult.recordset[0].total;
+    
+    // Transform results to match the aggregated format
+    console.log(`Transforming ${result.recordset.length} Coach records...`);
+    const employees = result.recordset.map(record => ({
+      employeeId: record.employeeId,
+      employeeNumber: record.employeeNumber,
+      name: record.name,
+      facility: record.facility,
+      area: record.area,
+      staffRoll: record.staffRoll,
+      // Level 1
+      level1AssignedDate: record.level1AssignedDate,
+      level1CompletedDate: record.level1CompletedDate,
+      level1SecureCareAwarded: record.level1SecureCareAwarded,
+      level1SecureCareAwardedDate: record.level1SecureCareAwardedDate,
+      // Level 2
+      level2ConferenceCompleted: record.level2ConferenceCompleted,
+      level2Notes: record.level2Notes,
+      level2AdvisorId: record.level2AdvisorId,
+      level2AdvisorName: record.level2AdvisorName,
+      level2StandingVideo: record.level2StandingVideo,
+      level2SleepingVideo: record.level2SleepingVideo,
+      level2FeedGradVideo: record.level2FeedGradVideo,
+      level2SecureCareAwarded: record.level2SecureCareAwarded,
+      level2SecureCareAwardedDate: record.level2SecureCareAwardedDate,
+      level2Awaiting: record.level2Awaiting,
+      // Level 3
+      level3ConferenceCompleted: record.level3ConferenceCompleted,
+      level3Notes: record.level3Notes,
+      level3AdvisorId: record.level3AdvisorId,
+      level3AdvisorName: record.level3AdvisorName,
+      level3StandingVideo: record.level3StandingVideo,
+      level3NoHandnoSpeak: record.level3NoHandnoSpeak,
+      level3SleepingVideo: record.level3SleepingVideo,
+      level3SecureCareAwarded: record.level3SecureCareAwarded,
+      level3SecureCareAwardedDate: record.level3SecureCareAwardedDate,
+      level3Awaiting: record.level3Awaiting,
+      // Consultant
+      consultantConferenceCompleted: record.consultantConferenceCompleted,
+      consultantNotes: record.consultantNotes,
+      consultantAdvisorId: record.consultantAdvisorId,
+      consultantAdvisorName: record.consultantAdvisorName,
+      consultantSession1: record.consultantSession1,
+      consultantSession2: record.consultantSession2,
+      consultantSession3: record.consultantSession3,
+      consultantSecureCareAwarded: record.consultantSecureCareAwarded,
+      consultantSecureCareAwardedDate: record.consultantSecureCareAwardedDate,
+      consultantAwaiting: record.consultantAwaiting,
+      // Coach
+      coachConferenceCompleted: record.coachConferenceCompleted,
+      coachNotes: record.coachNotes,
+      coachAdvisorId: record.coachAdvisorId,
+      coachAdvisorName: record.coachAdvisorName,
+      coachSession1: record.coachSession1,
+      coachSession2: record.coachSession2,
+      coachSession3: record.coachSession3,
+      coachSecureCareAwarded: record.coachSecureCareAwarded,
+      coachSecureCareAwardedDate: record.coachSecureCareAwardedDate,
+      coachAwaiting: record.coachAwaiting
+    }));
+    
+    console.log(`Returning ${employees.length} employees for Coach view`);
+    return {
+      employees: employees,
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
+        totalEmployees: total,
+        itemsPerPage: limit
+      }
+    };
+  }
 }
 
 module.exports = new SecureCareService();
