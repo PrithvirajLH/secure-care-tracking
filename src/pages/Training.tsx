@@ -856,6 +856,9 @@ export default function Training() {
           if (want === 'empty') {
             // Show only records where notes are empty or NULL
             if (noteValue !== '' && emp.notes !== null && emp.notes !== undefined) return false;
+          } else if (want === 'exclude-inactive') {
+            // Show everything except Inactive
+            if (noteValue === 'Inactive') return false;
           } else {
             if (noteValue !== want) return false;
           }
@@ -961,6 +964,9 @@ export default function Training() {
               const noteValue = (emp.notes || '').trim();
               if (want === 'empty') {
                 if (noteValue !== '' && emp.notes !== null && emp.notes !== undefined) return false;
+              } else if (want === 'exclude-inactive') {
+                // Show everything except Inactive
+                if (noteValue === 'Inactive') return false;
               } else {
                 if (noteValue !== want) return false;
               }
@@ -1105,6 +1111,9 @@ export default function Training() {
           if (want === 'empty') {
             // Show only records where notes are empty or NULL
             if (noteValue !== '' && emp.notes !== null && emp.notes !== undefined) return false;
+          } else if (want === 'exclude-inactive') {
+            // Show everything except Inactive
+            if (noteValue === 'Inactive') return false;
           } else {
             if (noteValue !== want) return false;
           }
@@ -1926,6 +1935,7 @@ export default function Training() {
                                     >
                                       <DropdownMenuRadioItem value="all">All</DropdownMenuRadioItem>
                                       <DropdownMenuRadioItem value="empty">Empty</DropdownMenuRadioItem>
+                                      <DropdownMenuRadioItem value="exclude-inactive">Exclude Inactive</DropdownMenuRadioItem>
                                       {NOTES_OPTIONS.filter(o => o.value !== '').map(o => (
                                         <DropdownMenuRadioItem key={o.value} value={o.value}>{o.label}</DropdownMenuRadioItem>
                                       ))}
