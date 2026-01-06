@@ -213,6 +213,38 @@ class SecureCareAPI {
     return response.json();
   }
 
+  // Check if user has permission to edit completed dates
+  async checkEditCompletedDatePermission(): Promise<{ hasPermission: boolean; userIdentifier: string | null }> {
+    const response = await fetch(`${this.baseURL}/securecare/permissions/edit-completed-date`);
+    if (!response.ok) {
+      throw new Error(`Failed to check permissions: ${response.statusText}`);
+    }
+    return response.json();
+  }
+
+  // Edit completed date: update schedule column and clear actual column
+  async editCompletedDate(employeeId: string, scheduleColumn: string, completeColumn: string, date: Date): Promise<{ success: boolean; message: string }> {
+    const response = await fetch(`${this.baseURL}/securecare/edit-completed`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        employeeId,
+        scheduleColumn,
+        completeColumn,
+        date: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(`Failed to edit completed date: ${errorData.message || response.statusText}`);
+    }
+
+    return response.json();
+  }
+
   // Approve a conference completion
   async approveConference(employeeId: string, notes?: string): Promise<{ success: boolean }> {
     const response = await fetch(`${this.baseURL}/securecare/approve`, {

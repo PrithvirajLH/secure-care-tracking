@@ -57,7 +57,7 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
       return trainingAPI.getEmployeeById(employee.employeeId.toString());
     },
     enabled: open && hasValidEmployeeId, // Only fetch when modal is open and has valid ID
-    staleTime: 0, // Always fetch fresh data
+    staleTime: 10 * 1000, // 10 seconds - balance freshness with performance
   });
 
   // Also fetch all SecureCareEmployee records (all award types) for this employee
@@ -68,7 +68,7 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
       return result;
     },
     enabled: open && hasValidEmployeeId,
-    staleTime: 0,
+    staleTime: 10 * 1000, // 10 seconds - balance freshness with performance
   });
 
 

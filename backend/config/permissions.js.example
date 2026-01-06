@@ -1,0 +1,20 @@
+// Permission configuration for role-based access control
+// Copy this file to permissions.js and add user emails/identifiers
+
+// Users with permission to edit completed dates
+// For Azure Easy Auth, these should match the x-ms-client-principal-name header
+// Example:
+// const EDIT_COMPLETED_DATE_PERMISSIONS = [
+//   'user1@example.com',
+//   'user2@example.com'
+// ];
+
+const EDIT_COMPLETED_DATE_PERMISSIONS = [
+  // Add user emails or identifiers here
+  // Example: 'user1@example.com', 'user2@example.com'
+];
+
+module.exports = {
+  EDIT_COMPLETED_DATE_PERMISSIONS
+};
+

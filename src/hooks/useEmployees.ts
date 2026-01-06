@@ -95,10 +95,10 @@ export const useTrainingEmployees = (filters: EmployeeFilters, pageSize: number 
         limit: pageSize
       });
     },
-    staleTime: 0, // Set to 0 to ensure fresh data after mutations
+    staleTime: 30 * 1000, // 30 seconds - balance between freshness and performance
     gcTime: 10 * 60 * 1000,
-    refetchOnMount: 'always', // Always refetch when component mounts
-    refetchOnWindowFocus: true, // Refetch when window gains focus
+    refetchOnMount: false, // Don't refetch on mount if data is fresh
+    refetchOnWindowFocus: false, // Don't refetch on window focus
   });
 
   const totalPages = data?.pagination?.totalPages || 0;

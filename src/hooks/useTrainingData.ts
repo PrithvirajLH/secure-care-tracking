@@ -39,21 +39,24 @@ export const useTrainingData = () => {
       return trainingAPI.scheduleTraining(employeeId, scheduleColumn, date);
     },
     onSuccess: async (data, variables) => {
-      // Invalidate and refetch relevant queries - force refetch to ensure UI updates with filters
+      // Invalidate relevant queries
       queryClient.invalidateQueries({ queryKey: trainingKeys.employee(variables.employeeId) });
       queryClient.invalidateQueries({ queryKey: ['employee-levels', variables.employeeId] });
       
-      // Force immediate refetch of all active employee queries
-      await queryClient.refetchQueries({ 
-        predicate: (query) => query.queryKey[0] === 'employees-unique',
-        type: 'active'
+      // Batch invalidations
+      queryClient.invalidateQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return key === 'employees-unique' || key === 'employees-training' || key === 'employees-stats';
+        }
       });
-      await queryClient.refetchQueries({ 
-        predicate: (query) => query.queryKey[0] === 'employees-training',
-        type: 'active'
-      });
-      await queryClient.refetchQueries({ 
-        predicate: (query) => query.queryKey[0] === 'employees-stats',
+      
+      // Immediately refetch active queries for instant UI update (non-blocking)
+      queryClient.refetchQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return key === 'employees-unique' || key === 'employees-training' || key === 'employees-stats';
+        },
         type: 'active'
       });
       
@@ -88,21 +91,24 @@ export const useTrainingData = () => {
       return trainingAPI.completeTraining(employeeId, scheduleColumn, completeColumn);
     },
     onSuccess: async (data, variables) => {
-      // Invalidate and refetch relevant queries - force refetch to ensure UI updates with filters
+      // Invalidate relevant queries
       queryClient.invalidateQueries({ queryKey: trainingKeys.employee(variables.employeeId) });
       queryClient.invalidateQueries({ queryKey: ['employee-levels', variables.employeeId] });
       
-      // Force immediate refetch of all active employee queries
-      await queryClient.refetchQueries({ 
-        predicate: (query) => query.queryKey[0] === 'employees-unique',
-        type: 'active'
+      // Batch invalidations
+      queryClient.invalidateQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return key === 'employees-unique' || key === 'employees-training' || key === 'employees-stats';
+        }
       });
-      await queryClient.refetchQueries({ 
-        predicate: (query) => query.queryKey[0] === 'employees-training',
-        type: 'active'
-      });
-      await queryClient.refetchQueries({ 
-        predicate: (query) => query.queryKey[0] === 'employees-stats',
+      
+      // Immediately refetch active queries for instant UI update (non-blocking)
+      queryClient.refetchQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return key === 'employees-unique' || key === 'employees-training' || key === 'employees-stats';
+        },
         type: 'active'
       });
       
@@ -112,6 +118,57 @@ export const useTrainingData = () => {
     },
     onError: (error) => {
       toast.error('Failed to complete training', {
+        description: error instanceof Error ? error.message : 'An error occurred',
+      });
+    },
+  });
+
+  // Edit completed date mutation: update schedule and clear actual column
+  const editCompletedDateMutation = useMutation({
+    mutationFn: ({ employeeId, requirementKey, date }: { employeeId: string; requirementKey: string; date: Date }) => {
+      let scheduleColumn = ScheduleFieldMapping[requirementKey] || `schedule${requirementKey}`;
+      
+      // Convert frontend field names to database column names for API calls
+      if (scheduleColumn === 'scheduleSession1') scheduleColumn = 'scheduleSession#1';
+      if (scheduleColumn === 'scheduleSession2') scheduleColumn = 'scheduleSession#2';
+      if (scheduleColumn === 'scheduleSession3') scheduleColumn = 'scheduleSession#3';
+      
+      // Map frontend field names to database field names
+      let completeColumn = requirementKey;
+      if (requirementKey === 'session1') completeColumn = 'session#1';
+      if (requirementKey === 'session2') completeColumn = 'session#2';
+      if (requirementKey === 'session3') completeColumn = 'session#3';
+      
+      return trainingAPI.editCompletedDate(employeeId, scheduleColumn, completeColumn, date);
+    },
+    onSuccess: async (data, variables) => {
+      // Invalidate relevant queries
+      queryClient.invalidateQueries({ queryKey: trainingKeys.employee(variables.employeeId) });
+      queryClient.invalidateQueries({ queryKey: ['employee-levels', variables.employeeId] });
+      
+      // Batch invalidations
+      queryClient.invalidateQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return key === 'employees-unique' || key === 'employees-training' || key === 'employees-stats';
+        }
+      });
+      
+      // Immediately refetch active queries for instant UI update (non-blocking)
+      queryClient.refetchQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return key === 'employees-unique' || key === 'employees-training' || key === 'employees-stats';
+        },
+        type: 'active'
+      });
+      
+      toast.success('Date updated successfully!', {
+        description: `Rescheduled for ${variables.date.toLocaleDateString()}`,
+      });
+    },
+    onError: (error) => {
+      toast.error('Failed to update date', {
         description: error instanceof Error ? error.message : 'An error occurred',
       });
     },
@@ -130,21 +187,24 @@ export const useTrainingData = () => {
       return trainingAPI.rescheduleTraining(employeeId, scheduleColumn, date);
     },
     onSuccess: async (data, variables) => {
-      // Invalidate and refetch relevant queries - force refetch to ensure UI updates with filters
+      // Invalidate relevant queries
       queryClient.invalidateQueries({ queryKey: trainingKeys.employee(variables.employeeId) });
       queryClient.invalidateQueries({ queryKey: ['employee-levels', variables.employeeId] });
       
-      // Force immediate refetch of all active employee queries
-      await queryClient.refetchQueries({ 
-        predicate: (query) => query.queryKey[0] === 'employees-unique',
-        type: 'active'
+      // Batch invalidations
+      queryClient.invalidateQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return key === 'employees-unique' || key === 'employees-training' || key === 'employees-stats';
+        }
       });
-      await queryClient.refetchQueries({ 
-        predicate: (query) => query.queryKey[0] === 'employees-training',
-        type: 'active'
-      });
-      await queryClient.refetchQueries({ 
-        predicate: (query) => query.queryKey[0] === 'employees-stats',
+      
+      // Immediately refetch active queries for instant UI update (non-blocking)
+      queryClient.refetchQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return key === 'employees-unique' || key === 'employees-training' || key === 'employees-stats';
+        },
         type: 'active'
       });
       
@@ -180,19 +240,23 @@ export const useTrainingData = () => {
       queryClient.invalidateQueries({ queryKey: trainingKeys.employee(variables.employeeId) });
       queryClient.invalidateQueries({ queryKey: ['employee-levels', variables.employeeId] });
       
-      // Force immediate refetch of all active employee queries
-      await queryClient.refetchQueries({ 
-        predicate: (query) => query.queryKey[0] === 'employees-unique',
+      // Batch invalidations
+      queryClient.invalidateQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return key === 'employees-unique' || key === 'employees-training' || key === 'employees-stats';
+        }
+      });
+      
+      // Immediately refetch active queries for instant UI update (non-blocking)
+      queryClient.refetchQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return key === 'employees-unique' || key === 'employees-training' || key === 'employees-stats';
+        },
         type: 'active'
       });
-      await queryClient.refetchQueries({ 
-        predicate: (query) => query.queryKey[0] === 'employees-training',
-        type: 'active'
-      });
-      await queryClient.refetchQueries({ 
-        predicate: (query) => query.queryKey[0] === 'employees-stats',
-        type: 'active'
-      });
+      
       toast.success('Conference approved successfully!');
     },
     onError: (error) => {
@@ -211,19 +275,23 @@ export const useTrainingData = () => {
       queryClient.invalidateQueries({ queryKey: trainingKeys.employee(variables.employeeId) });
       queryClient.invalidateQueries({ queryKey: ['employee-levels', variables.employeeId] });
       
-      // Force immediate refetch of all active employee queries
-      await queryClient.refetchQueries({ 
-        predicate: (query) => query.queryKey[0] === 'employees-unique',
+      // Batch invalidations
+      queryClient.invalidateQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return key === 'employees-unique' || key === 'employees-training' || key === 'employees-stats';
+        }
+      });
+      
+      // Immediately refetch active queries for instant UI update (non-blocking)
+      queryClient.refetchQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return key === 'employees-unique' || key === 'employees-training' || key === 'employees-stats';
+        },
         type: 'active'
       });
-      await queryClient.refetchQueries({ 
-        predicate: (query) => query.queryKey[0] === 'employees-training',
-        type: 'active'
-      });
-      await queryClient.refetchQueries({ 
-        predicate: (query) => query.queryKey[0] === 'employees-stats',
-        type: 'active'
-      });
+      
       toast.success('Conference rejected successfully!');
     },
     onError: (error) => {
@@ -240,10 +308,12 @@ export const useTrainingData = () => {
     // Mutations
     scheduleTraining: scheduleTrainingMutation.mutate,
     completeTraining: completeTrainingMutation.mutate,
+    editCompletedDate: editCompletedDateMutation.mutate,
     rescheduleTraining: rescheduleTrainingMutation.mutate,
     // Async variants for awaiting in UI flows
     scheduleTrainingAsync: scheduleTrainingMutation.mutateAsync,
     completeTrainingAsync: completeTrainingMutation.mutateAsync,
+    editCompletedDateAsync: editCompletedDateMutation.mutateAsync,
     rescheduleTrainingAsync: rescheduleTrainingMutation.mutateAsync,
     awardTraining: awardTrainingMutation.mutate,
     approveConference: approveConferenceMutation.mutate,
@@ -252,6 +322,7 @@ export const useTrainingData = () => {
     // Loading states
     isScheduling: scheduleTrainingMutation.isPending,
     isCompleting: completeTrainingMutation.isPending,
+    isEditingCompleted: editCompletedDateMutation.isPending,
     isRescheduling: rescheduleTrainingMutation.isPending,
     isAwarding: awardTrainingMutation.isPending,
     isApprovingConference: approveConferenceMutation.isPending,
@@ -260,6 +331,7 @@ export const useTrainingData = () => {
     // Error states
     scheduleError: scheduleTrainingMutation.error,
     completeError: completeTrainingMutation.error,
+    editCompletedError: editCompletedDateMutation.error,
     rescheduleError: rescheduleTrainingMutation.error,
     awardError: awardTrainingMutation.error,
   };

@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const secureCareService = require('../services/secureCareService');
+const { requireEditCompletedDatePermission } = require('../middleware/permissions');
+const { getCurrentUser, canEditCompletedDate } = require('../config/permissions');
 
 // Get employees by level with filters
 router.get('/employees/:level', async (req, res) => {
@@ -216,6 +218,49 @@ router.post('/complete', async (req, res) => {
     console.error('Complete training error:', error);
     res.status(500).json({ 
       error: 'Failed to complete training',
+      message: error.message 
+    });
+  }
+});
+
+// Check user permissions for editing completed dates
+router.get('/permissions/edit-completed-date', async (req, res) => {
+  try {
+    const userIdentifier = getCurrentUser(req);
+    const hasPermission = canEditCompletedDate(userIdentifier);
+    
+    res.json({ 
+      hasPermission,
+      userIdentifier: userIdentifier || null
+    });
+  } catch (error) {
+    console.error('Permission check error:', error);
+    res.status(500).json({ 
+      error: 'Failed to check permissions',
+      message: error.message 
+    });
+  }
+});
+
+// Edit completed date: update schedule column and clear actual column
+// Protected route - requires permission
+router.post('/edit-completed', requireEditCompletedDatePermission, async (req, res) => {
+  try {
+    const { employeeId, scheduleColumn, completeColumn, date } = req.body;
+    
+    if (!employeeId || !scheduleColumn || !completeColumn || !date) {
+      return res.status(400).json({ 
+        error: 'employeeId, scheduleColumn, completeColumn, and date are required' 
+      });
+    }
+    
+    const result = await secureCareService.editCompletedDate(employeeId, scheduleColumn, completeColumn, date);
+    res.json(result);
+    
+  } catch (error) {
+    console.error('Edit completed date error:', error);
+    res.status(500).json({ 
+      error: 'Failed to edit completed date',
       message: error.message 
     });
   }

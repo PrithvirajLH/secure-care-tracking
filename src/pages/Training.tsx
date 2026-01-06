@@ -54,6 +54,7 @@ import { useEmployees, useEmployeeStats, useTrainingEmployees, useAdvisors } fro
 import PageHeader from "@/components/PageHeader";
 import { trainingAPI } from "@/services/api";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEditCompletedDatePermission } from "@/hooks/usePermissions";
 
 // Import new configuration
 import { 
@@ -94,6 +95,11 @@ interface LevelStats {
 
 export default function Training() {
   const queryClient = useQueryClient();
+  
+  // Check permissions for editing completed dates
+  const { data: permissionData, isLoading: isLoadingPermissions, error: permissionError } = useEditCompletedDatePermission();
+  // Only enable if query is loaded, no error, and permission is explicitly true
+  const canEditCompletedDate = !isLoadingPermissions && !permissionError && (permissionData?.hasPermission === true);
   
   // URL-based tab persistence
   const [searchParams, setSearchParams] = useSearchParams();
@@ -247,7 +253,7 @@ export default function Training() {
   // Individual click outside handler for Mark Complete/Reschedule popup
   useEffect(() => {
     if (!popupPosition || !currentPopupEmployee || !currentPopupFieldKey) return;
-    if (openDatePicker && (openDatePicker.includes('conferenceCompleted') || openDatePicker.startsWith('reschedule-'))) return;
+    if (openDatePicker && (openDatePicker.includes('conferenceCompleted') || openDatePicker.startsWith('reschedule-') || openDatePicker.startsWith('edit-completed-'))) return;
     if (!ScheduleFieldMapping[currentPopupFieldKey] || !currentPopupEmployee[ScheduleFieldMapping[currentPopupFieldKey]]) return;
 
     const handleClickOutside = (event: MouseEvent) => {
@@ -262,6 +268,24 @@ export default function Training() {
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
   }, [popupPosition, currentPopupEmployee, currentPopupFieldKey, openDatePicker]);
+
+  // Individual click outside handler for Edit Completed Date Picker popup
+  useEffect(() => {
+    if (!openDatePicker || !openDatePicker.startsWith('edit-completed-')) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (!target.closest('[data-edit-completed-popup]')) {
+        setOpenDatePicker(null);
+        setPopupPosition(null);
+        setCurrentPopupEmployee(null);
+        setCurrentPopupFieldKey(null);
+      }
+    };
+
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [openDatePicker]);
 
   // Individual click outside handler for Reschedule Date Picker popup
   useEffect(() => {
@@ -283,7 +307,7 @@ export default function Training() {
 
   // Individual click outside handler for Schedule Date Picker popup
   useEffect(() => {
-    if (!openDatePicker || openDatePicker.includes('conferenceCompleted') || openDatePicker.startsWith('reschedule-')) return;
+    if (!openDatePicker || openDatePicker.includes('conferenceCompleted') || openDatePicker.startsWith('reschedule-') || openDatePicker.startsWith('edit-completed-')) return;
     if (!popupPosition || !currentPopupEmployee || !currentPopupFieldKey) return;
 
     const handleClickOutside = (event: MouseEvent) => {
@@ -305,11 +329,14 @@ export default function Training() {
     scheduleTraining: baseScheduleTraining,
     scheduleTrainingAsync: baseScheduleTrainingAsync,
     completeTraining: baseCompleteTraining,
+    editCompletedDate: baseEditCompletedDate,
+    editCompletedDateAsync: baseEditCompletedDateAsync,
     rescheduleTraining: baseRescheduleTraining,
     approveConference: baseApproveConference,
     rejectConference: baseRejectConference,
     isScheduling,
     isCompleting,
+    isEditingCompleted,
     isRescheduling,
     isApprovingConference,
     isRejectingConference,
@@ -325,6 +352,16 @@ export default function Training() {
 
   const completeTraining = async (params: any) => {
     baseCompleteTraining(params);
+    await new Promise(resolve => setTimeout(resolve, 500));
+    refetch();
+  };
+
+  const editCompletedDate = async (params: any) => {
+    if (baseEditCompletedDateAsync) {
+      await baseEditCompletedDateAsync(params);
+    } else {
+      baseEditCompletedDate(params);
+    }
     await new Promise(resolve => setTimeout(resolve, 500));
     refetch();
   };
@@ -1435,11 +1472,27 @@ export default function Training() {
     const status = fmt.scheduledOrDone(scheduledValue, value);
     
     if (value) {
+      // Blue badge - both schedule and actual have dates
+      // Clicking opens "Undo" popup: clears completed date and keeps scheduled date (yellow badge)
+      // Only clickable if user has permission
       return (
         <StatusBadge
           variant="completed"
           icon={CheckCircle}
           text={fmt.date(value)}
+          onMouseDown={canEditCompletedDate ? (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setIsMouseDownInProgress(true);
+            const rect = (e.target as HTMLElement).getBoundingClientRect();
+            const position = { x: rect.left + rect.width / 2, y: rect.bottom + 8 };
+            setPopupPosition(position);
+            setCurrentPopupEmployee(employee);
+            setCurrentPopupFieldKey(fieldKey);
+            setOpenDatePicker(`edit-completed-${key}`);
+            setTimeout(() => setIsMouseDownInProgress(false), 100);
+          } : undefined}
+          className={!canEditCompletedDate ? 'cursor-default' : 'cursor-pointer'}
         />
       );
     }
@@ -1458,7 +1511,8 @@ export default function Training() {
               setPopupPosition({ x: rect.left + rect.width / 2, y: rect.bottom + 8 });
               setCurrentPopupEmployee(employee);
               setCurrentPopupFieldKey(fieldKey);
-              // Don't set openDatePicker for scheduled items - let the render logic handle which popup to show
+              // Clear openDatePicker to ensure Mark Complete/Reschedule popup shows
+              setOpenDatePicker(null);
             }}
             disabled={conferenceRejected}
           />
@@ -2325,7 +2379,7 @@ export default function Training() {
        
        {/* Portal popup for Mark Complete/Reschedule */}
        {popupPosition && currentPopupEmployee && currentPopupFieldKey && 
-        (!openDatePicker || (!openDatePicker.includes('conferenceCompleted') && !openDatePicker.startsWith('reschedule-'))) &&
+        (!openDatePicker || (!openDatePicker.includes('conferenceCompleted') && !openDatePicker.startsWith('reschedule-') && !openDatePicker.startsWith('edit-completed-'))) &&
         ScheduleFieldMapping[currentPopupFieldKey] && 
         currentPopupEmployee[ScheduleFieldMapping[currentPopupFieldKey]] && (
          <div 
@@ -2379,6 +2433,52 @@ export default function Training() {
          </div>
        )}
        
+       {/* Portal popup for Undo Completed Date - Only show if user has permission */}
+       {canEditCompletedDate && openDatePicker && popupPosition && currentPopupEmployee && currentPopupFieldKey && 
+        openDatePicker.startsWith('edit-completed-') && (
+         <div 
+           className="fixed z-[9999] bg-white border border-gray-300 rounded-lg shadow-xl p-3 date-picker-popup modal-container"
+           data-edit-completed-popup
+           style={{
+             left: Math.max(10, Math.min(popupPosition.x, window.innerWidth - 200)),
+             top: Math.min(popupPosition.y, window.innerHeight - 120),
+             transform: 'translateX(-50%)'
+           }}
+         >
+          <div className="flex flex-col gap-2">
+            <button
+              onMouseDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const employeeId = currentPopupEmployee?.employeeId;
+                const requirementKey = currentPopupFieldKey;
+                const scheduleFieldKey = ScheduleFieldMapping[requirementKey];
+                const scheduledDate = scheduleFieldKey ? currentPopupEmployee[scheduleFieldKey] : null;
+                
+                setOpenDatePicker(null);
+                setPopupPosition(null);
+                setCurrentPopupEmployee(null);
+                setCurrentPopupFieldKey(null);
+                
+                if (employeeId && requirementKey && scheduledDate) {
+                  // Use the existing scheduled date to keep it unchanged
+                  editCompletedDate({ 
+                    employeeId, 
+                    requirementKey, 
+                    date: parseDate(scheduledDate) || new Date() 
+                  });
+                }
+              }}
+              disabled={isEditingCompleted}
+              className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-orange-500 to-red-500 text-white px-3 py-2 rounded-lg text-sm font-semibold hover:from-orange-600 hover:to-red-600 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <X className="w-4 h-4" />
+              {isEditingCompleted ? 'Undoing...' : 'Undo'}
+            </button>
+          </div>
+         </div>
+       )}
+       
        {/* Portal popup for Reschedule Date Picker */}
        {openDatePicker && popupPosition && currentPopupEmployee && currentPopupFieldKey && 
         openDatePicker.startsWith('reschedule-') && (
@@ -2418,7 +2518,8 @@ export default function Training() {
            currentPopupEmployee && 
            currentPopupFieldKey && 
            !openDatePicker.includes('conferenceCompleted') && 
-           !openDatePicker.startsWith('reschedule-');
+           !openDatePicker.startsWith('reschedule-') &&
+           !openDatePicker.startsWith('edit-completed-');
          
          
          return shouldRender;
