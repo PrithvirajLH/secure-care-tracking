@@ -571,10 +571,10 @@ export default function EmployeeData() {
                 {columns.map((column) => (
                   <TableHead 
                     key={column.key}
-                    className={`${column.bgColor} sticky top-0 z-10 hover:bg-opacity-80 transition-colors whitespace-nowrap`}
+                    className={`${column.bgColor} sticky top-0 z-10 hover:bg-opacity-80 transition-colors whitespace-nowrap text-center`}
                   >
                     <div 
-                      className="flex items-center justify-between cursor-pointer"
+                      className="flex items-center justify-center gap-1 cursor-pointer"
                       onClick={() => handleSort(column.key)}
                     >
                       <span className="font-semibold text-gray-900 text-xs">{column.label}</span>
@@ -609,7 +609,7 @@ export default function EmployeeData() {
                     {columns.map((column) => (
                       <TableCell 
                         key={column.key}
-                        className={`${column.bgColor} py-2 px-2 text-xs whitespace-nowrap`}
+                        className={`${column.bgColor} py-2 px-2 text-xs whitespace-nowrap text-center`}
                       >
                         {renderCellContent(employee, column)}
                       </TableCell>

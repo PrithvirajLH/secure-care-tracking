@@ -2630,12 +2630,13 @@ class SecureCareService {
       FROM [dbo].[SecureCareEmployee] l2
       JOIN [dbo].[SecureCareEmployee] l3
         ON l3.employeeNumber = l2.employeeNumber
-      LEFT JOIN [dbo].[SecureCareEmployee] l1
+      INNER JOIN [dbo].[SecureCareEmployee] l1
         ON l1.employeeNumber = l2.employeeNumber AND l1.awardType = 'Level 1'
       LEFT JOIN dbo.Advisor a2 ON l2.advisorId = a2.advisorId
       LEFT JOIN dbo.Advisor a3 ON l3.advisorId = a3.advisorId
       WHERE l2.awardType = 'Level 2'
         AND (l2.secureCareAwarded = 1 OR l2.secureCareAwardedDate IS NOT NULL)
+        AND l1.secureCareAwarded = 1
         AND l3.awardType = 'Level 3'
         AND (l3.secureCareAwarded = 0 OR l3.secureCareAwarded IS NULL)
         AND l3.secureCareAwardedDate IS NULL
@@ -2712,8 +2713,11 @@ class SecureCareService {
       FROM [dbo].[SecureCareEmployee] l2
       JOIN [dbo].[SecureCareEmployee] l3
         ON l3.employeeNumber = l2.employeeNumber
+      INNER JOIN [dbo].[SecureCareEmployee] l1
+        ON l1.employeeNumber = l2.employeeNumber AND l1.awardType = 'Level 1'
       WHERE l2.awardType = 'Level 2'
         AND (l2.secureCareAwarded = 1 OR l2.secureCareAwardedDate IS NOT NULL)
+        AND l1.secureCareAwarded = 1
         AND l3.awardType = 'Level 3'
         AND (l3.secureCareAwarded = 0 OR l3.secureCareAwarded IS NULL)
         AND l3.secureCareAwardedDate IS NULL
@@ -2826,12 +2830,12 @@ class SecureCareService {
     
     let query = `
       SELECT DISTINCT
-        l3.employeeNumber,
-        l3.employeeId,
-        l3.[name],
-        l3.[area],
-        l3.[facility],
-        l3.staffRoll,
+        consultant.employeeNumber,
+        consultant.employeeId,
+        consultant.[name],
+        consultant.[area],
+        consultant.[facility],
+        consultant.staffRoll,
         CONVERT(varchar(10), l1.assignedDate, 120) AS level1AssignedDate,
         CONVERT(varchar(10), l1.completedDate, 120) AS level1CompletedDate,
         l1.secureCareAwarded AS level1SecureCareAwarded,
@@ -2866,37 +2870,42 @@ class SecureCareService {
         consultant.secureCareAwarded AS consultantSecureCareAwarded,
         CONVERT(varchar(10), consultant.secureCareAwardedDate, 120) AS consultantSecureCareAwardedDate,
         consultant.awaiting AS consultantAwaiting
-      FROM [dbo].[SecureCareEmployee] l3
-      JOIN [dbo].[SecureCareEmployee] consultant
-        ON consultant.employeeNumber = l3.employeeNumber
-      LEFT JOIN [dbo].[SecureCareEmployee] l1
-        ON l1.employeeNumber = l3.employeeNumber AND l1.awardType = 'Level 1'
-      LEFT JOIN [dbo].[SecureCareEmployee] l2
-        ON l2.employeeNumber = l3.employeeNumber AND l2.awardType = 'Level 2'
+      FROM [dbo].[SecureCareEmployee] consultant
+      INNER JOIN [dbo].[SecureCareEmployee] l1
+        ON l1.employeeNumber = consultant.employeeNumber AND l1.awardType = 'Level 1'
+      INNER JOIN [dbo].[SecureCareEmployee] l2
+        ON l2.employeeNumber = consultant.employeeNumber AND l2.awardType = 'Level 2'
+      LEFT JOIN [dbo].[SecureCareEmployee] l3
+        ON l3.employeeNumber = consultant.employeeNumber AND l3.awardType = 'Level 3'
       LEFT JOIN dbo.Advisor a2 ON l2.advisorId = a2.advisorId
       LEFT JOIN dbo.Advisor a3 ON l3.advisorId = a3.advisorId
       LEFT JOIN dbo.Advisor aConsultant ON consultant.advisorId = aConsultant.advisorId
-      WHERE l3.awardType = 'Level 3'
-        AND (l3.secureCareAwarded = 1 OR l3.secureCareAwardedDate IS NOT NULL)
-        AND consultant.awardType = 'Consultant'
+      WHERE consultant.awardType = 'Consultant'
+        AND (l1.secureCareAwarded = 1 OR l1.secureCareAwardedDate IS NOT NULL)
+        AND (l2.secureCareAwarded = 1 OR l2.secureCareAwardedDate IS NOT NULL)
+        -- Level 3 awarded is optional for Consultant (no check needed)
         AND (consultant.secureCareAwarded = 0 OR consultant.secureCareAwarded IS NULL)
         AND consultant.secureCareAwardedDate IS NULL
         AND consultant.[session#1] IS NOT NULL
+        AND consultant.[session#1] != ''
         AND consultant.[session#2] IS NOT NULL
+        AND consultant.[session#2] != ''
         AND consultant.[session#3] IS NOT NULL
+        AND consultant.[session#3] != ''
     `;
     
+    console.log('Consultant readiness query:', query);
     const request = pool.request();
     
     // Apply additional filters
     if (filters.facility && filters.facility !== 'all') {
       const facilities = Array.isArray(filters.facility) ? filters.facility : [filters.facility];
       if (facilities.length === 1) {
-        query += ` AND l3.facility = @facility0`;
+        query += ` AND consultant.facility = @facility0`;
         request.input('facility0', sql.VarChar, facilities[0]);
       } else if (facilities.length > 1) {
         const facilityParams = facilities.map((f, i) => `@facility${i}`).join(', ');
-        query += ` AND l3.facility IN (${facilityParams})`;
+        query += ` AND consultant.facility IN (${facilityParams})`;
         facilities.forEach((f, i) => {
           request.input(`facility${i}`, sql.VarChar, f);
         });
@@ -2904,17 +2913,17 @@ class SecureCareService {
     }
     
     if (filters.area && filters.area !== 'all') {
-      query += ` AND l3.area = @area`;
+      query += ` AND consultant.area = @area`;
       request.input('area', sql.VarChar, filters.area);
     }
     
     if (filters.search) {
-      query += ` AND (l3.name LIKE @search OR l3.employeeNumber LIKE @search)`;
+      query += ` AND (consultant.name LIKE @search OR consultant.employeeNumber LIKE @search)`;
       request.input('search', sql.VarChar, `%${filters.search}%`);
     }
     
     if (filters.jobTitle && filters.jobTitle !== 'all') {
-      query += ` AND l3.staffRoll = @jobTitle`;
+      query += ` AND consultant.staffRoll = @jobTitle`;
       request.input('jobTitle', sql.VarChar, filters.jobTitle);
     }
     
@@ -2923,19 +2932,19 @@ class SecureCareService {
     const sortOrder = filters.sortOrder || 'asc';
     switch (sortBy) {
       case 'name':
-        query += ` ORDER BY l3.name ${sortOrder.toUpperCase()}`;
+        query += ` ORDER BY consultant.name ${sortOrder.toUpperCase()}`;
         break;
       case 'facility':
-        query += ` ORDER BY l3.facility ${sortOrder.toUpperCase()}`;
+        query += ` ORDER BY consultant.facility ${sortOrder.toUpperCase()}`;
         break;
       case 'area':
-        query += ` ORDER BY l3.area ${sortOrder.toUpperCase()}, l3.name ${sortOrder.toUpperCase()}`;
+        query += ` ORDER BY consultant.area ${sortOrder.toUpperCase()}, consultant.name ${sortOrder.toUpperCase()}`;
         break;
       case 'employeeId':
-        query += ` ORDER BY l3.employeeNumber ${sortOrder.toUpperCase()}`;
+        query += ` ORDER BY consultant.employeeNumber ${sortOrder.toUpperCase()}`;
         break;
       default:
-        query += ` ORDER BY l3.area ${sortOrder.toUpperCase()}, l3.name ${sortOrder.toUpperCase()}`;
+        query += ` ORDER BY consultant.area ${sortOrder.toUpperCase()}, consultant.name ${sortOrder.toUpperCase()}`;
     }
     
     // Add pagination - allow large limits to show all data
@@ -2959,18 +2968,26 @@ class SecureCareService {
     
     // Get total count
     let countQuery = `
-      SELECT COUNT(DISTINCT l3.employeeNumber) as total
-      FROM [dbo].[SecureCareEmployee] l3
-      JOIN [dbo].[SecureCareEmployee] consultant
-        ON consultant.employeeNumber = l3.employeeNumber
-      WHERE l3.awardType = 'Level 3'
-        AND (l3.secureCareAwarded = 1 OR l3.secureCareAwardedDate IS NOT NULL)
-        AND consultant.awardType = 'Consultant'
+      SELECT COUNT(DISTINCT consultant.employeeNumber) as total
+      FROM [dbo].[SecureCareEmployee] consultant
+      INNER JOIN [dbo].[SecureCareEmployee] l1
+        ON l1.employeeNumber = consultant.employeeNumber AND l1.awardType = 'Level 1'
+      INNER JOIN [dbo].[SecureCareEmployee] l2
+        ON l2.employeeNumber = consultant.employeeNumber AND l2.awardType = 'Level 2'
+      LEFT JOIN [dbo].[SecureCareEmployee] l3
+        ON l3.employeeNumber = consultant.employeeNumber AND l3.awardType = 'Level 3'
+      WHERE consultant.awardType = 'Consultant'
+        AND (l1.secureCareAwarded = 1 OR l1.secureCareAwardedDate IS NOT NULL)
+        AND (l2.secureCareAwarded = 1 OR l2.secureCareAwardedDate IS NOT NULL)
+        -- Level 3 awarded is optional for Consultant (no check needed)
         AND (consultant.secureCareAwarded = 0 OR consultant.secureCareAwarded IS NULL)
         AND consultant.secureCareAwardedDate IS NULL
         AND consultant.[session#1] IS NOT NULL
+        AND consultant.[session#1] != ''
         AND consultant.[session#2] IS NOT NULL
+        AND consultant.[session#2] != ''
         AND consultant.[session#3] IS NOT NULL
+        AND consultant.[session#3] != ''
     `;
     
     const countRequest = pool.request();
@@ -2978,11 +2995,11 @@ class SecureCareService {
     if (filters.facility && filters.facility !== 'all') {
       const facilities = Array.isArray(filters.facility) ? filters.facility : [filters.facility];
       if (facilities.length === 1) {
-        countQuery += ` AND l3.facility = @facilityCount0`;
+        countQuery += ` AND consultant.facility = @facilityCount0`;
         countRequest.input('facilityCount0', sql.VarChar, facilities[0]);
       } else if (facilities.length > 1) {
         const facilityParams = facilities.map((f, i) => `@facilityCount${i}`).join(', ');
-        countQuery += ` AND l3.facility IN (${facilityParams})`;
+        countQuery += ` AND consultant.facility IN (${facilityParams})`;
         facilities.forEach((f, i) => {
           countRequest.input(`facilityCount${i}`, sql.VarChar, f);
         });
@@ -2990,17 +3007,17 @@ class SecureCareService {
     }
     
     if (filters.area && filters.area !== 'all') {
-      countQuery += ` AND l3.area = @area`;
+      countQuery += ` AND consultant.area = @area`;
       countRequest.input('area', sql.VarChar, filters.area);
     }
     
     if (filters.search) {
-      countQuery += ` AND (l3.name LIKE @search OR l3.employeeNumber LIKE @search)`;
+      countQuery += ` AND (consultant.name LIKE @search OR consultant.employeeNumber LIKE @search)`;
       countRequest.input('search', sql.VarChar, `%${filters.search}%`);
     }
     
     if (filters.jobTitle && filters.jobTitle !== 'all') {
-      countQuery += ` AND l3.staffRoll = @jobTitle`;
+      countQuery += ` AND consultant.staffRoll = @jobTitle`;
       countRequest.input('jobTitle', sql.VarChar, filters.jobTitle);
     }
     
@@ -3143,9 +3160,9 @@ class SecureCareService {
       FROM [dbo].[SecureCareEmployee] consultant
       JOIN [dbo].[SecureCareEmployee] coach
         ON coach.employeeNumber = consultant.employeeNumber
-      LEFT JOIN [dbo].[SecureCareEmployee] l1
+      INNER JOIN [dbo].[SecureCareEmployee] l1
         ON l1.employeeNumber = consultant.employeeNumber AND l1.awardType = 'Level 1'
-      LEFT JOIN [dbo].[SecureCareEmployee] l2
+      INNER JOIN [dbo].[SecureCareEmployee] l2
         ON l2.employeeNumber = consultant.employeeNumber AND l2.awardType = 'Level 2'
       LEFT JOIN [dbo].[SecureCareEmployee] l3
         ON l3.employeeNumber = consultant.employeeNumber AND l3.awardType = 'Level 3'
@@ -3155,6 +3172,9 @@ class SecureCareService {
       LEFT JOIN dbo.Advisor aCoach ON coach.advisorId = aCoach.advisorId
       WHERE consultant.awardType = 'Consultant'
         AND (consultant.secureCareAwarded = 1 OR consultant.secureCareAwardedDate IS NOT NULL)
+        AND l1.secureCareAwarded = 1
+        AND l2.secureCareAwarded = 1
+        -- AND l3.secureCareAwarded = 1  -- Level 3 awarded is optional for Coach
         AND coach.awardType = 'Coach'
         AND (coach.secureCareAwarded = 0 OR coach.secureCareAwarded IS NULL)
         AND coach.secureCareAwardedDate IS NULL
@@ -3240,8 +3260,17 @@ class SecureCareService {
       FROM [dbo].[SecureCareEmployee] consultant
       JOIN [dbo].[SecureCareEmployee] coach
         ON coach.employeeNumber = consultant.employeeNumber
+      INNER JOIN [dbo].[SecureCareEmployee] l1
+        ON l1.employeeNumber = consultant.employeeNumber AND l1.awardType = 'Level 1'
+      INNER JOIN [dbo].[SecureCareEmployee] l2
+        ON l2.employeeNumber = consultant.employeeNumber AND l2.awardType = 'Level 2'
+      LEFT JOIN [dbo].[SecureCareEmployee] l3
+        ON l3.employeeNumber = consultant.employeeNumber AND l3.awardType = 'Level 3'
       WHERE consultant.awardType = 'Consultant'
         AND (consultant.secureCareAwarded = 1 OR consultant.secureCareAwardedDate IS NOT NULL)
+        AND l1.secureCareAwarded = 1
+        AND l2.secureCareAwarded = 1
+        -- AND l3.secureCareAwarded = 1  -- Level 3 awarded is optional for Coach
         AND coach.awardType = 'Coach'
         AND (coach.secureCareAwarded = 0 OR coach.secureCareAwarded IS NULL)
         AND coach.secureCareAwardedDate IS NULL

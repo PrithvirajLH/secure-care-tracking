@@ -309,8 +309,8 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
       case "care-partner":
         return {
           requirements: [
-            { name: "Relias Training Assigned", key: "assignedDate", completed: !!employee.assignedDate, date: employee.assignedDate },
-            { name: "Relias Training Completed", key: "completedDate", completed: !!employee.completedDate, date: employee.completedDate },
+            { name: "Carebility Training Assigned", key: "assignedDate", completed: !!employee.assignedDate, date: employee.assignedDate },
+            { name: "Carebility Training Completed", key: "completedDate", completed: !!employee.completedDate, date: employee.completedDate },
             { name: "Level 1 Awarded", key: "secureCareAwarded", completed: isAwardedFor('Level 1'), date: getAwardedDateFor('Level 1') }
           ],
           total: 3,
@@ -430,8 +430,8 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
         if (isLevel1Awarded) {
           return {
             requirements: [
-              { name: "Relias Training Assigned", key: "assignedDate", completed: true, date: recordForLevel.assignedDate },
-              { name: "Relias Training Completed", key: "completedDate", completed: true, date: recordForLevel.completedDate },
+              { name: "Carebility Training Assigned", key: "assignedDate", completed: true, date: recordForLevel.assignedDate },
+              { name: "Carebility Training Completed", key: "completedDate", completed: true, date: recordForLevel.completedDate },
               { name: "Level 1 Awarded", key: "secureCareAwarded", completed: true, date: level1AwardedDate }
             ],
             total: 3,
@@ -446,8 +446,8 @@ export default function EmployeeDetailModal({ employee, children, onModalOpenCha
         // If not awarded, calculate actual progress
         return {
           requirements: [
-            { name: "Relias Training Assigned", key: "assignedDate", completed: !!recordForLevel.assignedDate, date: recordForLevel.assignedDate },
-            { name: "Relias Training Completed", key: "completedDate", completed: !!recordForLevel.completedDate, date: recordForLevel.completedDate },
+            { name: "Carebility Training Assigned", key: "assignedDate", completed: !!recordForLevel.assignedDate, date: recordForLevel.assignedDate },
+            { name: "Carebility Training Completed", key: "completedDate", completed: !!recordForLevel.completedDate, date: recordForLevel.completedDate },
             { name: "Level 1 Awarded", key: "secureCareAwarded", completed: false, date: null }
           ],
           total: 3,

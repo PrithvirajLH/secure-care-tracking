@@ -4,7 +4,7 @@ export type AwardType = 'Level 1' | 'Level 2' | 'Level 3' | 'Consultant' | 'Coac
 export const LevelColumns: Record<AwardType, string[]> = {
   'Level 1': [
     'Employee','Facility','Area',
-    'Relias Training\nAssigned','Relias Training\nCompleted',
+    'Carebility Training\nAssigned','Carebility Training\nCompleted',
     'Level 1 Awarded'
   ],
   'Level 2': [
@@ -51,8 +51,8 @@ export const LevelFieldMapping: Record<AwardType, Record<string, string>> = {
     'Employee': 'name',
     'Facility': 'facility',
     'Area': 'area',
-    'Relias Training\nAssigned': 'assignedDate',
-    'Relias Training\nCompleted': 'completedDate',
+    'Carebility Training\nAssigned': 'assignedDate',
+    'Carebility Training\nCompleted': 'completedDate',
     'Level 1 Awarded': 'secureCareAwarded'
   },
   'Level 2': {
