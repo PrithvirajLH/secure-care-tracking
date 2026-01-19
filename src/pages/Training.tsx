@@ -32,7 +32,8 @@ import {
   CalendarPlus,
   Square,
   CheckSquare,
-  Check
+  Check,
+  Search
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -203,8 +204,27 @@ export default function Training() {
   const [isButtonClicking, setIsButtonClicking] = useState<boolean>(false);
   const [isMouseDownInProgress, setIsMouseDownInProgress] = useState<boolean>(false);
   
-  // New simple search state
-  const [searchQuery, setSearchQuery] = useState<string>('');
+  // Search state - manual trigger (button or Enter key)
+  const [searchQuery, setSearchQuery] = useState<string>(''); // Input field value
+  const [committedSearchQuery, setCommittedSearchQuery] = useState<string>(''); // Actually applied to filter
+  
+  // Function to trigger the search
+  const handleSearch = useCallback(() => {
+    setCommittedSearchQuery(searchQuery.trim());
+  }, [searchQuery]);
+  
+  // Handle Enter key in search input
+  const handleSearchKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      handleSearch();
+    }
+  }, [handleSearch]);
+  
+  // Clear search
+  const handleClearSearch = useCallback(() => {
+    setSearchQuery('');
+    setCommittedSearchQuery('');
+  }, []);
   
   // Bulk scheduling state
   const [isBulkMode, setIsBulkMode] = useState<boolean>(false);
@@ -574,16 +594,18 @@ export default function Training() {
 
   // Server-side pagination with filters (includes optional date filter)
   // Consolidated filters definition to avoid circular dependency
+  // Uses committedSearchQuery - only updates when user clicks search or presses Enter
   const filters = useMemo(() => ({
     level: activeTab,
     status: 'all', // Changed from 'active' to 'all' to show all employees
     facility: facilityFilter.length > 0 ? facilityFilter : undefined,
     area: areaFilter !== 'all' ? areaFilter : undefined,
+    search: committedSearchQuery || undefined, // Server-side search (triggered by button/Enter)
     sortBy: sortBy,
     sortOrder: sortOrder,
     dateField: dateFilter.column ? currentFieldMapping[dateFilter.column] : undefined,
     date: dateFilter.date ? dateFilter.date.toISOString().split('T')[0] : undefined
-  }), [activeTab, facilityFilter, areaFilter, sortBy, sortOrder, dateFilter, currentFieldMapping]);
+  }), [activeTab, facilityFilter, areaFilter, committedSearchQuery, sortBy, sortOrder, dateFilter, currentFieldMapping]);
 
   const {
     employees: allEmployees,
@@ -832,9 +854,9 @@ export default function Training() {
   const filteredEmployees = useMemo(() => {
     let filtered = currentEmployees;
     
-    // Apply search filter first
-    if (searchQuery.trim()) {
-      const searchTerm = searchQuery.toLowerCase().trim();
+    // Apply search filter first (using committedSearchQuery - the one sent to server)
+    if (committedSearchQuery) {
+      const searchTerm = committedSearchQuery.toLowerCase();
       filtered = filtered.filter(emp => {
         const name = (emp.name || emp.Employee || '').toLowerCase();
         const employeeNumber = (emp.employeeNumber || emp.employeeId || '').toLowerCase();
@@ -922,16 +944,18 @@ export default function Training() {
     });
     
     return filtered;
-  }, [currentEmployees, searchQuery, reqStatusFilters, filteredColumns, currentFieldMapping, scheduledDates, completedDates, dateFilter]);
+  }, [currentEmployees, committedSearchQuery, reqStatusFilters, filteredColumns, currentFieldMapping, scheduledDates, completedDates, dateFilter]);
 
+  // Note: search, facility, area, and date filters are handled server-side now
+  // isAnyFilterActive only triggers client-side aggregation for filters NOT handled by server
   const isAnyFilterActive = useMemo(() => {
-    if (facilityFilter.length > 0 || areaFilter !== 'all' || searchQuery.trim()) return true;
-    if (dateFilter.column && dateFilter.date) return true;
+    // Server-side filters (search, facility, area, date) don't require client aggregation
+    // Only per-column requirement status filters need client-side processing
     return filteredColumns.some(col => {
       const fieldKey = currentFieldMapping[col];
       return fieldKey && (reqStatusFilters[fieldKey] || 'all') !== 'all';
     });
-  }, [facilityFilter, areaFilter, searchQuery, dateFilter, reqStatusFilters, filteredColumns, currentFieldMapping]);
+  }, [reqStatusFilters, filteredColumns, currentFieldMapping]);
 
   // Aggregate across pages when filters active, until either we collect all filtered rows
   // or reach 100 (single page). If more than 100 exist, keep normal pagination.
@@ -955,9 +979,9 @@ export default function Training() {
 
       const applyLocalFilters = (list: any[]) => {
         let filtered = list;
-        // Apply search
-        if (searchQuery.trim()) {
-          const searchTerm = searchQuery.toLowerCase().trim();
+        // Apply search (using committedSearchQuery - the one sent to server)
+        if (committedSearchQuery) {
+          const searchTerm = committedSearchQuery.toLowerCase();
           filtered = filtered.filter(emp => {
             const name = (emp.name || emp.Employee || '').toLowerCase();
             const employeeNumber = String(emp.employeeNumber || emp.employeeId || '').toLowerCase();
@@ -1064,14 +1088,21 @@ export default function Training() {
     return () => {
       isCancelled = true;
     };
-  }, [isAnyFilterActive, facilityFilter, areaFilter, dateFilter, activeTab, searchQuery, reqStatusFilters, filteredColumns, totalPages, itemsPerPage, currentFieldMapping, sortBy, sortOrder, allEmployees]);
+  // Note: Removed searchQuery, facilityFilter, areaFilter, dateFilter from deps since they're handled server-side
+  }, [isAnyFilterActive, activeTab, reqStatusFilters, filteredColumns, totalPages, itemsPerPage, currentFieldMapping, sortBy, sortOrder, allEmployees]);
 
-  // Ensure pagination and counts update immediately when any filter changes
+  // Ensure pagination resets to page 1 when server-side filters change
+  // Using committedSearchQuery - only resets when search is actually triggered
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [committedSearchQuery, setCurrentPage]);
+  
+  // Also reset for client-side filters (reqStatusFilters)
   useEffect(() => {
     if (isAnyFilterActive) {
       setCurrentPage(1);
     }
-  }, [searchQuery, dateFilter, reqStatusFilters, filteredColumns, isAnyFilterActive, setCurrentPage]);
+  }, [reqStatusFilters, filteredColumns, isAnyFilterActive, setCurrentPage]);
 
   // Base list used for local filtering/rendering
   // Decide whether to use merged (single page) or normal paged data
@@ -1087,9 +1118,9 @@ export default function Training() {
     // Re-apply filters to the merged employees
     let filtered = baseEmployees;
     
-    // Apply search filter first
-    if (searchQuery.trim()) {
-      const searchTerm = searchQuery.toLowerCase().trim();
+    // Apply search filter first (using committedSearchQuery - the one sent to server)
+    if (committedSearchQuery) {
+      const searchTerm = committedSearchQuery.toLowerCase();
       filtered = filtered.filter(emp => {
         const name = (emp.name || emp.Employee || '').toLowerCase();
         const employeeNumber = (emp.employeeNumber || emp.employeeId || '').toLowerCase();
@@ -1184,25 +1215,26 @@ export default function Training() {
       const endIdx = startIdx + itemsPerPage;
       return filtered.slice(startIdx, endIdx);
     }
-  }, [isAnyFilterActive, filteredEmployees, baseEmployees, searchQuery, reqStatusFilters, filteredColumns, currentFieldMapping, dateFilter, currentPage, itemsPerPage, sortBy, currentEmployees, mergedEmployees, allEmployees]);
+  }, [isAnyFilterActive, filteredEmployees, baseEmployees, committedSearchQuery, reqStatusFilters, filteredColumns, currentFieldMapping, dateFilter, currentPage, itemsPerPage, sortBy, currentEmployees, mergedEmployees, allEmployees]);
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (facilityFilter.length > 0) count++;
     if (areaFilter !== 'all') count++;
-    if (searchQuery.trim()) count++;
+    if (committedSearchQuery) count++; // Count only committed/applied search
     if (dateFilter.column && dateFilter.date) count++;
     count += filteredColumns.reduce((acc, col) => {
       const fieldKey = currentFieldMapping[col];
       return acc + (fieldKey && ((reqStatusFilters[fieldKey] || 'all') !== 'all') ? 1 : 0);
     }, 0);
     return count;
-  }, [facilityFilter, areaFilter, searchQuery, dateFilter, reqStatusFilters, filteredColumns, currentFieldMapping]);
+  }, [facilityFilter, areaFilter, committedSearchQuery, dateFilter, reqStatusFilters, filteredColumns, currentFieldMapping]);
 
   const clearFilters = () => {
     setFacilityFilter([]);
     setAreaFilter('all');
     setSearchQuery('');
+    setCommittedSearchQuery(''); // Also clear the committed search
     // Reset to level-specific default sorting
     const currentLevel: AwardType = getLevelFromTabKey(activeTab);
     setSortBy(currentLevel === 'Level 1' ? 'latest' : 'conference');
@@ -1653,27 +1685,38 @@ export default function Training() {
                    className="rounded-lg"
                  />
                  <div className="flex items-center gap-3 p-3 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-lg border border-purple-200">
-                   <div className="flex items-center gap-2">
-                     <Filter className="w-4 h-4 text-purple-600" />
-                     <span className="text-sm font-medium text-purple-900">Search:</span>
-                   </div>
-                   <div className="relative w-[200px]">
-                     <Input
-                       value={searchQuery}
-                       onChange={(e) => setSearchQuery(e.target.value)}
-                       onFocus={(e) => e.currentTarget.select()}
-                       placeholder="Employee name or ID"
-                       className="h-8 text-sm pr-8 bg-white border-purple-200 shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                     />
-                     {searchQuery && (
-                       <button
-                         onClick={() => setSearchQuery('')}
-                         className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                       >
-                         <X className="w-4 h-4" />
-                       </button>
-                     )}
-                   </div>
+                  <div className="flex items-center gap-2">
+                    <Search className="w-4 h-4 text-purple-600" />
+                    <span className="text-sm font-medium text-purple-900">Search:</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="relative w-[200px]">
+                      <Input
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onKeyDown={handleSearchKeyDown}
+                        onFocus={(e) => e.currentTarget.select()}
+                        placeholder="Employee name or ID"
+                        className="h-8 text-sm pr-8 bg-white border-purple-200 shadow-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                      />
+                      {searchQuery && (
+                        <button
+                          onClick={handleClearSearch}
+                          className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                    <Button
+                      onClick={handleSearch}
+                      size="sm"
+                      className="h-8 px-3 bg-purple-600 hover:bg-purple-700 text-white"
+                      disabled={!searchQuery.trim()}
+                    >
+                      <Search className="w-4 h-4" />
+                    </Button>
+                  </div>
                    <div className="flex items-center gap-2">
                      <div className="flex items-center gap-1">
                        <TrendingUp className="w-4 h-4 text-purple-600" />
