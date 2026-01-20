@@ -4,6 +4,8 @@ const { getPool, sql } = require('../config/database');
 const analyticsCache = new Map();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
+const normalizeSortOrder = (value) => (String(value).toLowerCase() === 'desc' ? 'DESC' : 'ASC');
+
 class SecureCareService {
   
   // Cache helper methods
@@ -220,7 +222,7 @@ class SecureCareService {
     
     // Add sorting support - default to name sorting
     const sortBy = filters.sortBy || 'name';
-    const sortOrder = filters.sortOrder || 'asc';
+    const sortOrder = normalizeSortOrder(filters.sortOrder);
     
     let orderClause = '';
     switch (sortBy) {
@@ -915,7 +917,7 @@ class SecureCareService {
     
       // Add sorting support - default to name sorting
       const sortBy = filters.sortBy || 'name';
-      const sortOrder = filters.sortOrder || 'asc';
+      const sortOrder = normalizeSortOrder(filters.sortOrder);
     
     let orderClause = '';
     switch (sortBy) {
@@ -1133,7 +1135,7 @@ class SecureCareService {
     
     // Add sorting support - default to name sorting
     const sortBy = filters.sortBy || 'name';
-    const sortOrder = filters.sortOrder || 'asc';
+    const sortOrder = normalizeSortOrder(filters.sortOrder);
     
     let orderClause = '';
     switch (sortBy) {
@@ -1390,6 +1392,8 @@ class SecureCareService {
     // Build base query with filters
     let whereClause = '';
     const conditions = [];
+
+    conditions.push('e.awardType IS NOT NULL');
     
     // Handle facility filter - can be string or array
     if (filters.facility && filters.facility !== 'all') {
@@ -1729,7 +1733,6 @@ class SecureCareService {
         END) as avgTime
       FROM dbo.SecureCareEmployee e
       ${whereClause}
-      AND e.awardType IS NOT NULL
       GROUP BY e.awardType
       ORDER BY 
         CASE e.awardType
@@ -2097,278 +2100,180 @@ class SecureCareService {
   async getAllEmployeeData(filters = {}) {
     const pool = await getPool();
     
-    // First, get all unique employees by employeeNumber
-    let query = `
-      SELECT DISTINCT
-        e.employeeNumber,
-        MAX(e.employeeId) as employeeId,
-        MAX(e.name) as name,
-        MAX(e.facility) as facility,
-        MAX(e.area) as area,
-        MAX(e.staffRoll) as staffRoll
-      FROM dbo.SecureCareEmployee e
-      WHERE 1=1
-    `;
-    
-    const request = pool.request();
-    
-    // Apply filters
-    if (filters.facility && filters.facility !== 'all') {
-      const facilities = Array.isArray(filters.facility) ? filters.facility : [filters.facility];
-      if (facilities.length === 1) {
-        query += ` AND e.facility = @facility0`;
-        request.input('facility0', sql.VarChar, facilities[0]);
-      } else if (facilities.length > 1) {
-        const facilityParams = facilities.map((f, i) => `@facility${i}`).join(', ');
-        query += ` AND e.facility IN (${facilityParams})`;
-        facilities.forEach((f, i) => {
-          request.input(`facility${i}`, sql.VarChar, f);
-        });
-      }
+    const facilities = filters.facility && filters.facility !== 'all'
+      ? (Array.isArray(filters.facility) ? filters.facility : [filters.facility]).filter(Boolean)
+      : null;
+
+    const conditions = [];
+    if (facilities && facilities.length === 1) {
+      conditions.push('e.facility = @facility0');
+    } else if (facilities && facilities.length > 1) {
+      const facilityParams = facilities.map((f, i) => `@facility${i}`).join(', ');
+      conditions.push(`e.facility IN (${facilityParams})`);
     }
-    
     if (filters.area && filters.area !== 'all') {
-      query += ` AND e.area = @area`;
-      request.input('area', sql.VarChar, filters.area);
+      conditions.push('e.area = @area');
     }
-    
     if (filters.search) {
-      query += ` AND (e.name LIKE @search OR e.employeeNumber LIKE @search)`;
-      request.input('search', sql.VarChar, `%${filters.search}%`);
+      conditions.push('(e.name LIKE @search OR e.employeeNumber LIKE @search)');
     }
-    
     if (filters.jobTitle && filters.jobTitle !== 'all') {
-      query += ` AND e.staffRoll = @jobTitle`;
-      request.input('jobTitle', sql.VarChar, filters.jobTitle);
+      conditions.push('e.staffRoll = @jobTitle');
     }
-    
-    query += ` GROUP BY e.employeeNumber`;
-    
-    // Add sorting
+
+    const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
     const sortBy = filters.sortBy || 'area';
-    const sortOrder = filters.sortOrder || 'asc';
+    const sortOrder = normalizeSortOrder(filters.sortOrder);
+    let orderByClause = '';
     switch (sortBy) {
       case 'name':
-        query += ` ORDER BY MAX(e.name) ${sortOrder.toUpperCase()}`;
+        orderByClause = `fe.name ${sortOrder}`;
         break;
       case 'facility':
-        query += ` ORDER BY MAX(e.facility) ${sortOrder.toUpperCase()}`;
+        orderByClause = `fe.facility ${sortOrder}`;
         break;
       case 'area':
-        // Sort by area first, then name
-        query += ` ORDER BY MAX(e.area) ${sortOrder.toUpperCase()}, MAX(e.name) ${sortOrder.toUpperCase()}`;
+        orderByClause = `fe.area ${sortOrder}, fe.name ${sortOrder}`;
         break;
       case 'employeeId':
-        query += ` ORDER BY MAX(e.employeeNumber) ${sortOrder.toUpperCase()}`;
+        orderByClause = `fe.employeeNumber ${sortOrder}`;
         break;
       default:
-        // Default: sort by area first, then name
-        query += ` ORDER BY MAX(e.area) ${sortOrder.toUpperCase()}, MAX(e.name) ${sortOrder.toUpperCase()}`;
+        orderByClause = `fe.area ${sortOrder}, fe.name ${sortOrder}`;
     }
-    
-    // Add pagination - allow large limits to show all data
+
     const page = parseInt(filters.page) || 1;
     const requestedLimit = parseInt(filters.limit) || 1000;
-    // Allow up to 10,000 records to show all data
     const limit = requestedLimit > 10000 ? 10000 : requestedLimit;
     const offset = (page - 1) * limit;
-    query += ` OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY`;
-    
-    const uniqueEmployeesResult = await request.query(query);
-    
-    // Get total count
-    let countQuery = `
-      SELECT COUNT(DISTINCT e.employeeNumber) as total
-      FROM dbo.SecureCareEmployee e
-      WHERE 1=1
-    `;
-    const countRequest = pool.request();
-    
-    if (filters.facility && filters.facility !== 'all') {
-      const facilities = Array.isArray(filters.facility) ? filters.facility : [filters.facility];
-      if (facilities.length === 1) {
-        countQuery += ` AND e.facility = @facilityCount0`;
-        countRequest.input('facilityCount0', sql.VarChar, facilities[0]);
-      } else if (facilities.length > 1) {
-        const facilityParams = facilities.map((f, i) => `@facilityCount${i}`).join(', ');
-        countQuery += ` AND e.facility IN (${facilityParams})`;
-        facilities.forEach((f, i) => {
-          countRequest.input(`facilityCount${i}`, sql.VarChar, f);
-        });
-      }
+
+    const dataRequest = pool.request();
+    if (facilities && facilities.length > 0) {
+      facilities.forEach((facility, index) => {
+        dataRequest.input(`facility${index}`, sql.VarChar, facility);
+      });
     }
-    
     if (filters.area && filters.area !== 'all') {
-      countQuery += ` AND e.area = @area`;
+      dataRequest.input('area', sql.VarChar, filters.area);
+    }
+    if (filters.search) {
+      dataRequest.input('search', sql.VarChar, `%${filters.search}%`);
+    }
+    if (filters.jobTitle && filters.jobTitle !== 'all') {
+      dataRequest.input('jobTitle', sql.VarChar, filters.jobTitle);
+    }
+    dataRequest.input('offset', sql.Int, offset);
+    dataRequest.input('limit', sql.Int, limit);
+
+    const dataQuery = `
+      WITH FilteredEmployees AS (
+        SELECT
+          e.employeeNumber,
+          MAX(e.employeeId) as employeeId,
+          MAX(e.name) as name,
+          MAX(e.facility) as facility,
+          MAX(e.area) as area,
+          MAX(e.staffRoll) as staffRoll
+        FROM dbo.SecureCareEmployee e
+        ${whereClause}
+        GROUP BY e.employeeNumber
+      ),
+      OrderedEmployees AS (
+        SELECT
+          fe.*,
+          ROW_NUMBER() OVER (ORDER BY ${orderByClause}) as row_num
+        FROM FilteredEmployees fe
+      ),
+      PagedEmployees AS (
+        SELECT *
+        FROM OrderedEmployees
+        WHERE row_num > @offset AND row_num <= @offset + @limit
+      )
+      SELECT
+        p.employeeId,
+        p.employeeNumber,
+        p.name,
+        p.facility,
+        p.area,
+        p.staffRoll,
+        MAX(CASE WHEN e.awardType = 'Level 1' THEN CONVERT(varchar(10), e.assignedDate, 120) END) AS level1AssignedDate,
+        MAX(CASE WHEN e.awardType = 'Level 1' THEN CONVERT(varchar(10), e.completedDate, 120) END) AS level1CompletedDate,
+        MAX(CASE WHEN e.awardType = 'Level 1' THEN e.secureCareAwarded END) AS level1SecureCareAwarded,
+        MAX(CASE WHEN e.awardType = 'Level 1' THEN CONVERT(varchar(10), e.secureCareAwardedDate, 120) END) AS level1SecureCareAwardedDate,
+        MAX(CASE WHEN e.awardType = 'Level 2' THEN CONVERT(varchar(10), e.conferenceCompleted, 120) END) AS level2ConferenceCompleted,
+        MAX(CASE WHEN e.awardType = 'Level 2' THEN e.notes END) AS level2Notes,
+        MAX(CASE WHEN e.awardType = 'Level 2' THEN e.advisorId END) AS level2AdvisorId,
+        MAX(CASE WHEN e.awardType = 'Level 2' THEN a.firstName + ' ' + ISNULL(a.lastName, '') END) AS level2AdvisorName,
+        MAX(CASE WHEN e.awardType = 'Level 2' THEN CONVERT(varchar(10), e.standingVideo, 120) END) AS level2StandingVideo,
+        MAX(CASE WHEN e.awardType = 'Level 2' THEN CONVERT(varchar(10), e.sleepingVideo, 120) END) AS level2SleepingVideo,
+        MAX(CASE WHEN e.awardType = 'Level 2' THEN CONVERT(varchar(10), e.feedGradVideo, 120) END) AS level2FeedGradVideo,
+        MAX(CASE WHEN e.awardType = 'Level 2' THEN e.secureCareAwarded END) AS level2SecureCareAwarded,
+        MAX(CASE WHEN e.awardType = 'Level 2' THEN CONVERT(varchar(10), e.secureCareAwardedDate, 120) END) AS level2SecureCareAwardedDate,
+        MAX(CASE WHEN e.awardType = 'Level 2' THEN e.awaiting END) AS level2Awaiting,
+        MAX(CASE WHEN e.awardType = 'Level 3' THEN CONVERT(varchar(10), e.conferenceCompleted, 120) END) AS level3ConferenceCompleted,
+        MAX(CASE WHEN e.awardType = 'Level 3' THEN CONVERT(varchar(10), e.standingVideo, 120) END) AS level3StandingVideo,
+        MAX(CASE WHEN e.awardType = 'Level 3' THEN CONVERT(varchar(10), e.noHandnoSpeak, 120) END) AS level3NoHandnoSpeak,
+        MAX(CASE WHEN e.awardType = 'Level 3' THEN CONVERT(varchar(10), e.sleepingVideo, 120) END) AS level3SleepingVideo,
+        MAX(CASE WHEN e.awardType = 'Level 3' THEN e.secureCareAwarded END) AS level3SecureCareAwarded,
+        MAX(CASE WHEN e.awardType = 'Level 3' THEN CONVERT(varchar(10), e.secureCareAwardedDate, 120) END) AS level3SecureCareAwardedDate,
+        MAX(CASE WHEN e.awardType = 'Level 3' THEN e.awaiting END) AS level3Awaiting,
+        MAX(CASE WHEN e.awardType = 'Consultant' THEN CONVERT(varchar(10), e.conferenceCompleted, 120) END) AS consultantConferenceCompleted,
+        MAX(CASE WHEN e.awardType = 'Consultant' THEN CONVERT(varchar(10), e.[session#1], 120) END) AS consultantSession1,
+        MAX(CASE WHEN e.awardType = 'Consultant' THEN CONVERT(varchar(10), e.[session#2], 120) END) AS consultantSession2,
+        MAX(CASE WHEN e.awardType = 'Consultant' THEN CONVERT(varchar(10), e.[session#3], 120) END) AS consultantSession3,
+        MAX(CASE WHEN e.awardType = 'Consultant' THEN e.secureCareAwarded END) AS consultantSecureCareAwarded,
+        MAX(CASE WHEN e.awardType = 'Consultant' THEN CONVERT(varchar(10), e.secureCareAwardedDate, 120) END) AS consultantSecureCareAwardedDate,
+        MAX(CASE WHEN e.awardType = 'Consultant' THEN e.awaiting END) AS consultantAwaiting,
+        MAX(CASE WHEN e.awardType = 'Coach' THEN CONVERT(varchar(10), e.conferenceCompleted, 120) END) AS coachConferenceCompleted,
+        MAX(CASE WHEN e.awardType = 'Coach' THEN CONVERT(varchar(10), e.[session#1], 120) END) AS coachSession1,
+        MAX(CASE WHEN e.awardType = 'Coach' THEN CONVERT(varchar(10), e.[session#2], 120) END) AS coachSession2,
+        MAX(CASE WHEN e.awardType = 'Coach' THEN CONVERT(varchar(10), e.[session#3], 120) END) AS coachSession3,
+        MAX(CASE WHEN e.awardType = 'Coach' THEN e.secureCareAwarded END) AS coachSecureCareAwarded,
+        MAX(CASE WHEN e.awardType = 'Coach' THEN CONVERT(varchar(10), e.secureCareAwardedDate, 120) END) AS coachSecureCareAwardedDate,
+        MAX(CASE WHEN e.awardType = 'Coach' THEN e.awaiting END) AS coachAwaiting
+      FROM PagedEmployees p
+      LEFT JOIN dbo.SecureCareEmployee e ON e.employeeNumber = p.employeeNumber
+      LEFT JOIN dbo.Advisor a ON e.advisorId = a.advisorId
+      GROUP BY
+        p.employeeId,
+        p.employeeNumber,
+        p.name,
+        p.facility,
+        p.area,
+        p.staffRoll,
+        p.row_num
+      ORDER BY p.row_num
+    `;
+
+    const dataResult = await dataRequest.query(dataQuery);
+
+    const countRequest = pool.request();
+    if (facilities && facilities.length > 0) {
+      facilities.forEach((facility, index) => {
+        countRequest.input(`facility${index}`, sql.VarChar, facility);
+      });
+    }
+    if (filters.area && filters.area !== 'all') {
       countRequest.input('area', sql.VarChar, filters.area);
     }
-    
     if (filters.search) {
-      countQuery += ` AND (e.name LIKE @search OR e.employeeNumber LIKE @search)`;
       countRequest.input('search', sql.VarChar, `%${filters.search}%`);
     }
-    
     if (filters.jobTitle && filters.jobTitle !== 'all') {
-      countQuery += ` AND e.staffRoll = @jobTitle`;
       countRequest.input('jobTitle', sql.VarChar, filters.jobTitle);
     }
-    
+
+    const countQuery = `
+      SELECT COUNT(DISTINCT e.employeeNumber) as total
+      FROM dbo.SecureCareEmployee e
+      ${whereClause}
+    `;
     const countResult = await countRequest.query(countQuery);
     const total = countResult.recordset[0].total;
     
-    // For each unique employee, get all their level records
-    const aggregatedEmployees = [];
-    
-    for (const uniqueEmp of uniqueEmployeesResult.recordset) {
-      const levelsRequest = pool.request();
-      levelsRequest.input('employeeNumber', sql.VarChar, uniqueEmp.employeeNumber);
-      
-      const levelsResult = await levelsRequest.query(`
-        SELECT 
-          e.employeeId,
-          e.employeeNumber,
-          e.name,
-          e.facility,
-          e.area,
-          e.staffRoll,
-          e.awardType,
-          CONVERT(varchar(10), e.assignedDate, 120) AS assignedDate,
-          CONVERT(varchar(10), e.completedDate, 120) AS completedDate,
-          CONVERT(varchar(10), e.conferenceCompleted, 120) AS conferenceCompleted,
-          CONVERT(varchar(10), e.scheduleStandingVideo, 120) AS scheduleStandingVideo,
-          CONVERT(varchar(10), e.standingVideo, 120) AS standingVideo,
-          CONVERT(varchar(10), e.scheduleSleepingVideo, 120) AS scheduleSleepingVideo,
-          CONVERT(varchar(10), e.sleepingVideo, 120) AS sleepingVideo,
-          CONVERT(varchar(10), e.scheduleFeedGradVideo, 120) AS scheduleFeedGradVideo,
-          CONVERT(varchar(10), e.feedGradVideo, 120) AS feedGradVideo,
-          CONVERT(varchar(10), e.schedulenoHandnoSpeak, 120) AS schedulenoHandnoSpeak,
-          CONVERT(varchar(10), e.noHandnoSpeak, 120) AS noHandnoSpeak,
-          CONVERT(varchar(10), e.[scheduleSession#1], 120) AS scheduleSession1,
-          CONVERT(varchar(10), e.[session#1], 120) AS session1,
-          CONVERT(varchar(10), e.[scheduleSession#2], 120) AS scheduleSession2,
-          CONVERT(varchar(10), e.[session#2], 120) AS session2,
-          CONVERT(varchar(10), e.[scheduleSession#3], 120) AS scheduleSession3,
-          CONVERT(varchar(10), e.[session#3], 120) AS session3,
-          e.secureCareAwarded,
-          CONVERT(varchar(10), e.secureCareAwardedDate, 120) AS secureCareAwardedDate,
-          e.awaiting,
-          e.notes,
-          e.advisorId,
-          a.firstName + ' ' + ISNULL(a.lastName, '') as advisorName
-        FROM dbo.SecureCareEmployee e
-        LEFT JOIN dbo.Advisor a ON e.advisorId = a.advisorId
-        WHERE e.employeeNumber = @employeeNumber
-        ORDER BY 
-          CASE 
-            WHEN e.awardType = 'Level 1' THEN 1
-            WHEN e.awardType = 'Level 2' THEN 2
-            WHEN e.awardType = 'Level 3' THEN 3
-            WHEN e.awardType = 'Consultant' THEN 4
-            WHEN e.awardType = 'Coach' THEN 5
-            ELSE 99
-          END
-      `);
-      
-      // Aggregate all level records into a single object
-      const aggregated = {
-        employeeId: uniqueEmp.employeeId,
-        employeeNumber: uniqueEmp.employeeNumber,
-        name: uniqueEmp.name,
-        facility: uniqueEmp.facility,
-        area: uniqueEmp.area,
-        staffRoll: uniqueEmp.staffRoll,
-        // Level 1 fields
-        level1AssignedDate: null,
-        level1CompletedDate: null,
-        level1SecureCareAwarded: null,
-        level1SecureCareAwardedDate: null,
-        // Level 2 fields
-        level2ConferenceCompleted: null,
-        level2Notes: null,
-        level2AdvisorId: null,
-        level2AdvisorName: null,
-        level2StandingVideo: null,
-        level2SleepingVideo: null,
-        level2FeedGradVideo: null,
-        level2SecureCareAwarded: null,
-        level2SecureCareAwardedDate: null,
-        level2Awaiting: null,
-        // Level 3 fields
-        level3ConferenceCompleted: null,
-        level3StandingVideo: null,
-        level3NoHandnoSpeak: null,
-        level3SleepingVideo: null,
-        level3SecureCareAwarded: null,
-        level3SecureCareAwardedDate: null,
-        level3Awaiting: null,
-        // Consultant fields
-        consultantConferenceCompleted: null,
-        consultantSession1: null,
-        consultantSession2: null,
-        consultantSession3: null,
-        consultantSecureCareAwarded: null,
-        consultantSecureCareAwardedDate: null,
-        consultantAwaiting: null,
-        // Coach fields
-        coachConferenceCompleted: null,
-        coachSession1: null,
-        coachSession2: null,
-        coachSession3: null,
-        coachSecureCareAwarded: null,
-        coachSecureCareAwardedDate: null,
-        coachAwaiting: null
-      };
-      
-      // Populate fields from each level record
-      for (const record of levelsResult.recordset) {
-        if (record.awardType === 'Level 1') {
-          aggregated.level1AssignedDate = record.assignedDate;
-          aggregated.level1CompletedDate = record.completedDate;
-          aggregated.level1SecureCareAwarded = record.secureCareAwarded;
-          aggregated.level1SecureCareAwardedDate = record.secureCareAwardedDate;
-        } else if (record.awardType === 'Level 2') {
-          aggregated.level2ConferenceCompleted = record.conferenceCompleted;
-          aggregated.level2Notes = record.notes;
-          aggregated.level2AdvisorId = record.advisorId;
-          aggregated.level2AdvisorName = record.advisorName;
-          aggregated.level2StandingVideo = record.standingVideo;
-          aggregated.level2SleepingVideo = record.sleepingVideo;
-          aggregated.level2FeedGradVideo = record.feedGradVideo;
-          aggregated.level2SecureCareAwarded = record.secureCareAwarded;
-          aggregated.level2SecureCareAwardedDate = record.secureCareAwardedDate;
-          aggregated.level2Awaiting = record.awaiting;
-        } else if (record.awardType === 'Level 3') {
-          aggregated.level3ConferenceCompleted = record.conferenceCompleted;
-          aggregated.level3StandingVideo = record.standingVideo;
-          aggregated.level3NoHandnoSpeak = record.noHandnoSpeak;
-          aggregated.level3SleepingVideo = record.sleepingVideo;
-          aggregated.level3SecureCareAwarded = record.secureCareAwarded;
-          aggregated.level3SecureCareAwardedDate = record.secureCareAwardedDate;
-          aggregated.level3Awaiting = record.awaiting;
-        } else if (record.awardType === 'Consultant') {
-          aggregated.consultantConferenceCompleted = record.conferenceCompleted;
-          aggregated.consultantSession1 = record.session1;
-          aggregated.consultantSession2 = record.session2;
-          aggregated.consultantSession3 = record.session3;
-          aggregated.consultantSecureCareAwarded = record.secureCareAwarded;
-          aggregated.consultantSecureCareAwardedDate = record.secureCareAwardedDate;
-          aggregated.consultantAwaiting = record.awaiting;
-        } else if (record.awardType === 'Coach') {
-          aggregated.coachConferenceCompleted = record.conferenceCompleted;
-          aggregated.coachSession1 = record.session1;
-          aggregated.coachSession2 = record.session2;
-          aggregated.coachSession3 = record.session3;
-          aggregated.coachSecureCareAwarded = record.secureCareAwarded;
-          aggregated.coachSecureCareAwardedDate = record.secureCareAwardedDate;
-          aggregated.coachAwaiting = record.awaiting;
-        }
-      }
-      
-      aggregatedEmployees.push(aggregated);
-    }
-    
     return {
-      employees: aggregatedEmployees,
+      employees: dataResult.recordset,
       pagination: {
         currentPage: page,
         totalPages: Math.ceil(total / limit),
@@ -2454,7 +2359,7 @@ class SecureCareService {
     
     // Add sorting
     const sortBy = filters.sortBy || 'area';
-    const sortOrder = filters.sortOrder || 'asc';
+    const sortOrder = normalizeSortOrder(filters.sortOrder);
     switch (sortBy) {
       case 'name':
         query += ` ORDER BY l1.name ${sortOrder.toUpperCase()}`;
@@ -2679,7 +2584,7 @@ class SecureCareService {
     
     // Add sorting
     const sortBy = filters.sortBy || 'area';
-    const sortOrder = filters.sortOrder || 'asc';
+    const sortOrder = normalizeSortOrder(filters.sortOrder);
     switch (sortBy) {
       case 'name':
         query += ` ORDER BY l2.name ${sortOrder.toUpperCase()}`;
@@ -2825,7 +2730,6 @@ class SecureCareService {
 
   // Get employees ready for Consultant award (Level 3 awarded, all Consultant sessions completed, Consultant not awarded)
   async getEmployeesReadyForConsultantAward(filters = {}) {
-    console.log('getEmployeesReadyForConsultantAward called with filters:', filters);
     const pool = await getPool();
     
     let query = `
@@ -2894,7 +2798,6 @@ class SecureCareService {
         AND consultant.[session#3] != ''
     `;
     
-    console.log('Consultant readiness query:', query);
     const request = pool.request();
     
     // Apply additional filters
@@ -2929,7 +2832,7 @@ class SecureCareService {
     
     // Add sorting
     const sortBy = filters.sortBy || 'area';
-    const sortOrder = filters.sortOrder || 'asc';
+    const sortOrder = normalizeSortOrder(filters.sortOrder);
     switch (sortBy) {
       case 'name':
         query += ` ORDER BY consultant.name ${sortOrder.toUpperCase()}`;
@@ -2957,9 +2860,7 @@ class SecureCareService {
     
     let result;
     try {
-      console.log('Executing Consultant query...');
       result = await request.query(query);
-      console.log(`Consultant query returned ${result.recordset.length} records`);
     } catch (error) {
       console.error('Error in getEmployeesReadyForConsultantAward query:', error);
       console.error('Query:', query);
@@ -3024,8 +2925,6 @@ class SecureCareService {
     let countResult;
     try {
       countResult = await countRequest.query(countQuery);
-      const total = countResult.recordset[0].total;
-      console.log(`Consultant total count: ${total}`);
     } catch (error) {
       console.error('Error getting Consultant count:', error);
       throw error;
@@ -3033,7 +2932,6 @@ class SecureCareService {
     const total = countResult.recordset[0].total;
     
     // Transform results to match the aggregated format
-    console.log(`Transforming ${result.recordset.length} Consultant records...`);
     const employees = result.recordset.map(record => ({
       employeeId: record.employeeId,
       employeeNumber: record.employeeNumber,
@@ -3102,17 +3000,16 @@ class SecureCareService {
 
   // Get employees ready for Coach award (Consultant awarded, all Coach sessions completed, Coach not awarded)
   async getEmployeesReadyForCoachAward(filters = {}) {
-    console.log('getEmployeesReadyForCoachAward called with filters:', filters);
     const pool = await getPool();
     
     let query = `
       SELECT DISTINCT
-        consultant.employeeNumber,
-        consultant.employeeId,
-        consultant.[name],
-        consultant.[area],
-        consultant.[facility],
-        consultant.staffRoll,
+        coach.employeeNumber,
+        coach.employeeId,
+        coach.[name],
+        coach.[area],
+        coach.[facility],
+        coach.staffRoll,
         CONVERT(varchar(10), l1.assignedDate, 120) AS level1AssignedDate,
         CONVERT(varchar(10), l1.completedDate, 120) AS level1CompletedDate,
         l1.secureCareAwarded AS level1SecureCareAwarded,
@@ -3157,25 +3054,23 @@ class SecureCareService {
         coach.secureCareAwarded AS coachSecureCareAwarded,
         CONVERT(varchar(10), coach.secureCareAwardedDate, 120) AS coachSecureCareAwardedDate,
         coach.awaiting AS coachAwaiting
-      FROM [dbo].[SecureCareEmployee] consultant
-      JOIN [dbo].[SecureCareEmployee] coach
-        ON coach.employeeNumber = consultant.employeeNumber
+      FROM [dbo].[SecureCareEmployee] coach
       INNER JOIN [dbo].[SecureCareEmployee] l1
-        ON l1.employeeNumber = consultant.employeeNumber AND l1.awardType = 'Level 1'
+        ON l1.employeeNumber = coach.employeeNumber AND l1.awardType = 'Level 1'
       INNER JOIN [dbo].[SecureCareEmployee] l2
-        ON l2.employeeNumber = consultant.employeeNumber AND l2.awardType = 'Level 2'
+        ON l2.employeeNumber = coach.employeeNumber AND l2.awardType = 'Level 2'
       LEFT JOIN [dbo].[SecureCareEmployee] l3
-        ON l3.employeeNumber = consultant.employeeNumber AND l3.awardType = 'Level 3'
+        ON l3.employeeNumber = coach.employeeNumber AND l3.awardType = 'Level 3'
+      LEFT JOIN [dbo].[SecureCareEmployee] consultant
+        ON consultant.employeeNumber = coach.employeeNumber AND consultant.awardType = 'Consultant'
       LEFT JOIN dbo.Advisor a2 ON l2.advisorId = a2.advisorId
       LEFT JOIN dbo.Advisor a3 ON l3.advisorId = a3.advisorId
       LEFT JOIN dbo.Advisor aConsultant ON consultant.advisorId = aConsultant.advisorId
       LEFT JOIN dbo.Advisor aCoach ON coach.advisorId = aCoach.advisorId
-      WHERE consultant.awardType = 'Consultant'
-        AND (consultant.secureCareAwarded = 1 OR consultant.secureCareAwardedDate IS NOT NULL)
-        AND l1.secureCareAwarded = 1
-        AND l2.secureCareAwarded = 1
-        -- AND l3.secureCareAwarded = 1  -- Level 3 awarded is optional for Coach
-        AND coach.awardType = 'Coach'
+      WHERE coach.awardType = 'Coach'
+        AND (l1.secureCareAwarded = 1 OR l1.secureCareAwardedDate IS NOT NULL)
+        AND (l2.secureCareAwarded = 1 OR l2.secureCareAwardedDate IS NOT NULL)
+        -- Level 3 awarded is optional for Coach
         AND (coach.secureCareAwarded = 0 OR coach.secureCareAwarded IS NULL)
         AND coach.secureCareAwardedDate IS NULL
         AND coach.[session#1] IS NOT NULL
@@ -3189,11 +3084,11 @@ class SecureCareService {
     if (filters.facility && filters.facility !== 'all') {
       const facilities = Array.isArray(filters.facility) ? filters.facility : [filters.facility];
       if (facilities.length === 1) {
-        query += ` AND consultant.facility = @facility0`;
+        query += ` AND coach.facility = @facility0`;
         request.input('facility0', sql.VarChar, facilities[0]);
       } else if (facilities.length > 1) {
         const facilityParams = facilities.map((f, i) => `@facility${i}`).join(', ');
-        query += ` AND consultant.facility IN (${facilityParams})`;
+        query += ` AND coach.facility IN (${facilityParams})`;
         facilities.forEach((f, i) => {
           request.input(`facility${i}`, sql.VarChar, f);
         });
@@ -3201,38 +3096,38 @@ class SecureCareService {
     }
     
     if (filters.area && filters.area !== 'all') {
-      query += ` AND consultant.area = @area`;
+      query += ` AND coach.area = @area`;
       request.input('area', sql.VarChar, filters.area);
     }
     
     if (filters.search) {
-      query += ` AND (consultant.name LIKE @search OR consultant.employeeNumber LIKE @search)`;
+      query += ` AND (coach.name LIKE @search OR coach.employeeNumber LIKE @search)`;
       request.input('search', sql.VarChar, `%${filters.search}%`);
     }
     
     if (filters.jobTitle && filters.jobTitle !== 'all') {
-      query += ` AND consultant.staffRoll = @jobTitle`;
+      query += ` AND coach.staffRoll = @jobTitle`;
       request.input('jobTitle', sql.VarChar, filters.jobTitle);
     }
     
-    // Add sorting
+    // Add sorting - must use columns from SELECT DISTINCT (coach, not consultant)
     const sortBy = filters.sortBy || 'area';
-    const sortOrder = filters.sortOrder || 'asc';
+    const sortOrder = normalizeSortOrder(filters.sortOrder);
     switch (sortBy) {
       case 'name':
-        query += ` ORDER BY consultant.name ${sortOrder.toUpperCase()}`;
+        query += ` ORDER BY coach.[name] ${sortOrder.toUpperCase()}`;
         break;
       case 'facility':
-        query += ` ORDER BY consultant.facility ${sortOrder.toUpperCase()}`;
+        query += ` ORDER BY coach.[facility] ${sortOrder.toUpperCase()}`;
         break;
       case 'area':
-        query += ` ORDER BY consultant.area ${sortOrder.toUpperCase()}, consultant.name ${sortOrder.toUpperCase()}`;
+        query += ` ORDER BY coach.[area] ${sortOrder.toUpperCase()}, coach.[name] ${sortOrder.toUpperCase()}`;
         break;
       case 'employeeId':
-        query += ` ORDER BY consultant.employeeNumber ${sortOrder.toUpperCase()}`;
+        query += ` ORDER BY coach.employeeNumber ${sortOrder.toUpperCase()}`;
         break;
       default:
-        query += ` ORDER BY consultant.area ${sortOrder.toUpperCase()}, consultant.name ${sortOrder.toUpperCase()}`;
+        query += ` ORDER BY coach.[area] ${sortOrder.toUpperCase()}, coach.[name] ${sortOrder.toUpperCase()}`;
     }
     
     // Add pagination - allow large limits to show all data
@@ -3245,9 +3140,7 @@ class SecureCareService {
     
     let result;
     try {
-      console.log('Executing Coach query...');
       result = await request.query(query);
-      console.log(`Coach query returned ${result.recordset.length} records`);
     } catch (error) {
       console.error('Error in getEmployeesReadyForCoachAward query:', error);
       console.error('Query:', query);
@@ -3256,22 +3149,18 @@ class SecureCareService {
     
     // Get total count
     let countQuery = `
-      SELECT COUNT(DISTINCT consultant.employeeNumber) as total
-      FROM [dbo].[SecureCareEmployee] consultant
-      JOIN [dbo].[SecureCareEmployee] coach
-        ON coach.employeeNumber = consultant.employeeNumber
+      SELECT COUNT(DISTINCT coach.employeeNumber) as total
+      FROM [dbo].[SecureCareEmployee] coach
       INNER JOIN [dbo].[SecureCareEmployee] l1
-        ON l1.employeeNumber = consultant.employeeNumber AND l1.awardType = 'Level 1'
+        ON l1.employeeNumber = coach.employeeNumber AND l1.awardType = 'Level 1'
       INNER JOIN [dbo].[SecureCareEmployee] l2
-        ON l2.employeeNumber = consultant.employeeNumber AND l2.awardType = 'Level 2'
+        ON l2.employeeNumber = coach.employeeNumber AND l2.awardType = 'Level 2'
       LEFT JOIN [dbo].[SecureCareEmployee] l3
-        ON l3.employeeNumber = consultant.employeeNumber AND l3.awardType = 'Level 3'
-      WHERE consultant.awardType = 'Consultant'
-        AND (consultant.secureCareAwarded = 1 OR consultant.secureCareAwardedDate IS NOT NULL)
-        AND l1.secureCareAwarded = 1
-        AND l2.secureCareAwarded = 1
-        -- AND l3.secureCareAwarded = 1  -- Level 3 awarded is optional for Coach
-        AND coach.awardType = 'Coach'
+        ON l3.employeeNumber = coach.employeeNumber AND l3.awardType = 'Level 3'
+      WHERE coach.awardType = 'Coach'
+        AND (l1.secureCareAwarded = 1 OR l1.secureCareAwardedDate IS NOT NULL)
+        AND (l2.secureCareAwarded = 1 OR l2.secureCareAwardedDate IS NOT NULL)
+        -- Level 3 awarded is optional for Coach
         AND (coach.secureCareAwarded = 0 OR coach.secureCareAwarded IS NULL)
         AND coach.secureCareAwardedDate IS NULL
         AND coach.[session#1] IS NOT NULL
@@ -3284,11 +3173,11 @@ class SecureCareService {
     if (filters.facility && filters.facility !== 'all') {
       const facilities = Array.isArray(filters.facility) ? filters.facility : [filters.facility];
       if (facilities.length === 1) {
-        countQuery += ` AND consultant.facility = @facilityCount0`;
+        countQuery += ` AND coach.facility = @facilityCount0`;
         countRequest.input('facilityCount0', sql.VarChar, facilities[0]);
       } else if (facilities.length > 1) {
         const facilityParams = facilities.map((f, i) => `@facilityCount${i}`).join(', ');
-        countQuery += ` AND consultant.facility IN (${facilityParams})`;
+        countQuery += ` AND coach.facility IN (${facilityParams})`;
         facilities.forEach((f, i) => {
           countRequest.input(`facilityCount${i}`, sql.VarChar, f);
         });
@@ -3296,25 +3185,23 @@ class SecureCareService {
     }
     
     if (filters.area && filters.area !== 'all') {
-      countQuery += ` AND consultant.area = @area`;
+      countQuery += ` AND coach.area = @area`;
       countRequest.input('area', sql.VarChar, filters.area);
     }
     
     if (filters.search) {
-      countQuery += ` AND (consultant.name LIKE @search OR consultant.employeeNumber LIKE @search)`;
+      countQuery += ` AND (coach.name LIKE @search OR coach.employeeNumber LIKE @search)`;
       countRequest.input('search', sql.VarChar, `%${filters.search}%`);
     }
     
     if (filters.jobTitle && filters.jobTitle !== 'all') {
-      countQuery += ` AND consultant.staffRoll = @jobTitle`;
+      countQuery += ` AND coach.staffRoll = @jobTitle`;
       countRequest.input('jobTitle', sql.VarChar, filters.jobTitle);
     }
     
     let countResult;
     try {
       countResult = await countRequest.query(countQuery);
-      const total = countResult.recordset[0].total;
-      console.log(`Coach total count: ${total}`);
     } catch (error) {
       console.error('Error getting Coach count:', error);
       throw error;
@@ -3322,7 +3209,6 @@ class SecureCareService {
     const total = countResult.recordset[0].total;
     
     // Transform results to match the aggregated format
-    console.log(`Transforming ${result.recordset.length} Coach records...`);
     const employees = result.recordset.map(record => ({
       employeeId: record.employeeId,
       employeeNumber: record.employeeNumber,
@@ -3381,7 +3267,6 @@ class SecureCareService {
       coachAwaiting: record.coachAwaiting
     }));
     
-    console.log(`Returning ${employees.length} employees for Coach view`);
     return {
       employees: employees,
       pagination: {

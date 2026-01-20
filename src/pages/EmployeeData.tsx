@@ -114,34 +114,11 @@ export default function EmployeeData() {
   const allEmployees: AggregatedEmployee[] = data?.employees || [];
   const pagination = data?.pagination || { currentPage: 1, totalPages: 1, totalEmployees: 0, itemsPerPage: 50 };
 
-  // Debug logging
   useEffect(() => {
     if (error) {
       console.error('Error fetching employee data:', error);
     }
-    if (data) {
-      console.log('Employee data received:', {
-        viewType,
-        employeeCount: allEmployees.length,
-        pagination
-      });
-    }
-  }, [error, data, viewType, allEmployees.length, pagination]);
-
-  // Debug: Log first employee's Level 1 data to check what we're receiving
-  useEffect(() => {
-    if (allEmployees.length > 0) {
-      const firstEmp = allEmployees[0];
-      console.log('First employee Level 1 data:', {
-        level1AssignedDate: firstEmp.level1AssignedDate,
-        level1CompletedDate: firstEmp.level1CompletedDate,
-        level1SecureCareAwarded: firstEmp.level1SecureCareAwarded,
-        level1SecureCareAwardedDate: firstEmp.level1SecureCareAwardedDate,
-        employeeNumber: firstEmp.employeeNumber,
-        name: firstEmp.name
-      });
-    }
-  }, [allEmployees]);
+  }, [error]);
 
   // Apply client-side sorting - show all employees (no column filters)
   const filteredEmployees = useMemo(() => {
@@ -625,4 +602,3 @@ export default function EmployeeData() {
     </div>
   );
 }
-

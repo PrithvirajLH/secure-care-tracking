@@ -3,8 +3,25 @@ const { canEditCompletedDate, getCurrentUser } = require('../config/permissions'
 /**
  * Middleware to check if user has permission to edit completed dates
  */
+function requireAuth(req, res, next) {
+  const userIdentifier = req.user?.identifier || getCurrentUser(req);
+  
+  if (!userIdentifier) {
+    return res.status(401).json({ 
+      error: 'Unauthorized',
+      message: 'User not identified. Authentication required.' 
+    });
+  }
+  
+  req.user = { identifier: userIdentifier };
+  next();
+}
+
+/**
+ * Middleware to check if user has permission to edit completed dates
+ */
 function requireEditCompletedDatePermission(req, res, next) {
-  const userIdentifier = getCurrentUser(req);
+  const userIdentifier = req.user?.identifier || getCurrentUser(req);
   
   if (!userIdentifier) {
     return res.status(401).json({ 
@@ -26,6 +43,7 @@ function requireEditCompletedDatePermission(req, res, next) {
 }
 
 module.exports = {
+  requireAuth,
   requireEditCompletedDatePermission
 };
 

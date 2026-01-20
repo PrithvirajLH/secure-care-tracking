@@ -5,6 +5,8 @@
 
 require('dotenv').config();
 
+const isProduction = process.env.NODE_ENV === 'production';
+
 // Get permissions from environment variable (comma-separated list)
 const getPermissionsFromEnv = () => {
   const envPermissions = process.env.EDIT_COMPLETED_DATE_PERMISSIONS;
@@ -48,14 +50,16 @@ function getCurrentUser(req) {
     return req.headers['x-ms-client-principal-name'];
   }
   
-  // Try custom header (for development/testing)
-  if (req.headers['x-user-email']) {
-    return req.headers['x-user-email'];
-  }
-  
-  // Try from query parameter (for development/testing only)
-  if (req.query.user) {
-    return req.query.user;
+  if (!isProduction) {
+    // Try custom header (for development/testing)
+    if (req.headers['x-user-email']) {
+      return req.headers['x-user-email'];
+    }
+    
+    // Try from query parameter (for development/testing only)
+    if (req.query.user) {
+      return req.query.user;
+    }
   }
   
   return null;

@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const secureCareService = require('../services/secureCareService');
-const { requireEditCompletedDatePermission } = require('../middleware/permissions');
+const { requireAuth, requireEditCompletedDatePermission } = require('../middleware/permissions');
 const { getCurrentUser, canEditCompletedDate } = require('../config/permissions');
 
 // Get employees by level with filters
@@ -139,7 +139,7 @@ router.get('/employee/:id/levels', async (req, res) => {
 });
 
 // Approve conference
-router.post('/approve', async (req, res) => {
+router.post('/approve', requireAuth, async (req, res) => {
   try {
     const { employeeId } = req.body;
     
@@ -160,7 +160,7 @@ router.post('/approve', async (req, res) => {
 });
 
 // Reject conference
-router.post('/reject', async (req, res) => {
+router.post('/reject', requireAuth, async (req, res) => {
   try {
     const { employeeId } = req.body;
     if (!employeeId) {
@@ -178,7 +178,7 @@ router.post('/reject', async (req, res) => {
 });
 
 // Schedule training
-router.post('/schedule', async (req, res) => {
+router.post('/schedule', requireAuth, async (req, res) => {
   try {
     const { employeeId, columnName, date } = req.body;
     
@@ -201,7 +201,7 @@ router.post('/schedule', async (req, res) => {
 });
 
 // Complete training
-router.post('/complete', async (req, res) => {
+router.post('/complete', requireAuth, async (req, res) => {
   try {
     const { employeeId, scheduleColumn, completeColumn } = req.body;
     
@@ -282,7 +282,7 @@ router.get('/advisors', async (req, res) => {
 });
 
 // Add new advisor
-router.post('/advisors', async (req, res) => {
+router.post('/advisors', requireAuth, async (req, res) => {
   try {
     const { firstName, lastName } = req.body;
     
@@ -320,7 +320,7 @@ router.get('/filter-options', async (req, res) => {
 });
 
 // Update employee notes
-router.post('/update-notes', async (req, res) => {
+router.post('/update-notes', requireAuth, async (req, res) => {
   try {
     const { employeeId, notes } = req.body;
     
@@ -341,7 +341,7 @@ router.post('/update-notes', async (req, res) => {
 });
 
 // Update employee advisor
-router.post('/update-advisor', async (req, res) => {
+router.post('/update-advisor', requireAuth, async (req, res) => {
   try {
     const { employeeId, advisorId } = req.body;
     
@@ -362,7 +362,7 @@ router.post('/update-advisor', async (req, res) => {
 });
 
 // Update employee notes for specific level/awardType
-router.post('/update-notes-level', async (req, res) => {
+router.post('/update-notes-level', requireAuth, async (req, res) => {
   try {
     const { employeeId, awardType, notes } = req.body;
     
@@ -383,7 +383,7 @@ router.post('/update-notes-level', async (req, res) => {
 });
 
 // Update employee advisor for specific level/awardType
-router.post('/update-advisor-level', async (req, res) => {
+router.post('/update-advisor-level', requireAuth, async (req, res) => {
   try {
     const { employeeId, awardType, advisorId } = req.body;
     

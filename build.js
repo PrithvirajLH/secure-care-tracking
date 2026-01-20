@@ -60,8 +60,25 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 8080;
 
+const rawOrigins = process.env.CORS_ORIGINS || '';
+const allowedOrigins = rawOrigins.split(',').map(origin => origin.trim()).filter(Boolean);
+const isProduction = process.env.NODE_ENV === 'production';
+const devFallbackOrigins = [\`http://localhost:\${PORT}\`, 'http://localhost:5173'];
+const corsOrigins = allowedOrigins.length > 0 ? allowedOrigins : (isProduction ? [] : devFallbackOrigins);
+
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin) {
+      return callback(null, true);
+    }
+    if (corsOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
