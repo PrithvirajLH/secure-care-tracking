@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const rateLimit = require('express-rate-limit');
 const path = require('path');
 require('dotenv').config();
 
@@ -11,6 +12,14 @@ const allowedOrigins = rawOrigins.split(',').map(origin => origin.trim()).filter
 const isProduction = process.env.NODE_ENV === 'production';
 const devFallbackOrigins = [`http://localhost:${PORT}`, 'http://localhost:5173'];
 const corsOrigins = allowedOrigins.length > 0 ? allowedOrigins : (isProduction ? [] : devFallbackOrigins);
+const rateLimitWindowMs = Number(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000;
+const rateLimitMax = Number(process.env.RATE_LIMIT_MAX) || 300;
+const apiRateLimiter = rateLimit({
+  windowMs: rateLimitWindowMs,
+  max: rateLimitMax,
+  standardHeaders: true,
+  legacyHeaders: false
+});
 
 // Middleware
 app.use(cors({
@@ -25,6 +34,7 @@ app.use(cors({
   },
   credentials: true
 }));
+app.use('/api', apiRateLimiter);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

@@ -473,9 +473,8 @@ export default function Training() {
       const currentFiltersString = JSON.stringify(filters);
       const exactQueryKey = ['employees-training', filters.level, currentPage, currentFiltersString];
       
-      // Remove the exact query from cache to force a fresh fetch
-      // This ensures we get the latest data from the server
-      queryClient.removeQueries({ queryKey: exactQueryKey });
+      // Mark the exact query as stale to refetch without clearing cached rows
+      await queryClient.invalidateQueries({ queryKey: exactQueryKey });
       
       // Also invalidate all training queries to ensure consistency
       queryClient.invalidateQueries({
@@ -1621,7 +1620,7 @@ export default function Training() {
    };
 
    // Loading state
-   if (isLoading) {
+   if (isLoading && !allEmployees.length) {
      return (
        <div className="flex items-center justify-center h-64">
          <div className="text-center">
@@ -1839,7 +1838,7 @@ export default function Training() {
                          <div className="w-3 h-3 border-2 border-blue-300 border-t-blue-600 rounded-full animate-spin"></div>
                          <span className="text-xs font-medium text-slate-600">Loading...</span>
                        </div>
-                ) : (
+                    ) : (
                       <div className="flex items-center space-x-1">
                         {(() => {
                           const totalCount = isAnyFilterActive ? aggregatedFilteredCount : totalEmployees;
@@ -1858,6 +1857,15 @@ export default function Training() {
                             </>
                           );
                         })()}
+                        {isFetching && (
+                          <span className="ml-2 inline-flex items-center gap-1 text-[10px] font-medium text-slate-500">
+                            <span className="relative flex h-2 w-2">
+                              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-75"></span>
+                              <span className="relative inline-flex h-2 w-2 rounded-full bg-sky-500"></span>
+                            </span>
+                            Refreshing
+                          </span>
+                        )}
                       </div>
                     )}
                    </div>

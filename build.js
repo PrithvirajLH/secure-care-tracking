@@ -54,6 +54,7 @@ try {
 console.log('🔧 Updating Backend Server...');
 const updatedServerContent = `const express = require('express');
 const cors = require('cors');
+const rateLimit = require('express-rate-limit');
 const path = require('path');
 require('dotenv').config();
 
@@ -65,6 +66,14 @@ const allowedOrigins = rawOrigins.split(',').map(origin => origin.trim()).filter
 const isProduction = process.env.NODE_ENV === 'production';
 const devFallbackOrigins = [\`http://localhost:\${PORT}\`, 'http://localhost:5173'];
 const corsOrigins = allowedOrigins.length > 0 ? allowedOrigins : (isProduction ? [] : devFallbackOrigins);
+const rateLimitWindowMs = Number(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000;
+const rateLimitMax = Number(process.env.RATE_LIMIT_MAX) || 300;
+const apiRateLimiter = rateLimit({
+  windowMs: rateLimitWindowMs,
+  max: rateLimitMax,
+  standardHeaders: true,
+  legacyHeaders: false
+});
 
 // Middleware
 app.use(cors({
@@ -79,6 +88,7 @@ app.use(cors({
   },
   credentials: true
 }));
+app.use('/api', apiRateLimiter);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -216,6 +226,11 @@ NODE_ENV=production
 
 # CORS Configuration (comma-separated origins)
 CORS_ORIGINS=http://localhost:8080,https://your-app-name.azurewebsites.net
+
+# Rate limiting
+# Window in milliseconds and max requests per window (applies to /api)
+RATE_LIMIT_WINDOW_MS=900000
+RATE_LIMIT_MAX=300
 `;
 
 fs.writeFileSync(path.join(backendDir, '.env.example'), envTemplate);
@@ -327,6 +342,7 @@ try {
       "cors": "^2.8.5",
       "dotenv": "^16.3.1",
       "express": "^4.18.2",
+      "express-rate-limit": "^7.4.0",
       "mssql": "^10.0.4",
       "csv-parse": "^5.5.6"
     },

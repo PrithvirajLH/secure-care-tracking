@@ -546,6 +546,20 @@ router.get('/analytics/metrics', async (req, res) => {
   }
 });
 
+// Dashboard summary (server-side aggregates)
+router.get('/dashboard/summary', async (req, res) => {
+  try {
+    const result = await secureCareService.getDashboardSummary();
+    res.json(result);
+  } catch (error) {
+    console.error('Get dashboard summary error:', error);
+    res.status(500).json({
+      error: 'Failed to get dashboard summary',
+      message: error.message
+    });
+  }
+});
+
 // Aggregates: Completions & Counts (date-range + filters)
 router.get('/aggregates/completions', async (req, res) => {
   try {

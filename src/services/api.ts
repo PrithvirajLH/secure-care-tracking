@@ -27,6 +27,23 @@ export interface EmployeeResponse {
   };
 }
 
+export interface DashboardSummary {
+  stats: any;
+  facilityRankings: {
+    top: any[];
+    bottom: any[];
+  };
+  recentActivity: Array<{
+    id: string;
+    type: string;
+    employeeName: string;
+    level: string;
+    date: string;
+    description: string;
+  }>;
+  activityCounts: Record<string, number>;
+}
+
 class SecureCareAPI {
   private baseURL: string;
 
@@ -491,6 +508,14 @@ class SecureCareAPI {
       throw new Error(`Failed to fetch all employee data: ${response.statusText}`);
     }
     
+    return response.json();
+  }
+
+  async getDashboardSummary(): Promise<DashboardSummary> {
+    const response = await fetch(`${this.baseURL}/securecare/dashboard/summary`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch dashboard summary: ${response.statusText}`);
+    }
     return response.json();
   }
 

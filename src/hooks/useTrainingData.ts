@@ -39,20 +39,7 @@ export const useTrainingData = () => {
       return trainingAPI.scheduleTraining(employeeId, scheduleColumn, date);
     },
     onSuccess: async (data, variables) => {
-      // Remove all matching queries from cache to force fresh fetch
-      // This is more aggressive than invalidate and ensures immediate UI updates in production
-      queryClient.removeQueries({ 
-        predicate: (query) => {
-          const key = query.queryKey[0];
-          return key === 'employees-unique' || key === 'employees-training' || key === 'employees-stats';
-        }
-      });
-      
-      // Also remove employee-specific queries
-      queryClient.removeQueries({ queryKey: trainingKeys.employee(variables.employeeId) });
-      queryClient.removeQueries({ queryKey: ['employee-levels', variables.employeeId] });
-      
-      // Invalidate to mark as stale (backup in case removeQueries doesn't catch everything)
+      // Invalidate to mark as stale so active queries refetch without dropping cached data
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: trainingKeys.employee(variables.employeeId) }),
         queryClient.invalidateQueries({ queryKey: ['employee-levels', variables.employeeId] }),
@@ -72,7 +59,7 @@ export const useTrainingData = () => {
         },
         type: 'active'
       }).catch(() => {
-        // Silently handle errors - the removeQueries will force fresh fetch on next render
+        // Silently handle errors - invalidation will refetch on next access
       });
       
       toast.success('Training scheduled successfully!', {
@@ -106,20 +93,7 @@ export const useTrainingData = () => {
       return trainingAPI.completeTraining(employeeId, scheduleColumn, completeColumn);
     },
     onSuccess: async (data, variables) => {
-      // Remove all matching queries from cache to force fresh fetch
-      // This is more aggressive than invalidate and ensures immediate UI updates in production
-      queryClient.removeQueries({ 
-        predicate: (query) => {
-          const key = query.queryKey[0];
-          return key === 'employees-unique' || key === 'employees-training' || key === 'employees-stats';
-        }
-      });
-      
-      // Also remove employee-specific queries
-      queryClient.removeQueries({ queryKey: trainingKeys.employee(variables.employeeId) });
-      queryClient.removeQueries({ queryKey: ['employee-levels', variables.employeeId] });
-      
-      // Invalidate to mark as stale (backup in case removeQueries doesn't catch everything)
+      // Invalidate to mark as stale so active queries refetch without dropping cached data
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: trainingKeys.employee(variables.employeeId) }),
         queryClient.invalidateQueries({ queryKey: ['employee-levels', variables.employeeId] }),
@@ -139,7 +113,7 @@ export const useTrainingData = () => {
         },
         type: 'active'
       }).catch(() => {
-        // Silently handle errors - the removeQueries will force fresh fetch on next render
+        // Silently handle errors - invalidation will refetch on next access
       });
       
       toast.success('Training marked as complete!', {
@@ -229,20 +203,7 @@ export const useTrainingData = () => {
       return trainingAPI.rescheduleTraining(employeeId, scheduleColumn, date);
     },
     onSuccess: async (data, variables) => {
-      // Remove all matching queries from cache to force fresh fetch
-      // This is more aggressive than invalidate and ensures immediate UI updates in production
-      queryClient.removeQueries({ 
-        predicate: (query) => {
-          const key = query.queryKey[0];
-          return key === 'employees-unique' || key === 'employees-training' || key === 'employees-stats';
-        }
-      });
-      
-      // Also remove employee-specific queries
-      queryClient.removeQueries({ queryKey: trainingKeys.employee(variables.employeeId) });
-      queryClient.removeQueries({ queryKey: ['employee-levels', variables.employeeId] });
-      
-      // Invalidate to mark as stale (backup in case removeQueries doesn't catch everything)
+      // Invalidate to mark as stale so active queries refetch without dropping cached data
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: trainingKeys.employee(variables.employeeId) }),
         queryClient.invalidateQueries({ queryKey: ['employee-levels', variables.employeeId] }),
@@ -262,7 +223,7 @@ export const useTrainingData = () => {
         },
         type: 'active'
       }).catch(() => {
-        // Silently handle errors - the removeQueries will force fresh fetch on next render
+        // Silently handle errors - invalidation will refetch on next access
       });
       
       toast.success('Training rescheduled successfully!', {

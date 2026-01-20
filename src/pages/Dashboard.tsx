@@ -1,16 +1,33 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Award, FileText, UsersRound, Clock, CheckCircle, AlertCircle, TrendingUp, Home, Calendar } from "lucide-react";
 import { Pie, PieChart, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, LabelList } from "recharts";
 import { motion } from "framer-motion";
-import { useApp } from "@/context/AppContext";
-import { parseDate } from "@/config/awardTypes";
 import PageHeader from "@/components/PageHeader";
 import { trainingAPI } from "@/services/api";
 
 // Refreshed palette for certification progress pie
 const COLORS = ["#4f46e5", "#14b8a6", "#f59e0b", "#ec4899", "#22c55e"];
+
+const EMPTY_STATS = {
+  total: 0,
+  totalCompleted: 0,
+  totalInProgress: 0,
+  totalPending: 0,
+  totalOverdue: 0,
+  awaitingApprovals: 0,
+  rejectedApprovals: 0,
+  completion: { level1: 0, level2: 0, level3: 0, consultant: 0, coach: 0 },
+  counts: {
+    level1: { completed: 0, inProgress: 0, pending: 0, overdue: 0 },
+    level2: { completed: 0, inProgress: 0, pending: 0, overdue: 0 },
+    level3: { completed: 0, inProgress: 0, pending: 0, overdue: 0 },
+    consultant: { completed: 0, inProgress: 0, pending: 0, overdue: 0 },
+    coach: { completed: 0, inProgress: 0, pending: 0, overdue: 0 }
+  }
+};
 
 // Helper function to get display names for requirement keys
 const getRequirementDisplayName = (requirementKey: string): string => {
@@ -49,327 +66,67 @@ const formatActivityDate = (dateString: string): string => {
 };
 
 export default function Dashboard() {
-  const { state } = useApp();
-
-  // State for fetching ALL employee records across all pages
-  const [allEmployees, setAllEmployees] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
-  const [loadingProgress, setLoadingProgress] = useState({ current: 0, total: 0 });
-
-  // Function to fetch all pages of employee data
-  const fetchAllEmployees = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    setAllEmployees([]);
-    
-    try {
-      // First, fetch page 1 to get total pages
-      const firstPageResult = await trainingAPI.getEmployeesByLevel('all', {
-        page: 1,
-        limit: 500 // Use 500 per page for efficiency
-      });
-      
-      const totalPages = firstPageResult.pagination.totalPages;
-      setLoadingProgress({ current: 1, total: totalPages });
-      
-      // Start with first page results
-      let accumulated = [...firstPageResult.employees];
-      
-      // Fetch remaining pages if there are more
-      if (totalPages > 1) {
-        const pagePromises: Promise<any>[] = [];
-        
-        // Fetch pages 2 through totalPages in parallel batches
-        for (let page = 2; page <= totalPages; page++) {
-          pagePromises.push(
-            trainingAPI.getEmployeesByLevel('all', {
-              page,
-              limit: 500
-            })
-          );
-        }
-        
-        // Process in batches of 5 to avoid overwhelming the server
-        const batchSize = 5;
-        for (let i = 0; i < pagePromises.length; i += batchSize) {
-          const batch = pagePromises.slice(i, i + batchSize);
-          const batchResults = await Promise.all(batch);
-          
-          batchResults.forEach(result => {
-            accumulated = [...accumulated, ...result.employees];
-          });
-          
-          setLoadingProgress({ current: Math.min(i + batchSize + 1, totalPages), total: totalPages });
-        }
-      }
-      
-      setAllEmployees(accumulated);
-    } catch (err) {
-      setError(err instanceof Error ? err : new Error('Failed to fetch employees'));
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  // Initial fetch on mount
-  useEffect(() => {
-    fetchAllEmployees();
-  }, [fetchAllEmployees]);
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: ['dashboard-summary'],
+    queryFn: () => trainingAPI.getDashboardSummary(),
+    staleTime: 2 * 60 * 1000
+  });
+  const lastRefetchRef = useRef(0);
 
   useEffect(() => {
     document.title = "SecureCare Training Dashboard";
   }, []);
 
-  // Auto-refresh when page becomes visible (user switches back to tab)
+  // Auto-refresh on visibility/focus with a short debounce to avoid duplicate refetches
   useEffect(() => {
+    const maybeRefetch = () => {
+      if (document.hidden) {
+        return;
+      }
+      const now = Date.now();
+      if (now - lastRefetchRef.current < 5000) {
+        return;
+      }
+      lastRefetchRef.current = now;
+      refetch();
+    };
+
     const handleVisibilityChange = () => {
       if (!document.hidden) {
-        fetchAllEmployees();
+        maybeRefetch();
       }
+    };
+
+    const handleFocus = () => {
+      maybeRefetch();
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [fetchAllEmployees]);
-
-  // Also refresh on window focus to capture rapid changes (e.g., awarded toggled)
-  useEffect(() => {
-    const handleFocus = () => {
-      fetchAllEmployees();
-    };
     window.addEventListener('focus', handleFocus);
-    return () => window.removeEventListener('focus', handleFocus);
-  }, [fetchAllEmployees]);
-
-  // Use accumulated employees from all pages
-  const employees = useMemo(() => {
-    if (allEmployees && allEmployees.length > 0) {
-      return allEmployees;
-    } else if (state.employees && state.employees.length > 0) {
-      return state.employees;
-    } else {
-      return [];
-    }
-  }, [allEmployees, state.employees]);
-
-  const stats = useMemo(() => {
-    // Get unique employees count (one record per employeeNumber)
-    const uniqueEmployeeNumbers = new Set(employees.map(e => e.employeeNumber));
-    const total = uniqueEmployeeNumbers.size;
-    
-    // Helper function to check if secureCareAwarded is truthy (handles boolean, number, string)
-    const checkAwarded = (e: any) => {
-      return e.secureCareAwarded === true || e.secureCareAwarded === 1 || e.secureCareAwarded === '1';
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
     };
+  }, [refetch]);
 
-    // Get unique employees prioritized by current, highest-status record per employeeNumber
-    const uniqueEmployees = (() => {
-      const employeeMap = new Map<string, any>();
-      const getRank = (e: any) => {
-        // Prefer awarded > approved conference > in progress > assigned
-        if (checkAwarded(e)) return 4;
-        const hasApprovedConf = e.conferenceCompleted && String(e.conferenceCompleted).trim() !== '' && (e.awaiting === 0 || e.awaiting === false);
-        if (hasApprovedConf) return 3;
-        const hasInProgress = e.conferenceCompleted && String(e.conferenceCompleted).trim() !== '' && (e.awaiting !== 1 && e.awaiting !== true);
-        if (hasInProgress) return 2;
-        if (e.assignedDate) return 1;
-        return 0;
-      };
-      const getTime = (e: any) => {
-        const dates = [
-          e.secureCareAwardedDate,
-          e.conferenceCompleted,
-          e.completedDate,
-          e.session3,
-          e.session2,
-          e.session1,
-          e.standingVideo,
-          e.sleepingVideo,
-          e.feedGradVideo,
-          e.noHandnoSpeak,
-          e.assignedDate
-        ].map((d: any) => d ? new Date(d).getTime() : 0);
-        return Math.max(0, ...dates);
-      };
-      for (const e of employees) {
-        const key = String(e.employeeNumber || e.employeeId);
-        const existing = employeeMap.get(key);
-        if (!existing) { employeeMap.set(key, e); continue; }
-        const aRank = getRank(e), bRank = getRank(existing);
-        if (aRank > bRank) { employeeMap.set(key, e); continue; }
-        if (aRank === bRank) {
-          const aTime = getTime(e), bTime = getTime(existing);
-          if (aTime > bTime) employeeMap.set(key, e);
-        }
-      }
-      return Array.from(employeeMap.values());
-    })();
-    
-    // Build per-level, per-employeeNumber deduplicated records
-    // Use same logic as training page to show both approved and rejected records
-    const perLevelEmployees = (() => {
-      const map = new Map<string, any>();
-      const getTime = (e: any) => {
-        const dates = [
-          e.secureCareAwardedDate,
-          e.conferenceCompleted,
-          e.completedDate,
-          e.session3,
-          e.session2,
-          e.session1,
-          e.standingVideo,
-          e.sleepingVideo,
-          e.feedGradVideo,
-          e.noHandnoSpeak,
-          e.assignedDate
-        ].map((d: any) => (d ? new Date(d).getTime() : 0));
-        return Math.max(0, ...dates);
-      };
-      for (const e of employees) {
-        const empNum = String(e.employeeNumber || e.employeeId);
-        const level = e.awardType || 'Unknown';
-        
-        // Create unique key that includes awaiting status to show both approved and rejected records
-        const awaitingStatus = e.awaiting === null ? 'rejected' : 
-                             e.awaiting === 0 ? 'approved' : 
-                             e.awaiting === 1 ? 'awaiting' : 'unknown';
-        const key = `${empNum}::${level}::${awaitingStatus}`;
-        
-        const existing = map.get(key);
-        if (!existing) { map.set(key, e); continue; }
-        const aTime = getTime(e), bTime = getTime(existing);
-        if (aTime > bTime) map.set(key, e);
-      }
-      return Array.from(map.values());
-    })();
+  const stats = data?.stats || EMPTY_STATS;
+  const facilityRankings = data?.facilityRankings || { top: [], bottom: [] };
+  const activityCounts = data?.activityCounts || {};
 
-    // Calculate completion rates for each level using per-level deduped records
-    const level1Completed = perLevelEmployees.filter(e => e.awardType === 'Level 1' && checkAwarded(e)).length;
-    const level2Completed = perLevelEmployees.filter(e => e.awardType === 'Level 2' && checkAwarded(e)).length;
-    const level3Completed = perLevelEmployees.filter(e => e.awardType === 'Level 3' && checkAwarded(e)).length;
-    const consultantCompleted = perLevelEmployees.filter(e => e.awardType === 'Consultant' && checkAwarded(e)).length;
-    const coachCompleted = perLevelEmployees.filter(e => e.awardType === 'Coach' && checkAwarded(e)).length;
-
-    // In-progress counts per level
-    // Level 1: Has assignedDate but not awarded
-    const level1InProgress = perLevelEmployees.filter(e => 
-      e.awardType === 'Level 1' && !checkAwarded(e) && !!e.assignedDate
-    ).length;
-    // Level 2+: Has conference completed, approved (awaiting=0), but not awarded
-    const level2InProgress = perLevelEmployees.filter(e => 
-      e.awardType === 'Level 2' && !checkAwarded(e) && 
-      e.conferenceCompleted && String(e.conferenceCompleted).trim() !== '' && 
-      (e.awaiting === 0 || e.awaiting === false)
-    ).length;
-    const level3InProgress = perLevelEmployees.filter(e => 
-      e.awardType === 'Level 3' && !checkAwarded(e) && 
-      e.conferenceCompleted && String(e.conferenceCompleted).trim() !== '' && 
-      (e.awaiting === 0 || e.awaiting === false)
-    ).length;
-    const consultantInProgress = perLevelEmployees.filter(e => 
-      e.awardType === 'Consultant' && !checkAwarded(e) && 
-      e.conferenceCompleted && String(e.conferenceCompleted).trim() !== '' && 
-      (e.awaiting === 0 || e.awaiting === false)
-    ).length;
-    const coachInProgress = perLevelEmployees.filter(e => 
-      e.awardType === 'Coach' && !checkAwarded(e) && 
-      e.conferenceCompleted && String(e.conferenceCompleted).trim() !== '' && 
-      (e.awaiting === 0 || e.awaiting === false)
-    ).length;
-
-    // Calculate pending counts (no award type assigned yet)
-    const level1Pending = employees.filter(e => !e.awardType || e.awardType === 'Level 1' && !e.assignedDate).length;
-    const level2Pending = employees.filter(e => e.awardType === 'Level 1' && checkAwarded(e) && !employees.some(emp => emp.employeeId === e.employeeId && emp.awardType === 'Level 2')).length;
-    const level3Pending = employees.filter(e => e.awardType === 'Level 2' && checkAwarded(e) && !employees.some(emp => emp.employeeId === e.employeeId && emp.awardType === 'Level 3')).length;
-    const consultantPending = employees.filter(e => e.awardType === 'Level 3' && checkAwarded(e) && !employees.some(emp => emp.employeeId === e.employeeId && emp.awardType === 'Consultant')).length;
-    const coachPending = employees.filter(e => e.awardType === 'Consultant' && checkAwarded(e) && !employees.some(emp => emp.employeeId === e.employeeId && emp.awardType === 'Coach')).length;
-
-    // Calculate overdue (assigned but not completed within expected timeframe)
-    const level1Overdue = employees.filter(e => {
-      if (e.awardType !== 'Level 1' || !e.assignedDate || checkAwarded(e)) return false;
-      const assignedDate = parseDate(e.assignedDate);
-      if (!assignedDate) return false;
-      const overdueDate = new Date(assignedDate.getTime() + 30 * 24 * 60 * 60 * 1000);
-      return overdueDate < new Date();
-    }).length;
-    const level2Overdue = employees.filter(e => {
-      if (e.awardType !== 'Level 2' || !e.assignedDate || checkAwarded(e)) return false;
-      const assignedDate = parseDate(e.assignedDate);
-      if (!assignedDate) return false;
-      const overdueDate = new Date(assignedDate.getTime() + 45 * 24 * 60 * 60 * 1000);
-      return overdueDate < new Date();
-    }).length;
-    const level3Overdue = employees.filter(e => {
-      if (e.awardType !== 'Level 3' || !e.assignedDate || checkAwarded(e)) return false;
-      const assignedDate = parseDate(e.assignedDate);
-      if (!assignedDate) return false;
-      const overdueDate = new Date(assignedDate.getTime() + 60 * 24 * 60 * 60 * 1000);
-      return overdueDate < new Date();
-    }).length;
-
-    // Awaiting approvals (L2+ conference completed but awaiting approval)
-    // Match Completions page logic: count all records with awaiting = 1 (not just unique employees)
-    const awaitingApprovals = employees.filter(e => {
-      if (e.awardType === 'Level 1') return false;
-      return e.awaiting === 1 || e.awaiting === true; // 1 or true => awaiting approval
-    }).length;
-
-    // Rejected approvals (conference completed but awaiting=null, indicating rejection)
-    // Use all employees, not just unique ones, to match completion page logic
-    const rejectedEmployees = employees.filter(e => {
-      return e.conferenceCompleted && e.conferenceCompleted.trim() !== '' && e.awaiting === null;
-    });
-    const rejectedApprovals = rejectedEmployees.length;
-    
-
-    // Calculate completion percentages as percentage of total employees assigned to each level
-    const level1Total = perLevelEmployees.filter(e => e.awardType === 'Level 1').length;
-    const level2Total = perLevelEmployees.filter(e => e.awardType === 'Level 2').length;
-    const level3Total = perLevelEmployees.filter(e => e.awardType === 'Level 3').length;
-    const consultantTotal = perLevelEmployees.filter(e => e.awardType === 'Consultant').length;
-    const coachTotal = perLevelEmployees.filter(e => e.awardType === 'Coach').length;
-    
-    const level1Percentage = Math.round((level1Completed / Math.max(level1Total, 1)) * 100);
-    const level2Percentage = Math.round((level2Completed / Math.max(level2Total, 1)) * 100);
-    const level3Percentage = Math.round((level3Completed / Math.max(level3Total, 1)) * 100);
-    const consultantPercentage = Math.round((consultantCompleted / Math.max(consultantTotal, 1)) * 100);
-    const coachPercentage = Math.round((coachCompleted / Math.max(coachTotal, 1)) * 100);
-
-    // Simple statistics based on secureCareAwarded field - count per-level records
-    // Count all completed records across all levels
-    const totalCompleted = level1Completed + level2Completed + level3Completed + consultantCompleted + coachCompleted;
-    
-    // Count all in-progress records across all levels
-    const totalInProgress = level1InProgress + level2InProgress + level3InProgress + consultantInProgress + coachInProgress;
-
-    const calculatedStats = {
-      total,
-      totalCompleted,
-      totalInProgress,
-      totalPending: level1Pending + level2Pending + level3Pending + consultantPending + coachPending,
-      totalOverdue: level1Overdue + level2Overdue + level3Overdue,
-      awaitingApprovals,
-      rejectedApprovals,
-      completion: { 
-        level1: level1Percentage, 
-        level2: level2Percentage, 
-        level3: level3Percentage, 
-        consultant: consultantPercentage, 
-        coach: coachPercentage 
-      },
-      counts: {
-        level1: { completed: level1Completed, inProgress: level1InProgress, pending: level1Pending, overdue: level1Overdue },
-        level2: { completed: level2Completed, inProgress: level2InProgress, pending: level2Pending, overdue: level2Overdue },
-        level3: { completed: level3Completed, inProgress: level3InProgress, pending: level3Pending, overdue: level3Overdue },
-        consultant: { completed: consultantCompleted, inProgress: consultantInProgress, pending: consultantPending, overdue: 0 },
-        coach: { completed: coachCompleted, inProgress: coachInProgress, pending: coachPending, overdue: 0 }
-      }
+  const recentActivity = useMemo(() => {
+    const iconMap: Record<string, any> = {
+      scheduled: Calendar,
+      completed: CheckCircle,
+      awaiting: AlertCircle,
+      awarded: Award,
+      conference: CheckCircle
     };
+    return (data?.recentActivity || []).map((activity: any) => ({
+      ...activity,
+      icon: iconMap[activity.type] || CheckCircle
+    }));
+  }, [data?.recentActivity]);
 
-
-    return calculatedStats;
-  }, [employees]);
 
   // Enhanced stats with basic employee data
   const enhancedStats = useMemo(() => {
@@ -434,276 +191,6 @@ export default function Dashboard() {
       };
     });
 
-  // Generate facility rankings (top and bottom) from actual employee data
-  const facilityRankings = useMemo(() => {
-    // Filter out employees with null/undefined facility names
-    // Handle both 'facility' and 'Facility' field names (case sensitivity)
-    const validEmployees = employees.filter(employee => {
-      const facilityName = employee.facility || employee.Facility;
-      return facilityName && 
-        facilityName.trim() !== '' && 
-        facilityName !== 'null' && 
-        facilityName !== 'undefined';
-    });
-
-    if (validEmployees.length === 0) {
-      return { top: [], bottom: [] };
-    }
-
-    const facilityStats = validEmployees.reduce((acc, employee) => {
-      // Normalize facility name: trim, lowercase, and remove extra spaces only
-      const facilityName = (employee.facility || employee.Facility)
-        .trim()
-        .toLowerCase()
-        .replace(/\s+/g, ' '); // Replace multiple spaces with single space
-      
-      if (!acc[facilityName]) {
-        acc[facilityName] = { total: 0, completed: 0, inProgress: 0, awaiting: 0 };
-      }
-      acc[facilityName].total++;
-      // Check if awarded using consistent logic (handles true, 1, '1')
-      const isEmployeeAwarded = employee.secureCareAwarded === true || employee.secureCareAwarded === 1 || employee.secureCareAwarded === '1';
-      if (isEmployeeAwarded) {
-        acc[facilityName].completed++;
-      } else if (employee.awaiting === 1 || employee.awaiting === true) {
-        acc[facilityName].awaiting++;
-      } else {
-        acc[facilityName].inProgress++;
-      }
-      return acc;
-    }, {} as Record<string, { total: number; completed: number; inProgress: number; awaiting: number }>);
-
-
-    // Calculate percentages and scores for all facilities
-    const WEIGHT_COMPLETED = 0.8; // give more weight to completed ratio
-    const WEIGHT_INPROGRESS = 0.2; // give less weight to in-progress count comparison
-
-    // Get max in-progress count for normalization
-    const maxInProgressCount = Math.max(...Object.values(facilityStats).map(s => (s as { total: number; completed: number; inProgress: number; awaiting: number }).inProgress), 1);
-
-    const facilityDataArray = Object.entries(facilityStats)
-      .map(([normalizedName, stats]) => {
-        const typedStats = stats as { total: number; completed: number; inProgress: number; awaiting: number };
-        
-        // Calculate completed percentage: completed / (completed + inProgress) * 100
-        const completedDenom = Math.max(typedStats.completed + typedStats.inProgress, 1);
-        const completedRatio = (typedStats.completed / completedDenom) * 100;
-        
-        // Calculate in-progress percentage: inProgress / (completed + inProgress) * 100
-        // This ensures completedRatio + inProgressRatio = 100%
-        const inProgressRatio = (typedStats.inProgress / completedDenom) * 100;
-        
-        // For in-progress comparison, use actual count normalized to 0-100 scale
-        // This allows facilities with more employees in progress to rank higher
-        const inProgressScore = maxInProgressCount > 0 ? (typedStats.inProgress / maxInProgressCount) * 100 : 0;
-        
-        // Calculate combined score using weighted combination
-        const combinedScore = WEIGHT_COMPLETED * completedRatio + WEIGHT_INPROGRESS * inProgressScore;
-        
-        // Capitalize first letter of each word for display
-        const displayName = normalizedName
-          .split(' ')
-          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-          .join(' ');
-        
-        return {
-          name: displayName.length > 25 ? displayName.substring(0, 25) + '...' : displayName,
-          fullName: displayName,
-          completedRatio: Math.round(completedRatio),
-          inProgressRatio: Math.round(inProgressRatio),
-          inProgressScore: Math.round(inProgressScore), // New field for the actual comparison score
-          combinedScore,
-          completedCount: typedStats.completed,
-          inProgressCount: typedStats.inProgress,
-          awaitingCount: typedStats.awaiting,
-          totalCount: typedStats.total,
-        };
-      })
-      .sort((a, b) => {
-        // Primary sort: by completion ratio (highest first)
-        // This ensures facilities with 100% completion rank together
-        if (Math.abs(b.completedRatio - a.completedRatio) > 0.01) {
-          return b.completedRatio - a.completedRatio;
-        }
-        // Secondary sort: by combined score when completion ratios are very close
-        if (Math.abs(b.combinedScore - a.combinedScore) > 0.01) {
-          return b.combinedScore - a.combinedScore;
-        }
-        // Tertiary sort: by total employees (larger facilities first when scores are equal)
-        if (b.totalCount !== a.totalCount) {
-          return b.totalCount - a.totalCount;
-        }
-        // Final sort: by name for consistency
-        return a.name.localeCompare(b.name);
-      });
-
-    // Top 5: highest combined scores (already in descending order)
-    const top = facilityDataArray.slice(0, 5);
-    
-    // Bottom 5: lowest combined scores
-    // slice(-5) gets last 5, reverse() puts worst performer first for display
-    const bottom = facilityDataArray.slice(-5).reverse();
-
-
-    return { top, bottom };
-  }, [employees]);
-
-  // Generate recent activity data
-  const recentActivity = useMemo(() => {
-    const activities: Array<{
-      id: string;
-      type: 'awaiting' | 'scheduled' | 'completed' | 'rescheduled' | 'awarded' | 'conference' | 'rejected';
-      employeeName: string;
-      level: string;
-      date: string;
-      description: string;
-      icon: any;
-      color: string;
-    }> = [];
-
-    employees.forEach(employee => {
-      const employeeName = employee.Employee || employee.name || 'Unknown Employee';
-      const level = employee.awardType || 'Unknown Level';
-      
-      // Assigned Date - add as scheduled activity
-      if (employee.assignedDate) {
-        activities.push({
-          id: `${employee.employeeId || employee.employeeNumber}-${level}-assigned-${employee.assignedDate}`,
-          type: 'scheduled',
-          employeeName,
-          level,
-          date: employee.assignedDate,
-          description: `Assigned to ${level}`,
-          icon: Calendar,
-          color: 'text-blue-600'
-        });
-      }
-
-      // Relias Training Completion
-      if (employee.completedDate) {
-        activities.push({
-          id: `${employee.employeeId || employee.employeeNumber}-${level}-relias-completed-${employee.completedDate}`,
-          type: 'completed',
-          employeeName,
-          level,
-          date: employee.completedDate,
-          description: `Completed Relias training for ${level}`,
-          icon: CheckCircle,
-          color: 'text-green-600'
-        });
-      }
-
-      // Conference Completion Activities
-      if (employee.conferenceCompleted) {
-        if (employee.awaiting === 1 || employee.awaiting === true) {
-          activities.push({
-            id: `${employee.employeeId || employee.employeeNumber}-${level}-conference-awaiting-${employee.conferenceCompleted}`,
-            type: 'awaiting',
-            employeeName,
-            level,
-            date: employee.conferenceCompleted,
-            description: `Conference completed, awaiting approval for ${level}`,
-            icon: AlertCircle,
-            color: 'text-amber-600'
-          });
-        } else if (employee.awaiting === false || employee.awaiting === 0 || employee.awaiting === null) {
-          activities.push({
-            id: `${employee.employeeId || employee.employeeNumber}-${level}-conference-approved-${employee.conferenceCompleted}`,
-            type: 'conference',
-            employeeName,
-            level,
-            date: employee.conferenceCompleted,
-            description: `Conference approved for ${level}`,
-            icon: CheckCircle,
-            color: 'text-green-600'
-          });
-        }
-      }
-
-      // Scheduled activities
-      const scheduledFields = [
-        { field: 'scheduleStandingVideo', name: 'Standing Video' },
-        { field: 'scheduleSleepingVideo', name: 'Sleeping Video' },
-        { field: 'scheduleFeedGradVideo', name: 'Feed/Grad Video' },
-        { field: 'schedulenoHandnoSpeak', name: 'No Hand/No Speak' },
-        { field: 'scheduleSession1', name: 'Session 1' },
-        { field: 'scheduleSession2', name: 'Session 2' },
-        { field: 'scheduleSession3', name: 'Session 3' }
-      ];
-
-      scheduledFields.forEach(({ field, name }) => {
-        if (employee[field]) {
-          activities.push({
-            id: `${employee.employeeId || employee.employeeNumber}-${level}-${field}-${employee[field]}`,
-            type: 'scheduled',
-            employeeName,
-            level,
-            date: employee[field],
-            description: `Scheduled for ${name} in ${level}`,
-            icon: Calendar,
-            color: 'text-blue-600'
-          });
-        }
-      });
-
-      // Completed activities
-      const completedFields = [
-        { field: 'standingVideo', name: 'Standing Video' },
-        { field: 'sleepingVideo', name: 'Sleeping Video' },
-        { field: 'feedGradVideo', name: 'Feed/Grad Video' },
-        { field: 'noHandnoSpeak', name: 'No Hand/No Speak' },
-        { field: 'session1', name: 'Session 1' },
-        { field: 'session2', name: 'Session 2' },
-        { field: 'session3', name: 'Session 3' }
-      ];
-
-      completedFields.forEach(({ field, name }) => {
-        if (employee[field]) {
-          activities.push({
-            id: `${employee.employeeId || employee.employeeNumber}-${level}-${field}-${employee[field]}`,
-            type: 'completed',
-            employeeName,
-            level,
-            date: employee[field],
-            description: `Completed ${name} in ${level}`,
-            icon: CheckCircle,
-            color: 'text-green-600'
-          });
-        }
-      });
-
-      // Awarded - check using consistent logic (handles true, 1, '1')
-      // Only include awarded activities that have a valid date to ensure accurate "latest awarded" display
-      const isAwarded = employee.secureCareAwarded === true || employee.secureCareAwarded === 1 || employee.secureCareAwarded === '1';
-      if (isAwarded) {
-        // Ensure the date is valid and not null/undefined/empty string
-        const awardedDate = employee.secureCareAwardedDate;
-        if (awardedDate && String(awardedDate).trim() !== '' && awardedDate !== 'null' && awardedDate !== 'undefined') {
-          activities.push({
-            id: `${employee.employeeId || employee.employeeNumber}-${level}-awarded-${awardedDate}`,
-            type: 'awarded',
-            employeeName,
-            level,
-            date: awardedDate,
-            description: `Awarded ${level}`,
-            icon: Award,
-            color: 'text-purple-600'
-          });
-        }
-      }
-    });
-
-    // Sort by date (most recent first) - don't limit here, let grouping handle it
-    const sortedActivities = activities
-      .sort((a, b) => {
-        const dateA = new Date(a.date).getTime();
-        const dateB = new Date(b.date).getTime();
-        return dateB - dateA;
-      });
-
-    return sortedActivities;
-  }, [employees]);
-
   // Loading state with progress indicator
   if (isLoading) {
     return (
@@ -711,11 +198,6 @@ export default function Dashboard() {
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
           <p className="text-gray-600">Loading dashboard data...</p>
-          {loadingProgress.total > 1 && (
-            <p className="text-sm text-gray-500 mt-2">
-              Fetching page {loadingProgress.current} of {loadingProgress.total}
-            </p>
-          )}
         </div>
       </div>
     );
@@ -729,7 +211,7 @@ export default function Dashboard() {
           <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
           <p className="text-red-600">Failed to load employees</p>
           <p className="text-sm text-gray-500 mt-1">{error.message}</p>
-          <Button onClick={() => fetchAllEmployees()} className="mt-2">
+          <Button onClick={() => refetch()} className="mt-2">
             Retry
           </Button>
         </div>
@@ -1086,12 +568,13 @@ export default function Dashboard() {
                 const activityGroups = allGroupTypes.map(type => {
                   const activities = groupedActivities[type] || [];
                   const config = groupConfig[type as keyof typeof groupConfig];
-                  return { type, activities, config };
+                  const totalCount = activityCounts[type] ?? activities.length;
+                  return { type, activities, config, totalCount };
                 });
 
                 return (
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-                    {activityGroups.map(({ type, activities, config }, groupIndex) => {
+                    {activityGroups.map(({ type, activities, config, totalCount }, groupIndex) => {
                       const IconComponent = config.icon;
                       
                       return (
@@ -1108,7 +591,7 @@ export default function Dashboard() {
                             </div>
                             <div className="min-w-0 flex-1">
                               <h3 className={`font-semibold ${config.textColor} text-base`}>{config.title}</h3>
-                              <p className="text-sm text-gray-600">{activities.length} {activities.length === 1 ? 'item' : 'items'}</p>
+                              <p className="text-sm text-gray-600">{totalCount} {totalCount === 1 ? 'item' : 'items'}</p>
                             </div>
                           </div>
                           
@@ -1153,10 +636,10 @@ export default function Dashboard() {
                             )}
                           </div>
                           
-                          {activities.length > 5 && (
+                          {totalCount > activities.length && (
                             <div className="mt-3 text-center">
                               <span className="text-sm text-gray-500">
-                                +{activities.length - 5} more {activities.length - 5 === 1 ? 'item' : 'items'}
+                                +{totalCount - activities.length} more {totalCount - activities.length === 1 ? 'item' : 'items'}
                               </span>
                             </div>
                           )}

@@ -99,6 +99,7 @@ export const useTrainingEmployees = (filters: EmployeeFilters, pageSize: number 
     gcTime: 10 * 60 * 1000,
     refetchOnMount: false, // Don't refetch on mount if data is fresh
     refetchOnWindowFocus: false, // Don't refetch on window focus
+    placeholderData: (prev) => prev,
   });
 
   const totalPages = data?.pagination?.totalPages || 0;
