@@ -258,7 +258,16 @@ module.exports = {
       LEFT JOIN dbo.Advisor a2 ON l2.advisorId = a2.advisorId
       LEFT JOIN dbo.Advisor a3 ON l3.advisorId = a3.advisorId
       WHERE l2.awardType = 'Level 2'
-        AND (l2.secureCareAwarded = 1 OR l2.secureCareAwardedDate IS NOT NULL)
+        AND (
+          (l2.secureCareAwarded = 1 OR l2.secureCareAwardedDate IS NOT NULL)
+          OR (
+            (l2.secureCareAwarded = 0 OR l2.secureCareAwarded IS NULL)
+            AND l2.secureCareAwardedDate IS NULL
+            AND l2.standingVideo IS NOT NULL
+            AND l2.sleepingVideo IS NOT NULL
+            AND l2.feedGradVideo IS NOT NULL
+          )
+        )
         AND l1.secureCareAwarded = 1
         AND l3.awardType = 'Level 3'
         AND (l3.secureCareAwarded = 0 OR l3.secureCareAwarded IS NULL)
@@ -339,7 +348,16 @@ module.exports = {
       INNER JOIN [dbo].[SecureCareEmployee] l1
         ON l1.employeeNumber = l2.employeeNumber AND l1.awardType = 'Level 1'
       WHERE l2.awardType = 'Level 2'
-        AND (l2.secureCareAwarded = 1 OR l2.secureCareAwardedDate IS NOT NULL)
+        AND (
+          (l2.secureCareAwarded = 1 OR l2.secureCareAwardedDate IS NOT NULL)
+          OR (
+            (l2.secureCareAwarded = 0 OR l2.secureCareAwarded IS NULL)
+            AND l2.secureCareAwardedDate IS NULL
+            AND l2.standingVideo IS NOT NULL
+            AND l2.sleepingVideo IS NOT NULL
+            AND l2.feedGradVideo IS NOT NULL
+          )
+        )
         AND l1.secureCareAwarded = 1
         AND l3.awardType = 'Level 3'
         AND (l3.secureCareAwarded = 0 OR l3.secureCareAwarded IS NULL)
@@ -446,7 +464,7 @@ module.exports = {
     };
   }
 
-  // Get employees ready for Consultant award (Level 3 awarded, all Consultant sessions completed, Consultant not awarded)
+  // Get employees ready for Consultant award (Level 1 awarded; Level 2 awarded or ready; sessions completed; Consultant not awarded)
 
   ,async getEmployeesReadyForConsultantAward(filters = {}) {
     const pool = await getPool();
@@ -505,7 +523,16 @@ module.exports = {
       LEFT JOIN dbo.Advisor aConsultant ON consultant.advisorId = aConsultant.advisorId
       WHERE consultant.awardType = 'Consultant'
         AND (l1.secureCareAwarded = 1 OR l1.secureCareAwardedDate IS NOT NULL)
-        AND (l2.secureCareAwarded = 1 OR l2.secureCareAwardedDate IS NOT NULL)
+        AND (
+          (l2.secureCareAwarded = 1 OR l2.secureCareAwardedDate IS NOT NULL)
+          OR (
+            (l2.secureCareAwarded = 0 OR l2.secureCareAwarded IS NULL)
+            AND l2.secureCareAwardedDate IS NULL
+            AND l2.standingVideo IS NOT NULL
+            AND l2.sleepingVideo IS NOT NULL
+            AND l2.feedGradVideo IS NOT NULL
+          )
+        )
         -- Level 3 awarded is optional for Consultant (no check needed)
         AND (consultant.secureCareAwarded = 0 OR consultant.secureCareAwarded IS NULL)
         AND consultant.secureCareAwardedDate IS NULL
@@ -598,7 +625,16 @@ module.exports = {
         ON l3.employeeNumber = consultant.employeeNumber AND l3.awardType = 'Level 3'
       WHERE consultant.awardType = 'Consultant'
         AND (l1.secureCareAwarded = 1 OR l1.secureCareAwardedDate IS NOT NULL)
-        AND (l2.secureCareAwarded = 1 OR l2.secureCareAwardedDate IS NOT NULL)
+        AND (
+          (l2.secureCareAwarded = 1 OR l2.secureCareAwardedDate IS NOT NULL)
+          OR (
+            (l2.secureCareAwarded = 0 OR l2.secureCareAwarded IS NULL)
+            AND l2.secureCareAwardedDate IS NULL
+            AND l2.standingVideo IS NOT NULL
+            AND l2.sleepingVideo IS NOT NULL
+            AND l2.feedGradVideo IS NOT NULL
+          )
+        )
         -- Level 3 awarded is optional for Consultant (no check needed)
         AND (consultant.secureCareAwarded = 0 OR consultant.secureCareAwarded IS NULL)
         AND consultant.secureCareAwardedDate IS NULL
@@ -718,19 +754,19 @@ module.exports = {
     };
   }
 
-  // Get employees ready for Coach award (Consultant awarded, all Coach sessions completed, Coach not awarded)
+  // Get employees ready for Coach award (Level 1 awarded; Level 2 awarded or ready; sessions completed; Coach not awarded)
 
   ,async getEmployeesReadyForCoachAward(filters = {}) {
     const pool = await getPool();
     
     let query = `
       SELECT DISTINCT
-        consultant.employeeNumber,
-        consultant.employeeId,
-        consultant.[name],
-        consultant.[area],
-        consultant.[facility],
-        consultant.staffRoll,
+        coach.employeeNumber,
+        coach.employeeId,
+        coach.[name],
+        coach.[area],
+        coach.[facility],
+        coach.staffRoll,
         CONVERT(varchar(10), l1.assignedDate, 120) AS level1AssignedDate,
         CONVERT(varchar(10), l1.completedDate, 120) AS level1CompletedDate,
         l1.secureCareAwarded AS level1SecureCareAwarded,
@@ -775,25 +811,32 @@ module.exports = {
         coach.secureCareAwarded AS coachSecureCareAwarded,
         CONVERT(varchar(10), coach.secureCareAwardedDate, 120) AS coachSecureCareAwardedDate,
         coach.awaiting AS coachAwaiting
-      FROM [dbo].[SecureCareEmployee] consultant
-      JOIN [dbo].[SecureCareEmployee] coach
-        ON coach.employeeNumber = consultant.employeeNumber
+      FROM [dbo].[SecureCareEmployee] coach
       INNER JOIN [dbo].[SecureCareEmployee] l1
-        ON l1.employeeNumber = consultant.employeeNumber AND l1.awardType = 'Level 1'
+        ON l1.employeeNumber = coach.employeeNumber AND l1.awardType = 'Level 1'
       INNER JOIN [dbo].[SecureCareEmployee] l2
-        ON l2.employeeNumber = consultant.employeeNumber AND l2.awardType = 'Level 2'
+        ON l2.employeeNumber = coach.employeeNumber AND l2.awardType = 'Level 2'
       LEFT JOIN [dbo].[SecureCareEmployee] l3
-        ON l3.employeeNumber = consultant.employeeNumber AND l3.awardType = 'Level 3'
+        ON l3.employeeNumber = coach.employeeNumber AND l3.awardType = 'Level 3'
+      LEFT JOIN [dbo].[SecureCareEmployee] consultant
+        ON consultant.employeeNumber = coach.employeeNumber AND consultant.awardType = 'Consultant'
       LEFT JOIN dbo.Advisor a2 ON l2.advisorId = a2.advisorId
       LEFT JOIN dbo.Advisor a3 ON l3.advisorId = a3.advisorId
       LEFT JOIN dbo.Advisor aConsultant ON consultant.advisorId = aConsultant.advisorId
       LEFT JOIN dbo.Advisor aCoach ON coach.advisorId = aCoach.advisorId
-      WHERE consultant.awardType = 'Consultant'
-        AND (consultant.secureCareAwarded = 1 OR consultant.secureCareAwardedDate IS NOT NULL)
-        AND l1.secureCareAwarded = 1
-        AND l2.secureCareAwarded = 1
+      WHERE coach.awardType = 'Coach'
+        AND (l1.secureCareAwarded = 1 OR l1.secureCareAwardedDate IS NOT NULL)
+        AND (
+          (l2.secureCareAwarded = 1 OR l2.secureCareAwardedDate IS NOT NULL)
+          OR (
+            (l2.secureCareAwarded = 0 OR l2.secureCareAwarded IS NULL)
+            AND l2.secureCareAwardedDate IS NULL
+            AND l2.standingVideo IS NOT NULL
+            AND l2.sleepingVideo IS NOT NULL
+            AND l2.feedGradVideo IS NOT NULL
+          )
+        )
         -- AND l3.secureCareAwarded = 1  -- Level 3 awarded is optional for Coach
-        AND coach.awardType = 'Coach'
         AND (coach.secureCareAwarded = 0 OR coach.secureCareAwarded IS NULL)
         AND coach.secureCareAwardedDate IS NULL
         AND coach.[session#1] IS NOT NULL
@@ -807,11 +850,11 @@ module.exports = {
     if (filters.facility && filters.facility !== 'all') {
       const facilities = Array.isArray(filters.facility) ? filters.facility : [filters.facility];
       if (facilities.length === 1) {
-        query += ` AND consultant.facility = @facility0`;
+        query += ` AND coach.facility = @facility0`;
         request.input('facility0', sql.VarChar, facilities[0]);
       } else if (facilities.length > 1) {
         const facilityParams = facilities.map((f, i) => `@facility${i}`).join(', ');
-        query += ` AND consultant.facility IN (${facilityParams})`;
+        query += ` AND coach.facility IN (${facilityParams})`;
         facilities.forEach((f, i) => {
           request.input(`facility${i}`, sql.VarChar, f);
         });
@@ -819,17 +862,17 @@ module.exports = {
     }
     
     if (filters.area && filters.area !== 'all') {
-      query += ` AND consultant.area = @area`;
+      query += ` AND coach.area = @area`;
       request.input('area', sql.VarChar, filters.area);
     }
     
     if (filters.search) {
-      query += ` AND (consultant.name LIKE @search OR consultant.employeeNumber LIKE @search)`;
+      query += ` AND (coach.name LIKE @search OR coach.employeeNumber LIKE @search)`;
       request.input('search', sql.VarChar, `%${filters.search}%`);
     }
     
     if (filters.jobTitle && filters.jobTitle !== 'all') {
-      query += ` AND consultant.staffRoll = @jobTitle`;
+      query += ` AND coach.staffRoll = @jobTitle`;
       request.input('jobTitle', sql.VarChar, filters.jobTitle);
     }
     
@@ -838,19 +881,19 @@ module.exports = {
     const sortOrder = normalizeSortOrder(filters.sortOrder);
     switch (sortBy) {
       case 'name':
-        query += ` ORDER BY consultant.name ${sortOrder.toUpperCase()}`;
+        query += ` ORDER BY coach.name ${sortOrder.toUpperCase()}`;
         break;
       case 'facility':
-        query += ` ORDER BY consultant.facility ${sortOrder.toUpperCase()}`;
+        query += ` ORDER BY coach.facility ${sortOrder.toUpperCase()}`;
         break;
       case 'area':
-        query += ` ORDER BY consultant.area ${sortOrder.toUpperCase()}, consultant.name ${sortOrder.toUpperCase()}`;
+        query += ` ORDER BY coach.area ${sortOrder.toUpperCase()}, coach.name ${sortOrder.toUpperCase()}`;
         break;
       case 'employeeId':
-        query += ` ORDER BY consultant.employeeNumber ${sortOrder.toUpperCase()}`;
+        query += ` ORDER BY coach.employeeNumber ${sortOrder.toUpperCase()}`;
         break;
       default:
-        query += ` ORDER BY consultant.area ${sortOrder.toUpperCase()}, consultant.name ${sortOrder.toUpperCase()}`;
+        query += ` ORDER BY coach.area ${sortOrder.toUpperCase()}, coach.name ${sortOrder.toUpperCase()}`;
     }
     
     // Add pagination - allow large limits to show all data
@@ -872,22 +915,27 @@ module.exports = {
     
     // Get total count
     let countQuery = `
-      SELECT COUNT(DISTINCT consultant.employeeNumber) as total
-      FROM [dbo].[SecureCareEmployee] consultant
-      JOIN [dbo].[SecureCareEmployee] coach
-        ON coach.employeeNumber = consultant.employeeNumber
+      SELECT COUNT(DISTINCT coach.employeeNumber) as total
+      FROM [dbo].[SecureCareEmployee] coach
       INNER JOIN [dbo].[SecureCareEmployee] l1
-        ON l1.employeeNumber = consultant.employeeNumber AND l1.awardType = 'Level 1'
+        ON l1.employeeNumber = coach.employeeNumber AND l1.awardType = 'Level 1'
       INNER JOIN [dbo].[SecureCareEmployee] l2
-        ON l2.employeeNumber = consultant.employeeNumber AND l2.awardType = 'Level 2'
+        ON l2.employeeNumber = coach.employeeNumber AND l2.awardType = 'Level 2'
       LEFT JOIN [dbo].[SecureCareEmployee] l3
-        ON l3.employeeNumber = consultant.employeeNumber AND l3.awardType = 'Level 3'
-      WHERE consultant.awardType = 'Consultant'
-        AND (consultant.secureCareAwarded = 1 OR consultant.secureCareAwardedDate IS NOT NULL)
-        AND l1.secureCareAwarded = 1
-        AND l2.secureCareAwarded = 1
+        ON l3.employeeNumber = coach.employeeNumber AND l3.awardType = 'Level 3'
+      WHERE coach.awardType = 'Coach'
+        AND (l1.secureCareAwarded = 1 OR l1.secureCareAwardedDate IS NOT NULL)
+        AND (
+          (l2.secureCareAwarded = 1 OR l2.secureCareAwardedDate IS NOT NULL)
+          OR (
+            (l2.secureCareAwarded = 0 OR l2.secureCareAwarded IS NULL)
+            AND l2.secureCareAwardedDate IS NULL
+            AND l2.standingVideo IS NOT NULL
+            AND l2.sleepingVideo IS NOT NULL
+            AND l2.feedGradVideo IS NOT NULL
+          )
+        )
         -- AND l3.secureCareAwarded = 1  -- Level 3 awarded is optional for Coach
-        AND coach.awardType = 'Coach'
         AND (coach.secureCareAwarded = 0 OR coach.secureCareAwarded IS NULL)
         AND coach.secureCareAwardedDate IS NULL
         AND coach.[session#1] IS NOT NULL
@@ -900,11 +948,11 @@ module.exports = {
     if (filters.facility && filters.facility !== 'all') {
       const facilities = Array.isArray(filters.facility) ? filters.facility : [filters.facility];
       if (facilities.length === 1) {
-        countQuery += ` AND consultant.facility = @facilityCount0`;
+        countQuery += ` AND coach.facility = @facilityCount0`;
         countRequest.input('facilityCount0', sql.VarChar, facilities[0]);
       } else if (facilities.length > 1) {
         const facilityParams = facilities.map((f, i) => `@facilityCount${i}`).join(', ');
-        countQuery += ` AND consultant.facility IN (${facilityParams})`;
+        countQuery += ` AND coach.facility IN (${facilityParams})`;
         facilities.forEach((f, i) => {
           countRequest.input(`facilityCount${i}`, sql.VarChar, f);
         });
@@ -912,17 +960,17 @@ module.exports = {
     }
     
     if (filters.area && filters.area !== 'all') {
-      countQuery += ` AND consultant.area = @area`;
+      countQuery += ` AND coach.area = @area`;
       countRequest.input('area', sql.VarChar, filters.area);
     }
     
     if (filters.search) {
-      countQuery += ` AND (consultant.name LIKE @search OR consultant.employeeNumber LIKE @search)`;
+      countQuery += ` AND (coach.name LIKE @search OR coach.employeeNumber LIKE @search)`;
       countRequest.input('search', sql.VarChar, `%${filters.search}%`);
     }
     
     if (filters.jobTitle && filters.jobTitle !== 'all') {
-      countQuery += ` AND consultant.staffRoll = @jobTitle`;
+      countQuery += ` AND coach.staffRoll = @jobTitle`;
       countRequest.input('jobTitle', sql.VarChar, filters.jobTitle);
     }
     

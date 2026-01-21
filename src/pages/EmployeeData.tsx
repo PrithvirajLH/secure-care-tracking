@@ -435,8 +435,8 @@ export default function EmployeeData() {
             : viewType === "ready-for-level3"
             ? "Employees ready for Level 3 award (Level 2 awarded, all Level 3 videos completed)"
             : viewType === "ready-for-consultant"
-            ? "Employees ready for Consultant award (Level 3 awarded, all Consultant sessions completed)"
-            : "Employees ready for Coach award (Consultant awarded, all Coach sessions completed)"
+            ? "Employees ready for Consultant award (Level 1 awarded; Level 2 awarded or videos completed; all Consultant sessions completed)"
+            : "Employees ready for Coach award (Level 1 awarded; Level 2 awarded or videos completed; all Coach sessions completed)"
         }
       >
         <div className="flex items-center gap-2">
