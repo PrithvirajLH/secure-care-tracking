@@ -1229,6 +1229,8 @@ export default function Training() {
     return count;
   }, [facilityFilter, areaFilter, committedSearchQuery, dateFilter, reqStatusFilters, filteredColumns, currentFieldMapping]);
 
+  const isAnyFilterApplied = activeFilterCount > 0;
+
   const clearFilters = () => {
     setFacilityFilter([]);
     setAreaFilter('all');
@@ -1872,7 +1874,7 @@ export default function Training() {
                  </div>
 
                  {/* Clear filters button */}
-                 {isAnyFilterActive && (
+                 {isAnyFilterApplied && (
                    <Button
                      variant="default"
                      size="sm"
