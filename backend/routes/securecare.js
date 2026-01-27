@@ -138,6 +138,15 @@ router.get('/employee/:id/levels', async (req, res) => {
   }
 });
 
+// Helper to get client IP address
+function getClientIp(req) {
+  return req.headers['x-forwarded-for']?.split(',')[0]?.trim() || 
+         req.headers['x-real-ip'] || 
+         req.connection?.remoteAddress || 
+         req.socket?.remoteAddress ||
+         null;
+}
+
 // Approve conference
 router.post('/approve', requireAuth, async (req, res) => {
   try {
@@ -147,7 +156,10 @@ router.post('/approve', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'employeeId is required' });
     }
     
-    const result = await secureCareService.approveConference(employeeId);
+    const userIdentifier = req.user?.identifier || getCurrentUser(req);
+    const ipAddress = getClientIp(req);
+    
+    const result = await secureCareService.approveConference(employeeId, userIdentifier, ipAddress);
     res.json(result);
     
   } catch (error) {
@@ -166,7 +178,11 @@ router.post('/reject', requireAuth, async (req, res) => {
     if (!employeeId) {
       return res.status(400).json({ error: 'employeeId is required' });
     }
-    const result = await secureCareService.rejectConference(employeeId);
+    
+    const userIdentifier = req.user?.identifier || getCurrentUser(req);
+    const ipAddress = getClientIp(req);
+    
+    const result = await secureCareService.rejectConference(employeeId, userIdentifier, ipAddress);
     res.json(result);
   } catch (error) {
     console.error('Reject conference error:', error);
@@ -188,7 +204,10 @@ router.post('/schedule', requireAuth, async (req, res) => {
       });
     }
     
-    const result = await secureCareService.scheduleTraining(employeeId, columnName, date);
+    const userIdentifier = req.user?.identifier || getCurrentUser(req);
+    const ipAddress = getClientIp(req);
+    
+    const result = await secureCareService.scheduleTraining(employeeId, columnName, date, userIdentifier, ipAddress);
     res.json(result);
     
   } catch (error) {
@@ -211,7 +230,10 @@ router.post('/complete', requireAuth, async (req, res) => {
       });
     }
     
-    const result = await secureCareService.completeTraining(employeeId, scheduleColumn, completeColumn);
+    const userIdentifier = req.user?.identifier || getCurrentUser(req);
+    const ipAddress = getClientIp(req);
+    
+    const result = await secureCareService.completeTraining(employeeId, scheduleColumn, completeColumn, userIdentifier, ipAddress);
     res.json(result);
     
   } catch (error) {
@@ -254,7 +276,10 @@ router.post('/edit-completed', requireEditCompletedDatePermission, async (req, r
       });
     }
     
-    const result = await secureCareService.editCompletedDate(employeeId, scheduleColumn, completeColumn, date);
+    const userIdentifier = req.user?.identifier || getCurrentUser(req);
+    const ipAddress = getClientIp(req);
+    
+    const result = await secureCareService.editCompletedDate(employeeId, scheduleColumn, completeColumn, date, userIdentifier, ipAddress);
     res.json(result);
     
   } catch (error) {
@@ -292,7 +317,10 @@ router.post('/advisors', requireAuth, async (req, res) => {
       });
     }
     
-    const advisor = await secureCareService.addAdvisor(firstName, lastName);
+    const userIdentifier = req.user?.identifier || getCurrentUser(req);
+    const ipAddress = getClientIp(req);
+    
+    const advisor = await secureCareService.addAdvisor(firstName, lastName, userIdentifier, ipAddress);
     res.status(201).json(advisor);
     
   } catch (error) {
@@ -328,7 +356,10 @@ router.post('/update-notes', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'employeeId is required' });
     }
     
-    const result = await secureCareService.updateEmployeeNotes(employeeId, notes);
+    const userIdentifier = req.user?.identifier || getCurrentUser(req);
+    const ipAddress = getClientIp(req);
+    
+    const result = await secureCareService.updateEmployeeNotes(employeeId, notes, userIdentifier, ipAddress);
     res.json(result);
     
   } catch (error) {
@@ -349,7 +380,10 @@ router.post('/update-advisor', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'employeeId is required' });
     }
     
-    const result = await secureCareService.updateEmployeeAdvisor(employeeId, advisorId);
+    const userIdentifier = req.user?.identifier || getCurrentUser(req);
+    const ipAddress = getClientIp(req);
+    
+    const result = await secureCareService.updateEmployeeAdvisor(employeeId, advisorId, userIdentifier, ipAddress);
     res.json(result);
     
   } catch (error) {
@@ -370,7 +404,10 @@ router.post('/update-notes-level', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'employeeId and awardType are required' });
     }
     
-    const result = await secureCareService.updateEmployeeNotesForLevel(employeeId, awardType, notes);
+    const userIdentifier = req.user?.identifier || getCurrentUser(req);
+    const ipAddress = getClientIp(req);
+    
+    const result = await secureCareService.updateEmployeeNotesForLevel(employeeId, awardType, notes, userIdentifier, ipAddress);
     res.json(result);
     
   } catch (error) {
@@ -391,7 +428,10 @@ router.post('/update-advisor-level', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'employeeId and awardType are required' });
     }
     
-    const result = await secureCareService.updateEmployeeAdvisorForLevel(employeeId, awardType, advisorId);
+    const userIdentifier = req.user?.identifier || getCurrentUser(req);
+    const ipAddress = getClientIp(req);
+    
+    const result = await secureCareService.updateEmployeeAdvisorForLevel(employeeId, awardType, advisorId, userIdentifier, ipAddress);
     res.json(result);
     
   } catch (error) {
@@ -653,6 +693,66 @@ router.get('/employee-data', async (req, res) => {
     console.error('Get all employee data error:', error);
     res.status(500).json({ 
       error: 'Internal server error',
+      message: error.message 
+    });
+  }
+});
+
+// ==================
+// AUDIT LOG ROUTES
+// (Protected - requires edit-completed-date permission)
+// ==================
+
+// Get audit logs with filtering and pagination
+router.get('/audit-logs', requireEditCompletedDatePermission, async (req, res) => {
+  try {
+    const filters = {
+      page: req.query.page || 1,
+      limit: req.query.limit || 50,
+      startDate: req.query.startDate,
+      endDate: req.query.endDate,
+      user: req.query.user,
+      action: req.query.action,
+      search: req.query.search
+    };
+    
+    const result = await secureCareService.getAuditLogs(filters);
+    res.json(result);
+    
+  } catch (error) {
+    console.error('Get audit logs error:', error);
+    res.status(500).json({ 
+      error: 'Failed to get audit logs',
+      message: error.message 
+    });
+  }
+});
+
+// Get unique users for audit filter dropdown
+router.get('/audit-logs/users', requireEditCompletedDatePermission, async (req, res) => {
+  try {
+    const users = await secureCareService.getAuditUsers();
+    res.json(users);
+    
+  } catch (error) {
+    console.error('Get audit users error:', error);
+    res.status(500).json({ 
+      error: 'Failed to get audit users',
+      message: error.message 
+    });
+  }
+});
+
+// Get audit log statistics
+router.get('/audit-logs/stats', requireEditCompletedDatePermission, async (req, res) => {
+  try {
+    const stats = await secureCareService.getAuditStats();
+    res.json(stats);
+    
+  } catch (error) {
+    console.error('Get audit stats error:', error);
+    res.status(500).json({ 
+      error: 'Failed to get audit stats',
       message: error.message 
     });
   }

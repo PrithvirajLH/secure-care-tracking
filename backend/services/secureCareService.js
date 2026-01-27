@@ -9,6 +9,8 @@ const analyticsMethods = require('./securecare/analytics');
 const dashboardMethods = require('./securecare/dashboard');
 const employeeDataMethods = require('./securecare/employeeData');
 const readinessMethods = require('./securecare/readiness');
+// Audit provider automatically selects Azure Table Storage or SQL Server
+const auditMethods = require('./securecare/auditProvider');
 
 class SecureCareService {
   getCacheKey(method, filters) {
@@ -41,7 +43,8 @@ Object.assign(
   analyticsMethods,
   dashboardMethods,
   employeeDataMethods,
-  readinessMethods
+  readinessMethods,
+  auditMethods
 );
 
 module.exports = new SecureCareService();

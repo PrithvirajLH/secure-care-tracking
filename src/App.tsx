@@ -14,6 +14,7 @@ const Training = lazy(() => import("./pages/Training"));
 const Advisors = lazy(() => import("./pages/Advisors"));
 const Completions = lazy(() => import("./pages/Completions"));
 const EmployeeData = lazy(() => import("./pages/EmployeeData"));
+const AuditLog = lazy(() => import("./pages/AuditLog"));
 
 
 // Loading component
@@ -57,6 +58,7 @@ const App = () => (
                     <Route path="/advisors" element={<Advisors />} />
                     <Route path="/completions" element={<Completions />} />
                     <Route path="/employee-data" element={<EmployeeData />} />
+                    <Route path="/audit-log" element={<AuditLog />} />
 
                     <Route path="*" element={<NotFound />} />
                   </Routes>

@@ -44,6 +44,49 @@ export interface DashboardSummary {
   activityCounts: Record<string, number>;
 }
 
+export interface AuditLogEntry {
+  auditId: number;
+  timestamp: string;
+  userIdentifier: string;
+  action: string;
+  tableName: string;
+  recordId: number | null;
+  employeeNumber: string | null;
+  employeeName: string | null;
+  awardType: string | null;
+  fieldName: string | null;
+  oldValue: string | null;
+  newValue: string | null;
+  details: string | null;
+  ipAddress: string | null;
+}
+
+export interface AuditLogsResponse {
+  logs: AuditLogEntry[];
+  pagination: {
+    currentPage: number;
+    totalPages: number;
+    totalItems: number;
+    itemsPerPage: number;
+  };
+}
+
+export interface AuditLogFilters {
+  page?: number;
+  limit?: number;
+  startDate?: string;
+  endDate?: string;
+  user?: string;
+  action?: string;
+  search?: string;
+}
+
+export interface AuditStats {
+  actionCounts: Array<{ action: string; count: number }>;
+  last7Days: Array<{ date: string; count: number }>;
+  topUsers: Array<{ userIdentifier: string; count: number }>;
+}
+
 class SecureCareAPI {
   private baseURL: string;
 
@@ -516,6 +559,53 @@ class SecureCareAPI {
     if (!response.ok) {
       throw new Error(`Failed to fetch dashboard summary: ${response.statusText}`);
     }
+    return response.json();
+  }
+
+  // ==================
+  // AUDIT LOG METHODS
+  // ==================
+
+  // Get audit logs with filtering and pagination
+  async getAuditLogs(filters: AuditLogFilters = {}): Promise<AuditLogsResponse> {
+    const params = new URLSearchParams();
+    
+    if (filters.page) params.append('page', filters.page.toString());
+    if (filters.limit) params.append('limit', filters.limit.toString());
+    if (filters.startDate) params.append('startDate', filters.startDate);
+    if (filters.endDate) params.append('endDate', filters.endDate);
+    if (filters.user && filters.user !== 'all') params.append('user', filters.user);
+    if (filters.action && filters.action !== 'all') params.append('action', filters.action);
+    if (filters.search) params.append('search', filters.search);
+    
+    const response = await fetch(`${this.baseURL}/securecare/audit-logs?${params}`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch audit logs: ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+
+  // Get unique users for audit filter dropdown
+  async getAuditUsers(): Promise<string[]> {
+    const response = await fetch(`${this.baseURL}/securecare/audit-logs/users`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch audit users: ${response.statusText}`);
+    }
+    
+    return response.json();
+  }
+
+  // Get audit log statistics
+  async getAuditStats(): Promise<AuditStats> {
+    const response = await fetch(`${this.baseURL}/securecare/audit-logs/stats`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch audit stats: ${response.statusText}`);
+    }
+    
     return response.json();
   }
 

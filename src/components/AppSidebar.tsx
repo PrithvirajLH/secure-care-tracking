@@ -1,11 +1,15 @@
 import { NavLink } from "react-router-dom";
-import { Users2, GraduationCap, CalendarClock, Home, FileText, Database } from "lucide-react";
+import { Users2, GraduationCap, CalendarClock, Home, FileText, Database, ClipboardList } from "lucide-react";
 import { useSidebar } from "@/components/ui/sidebar";
 import { motion } from "motion/react";
+import { useEditCompletedDatePermission } from "@/hooks/usePermissions";
 
 export default function AppSidebar() {
   const { open, animate } = useSidebar();
-  const items = [
+  const { data: permissionData } = useEditCompletedDatePermission();
+  const hasAuditAccess = permissionData?.hasPermission ?? false;
+
+  const baseItems = [
     { title: "Dashboard", to: "/", Icon: Home },
     { title: "Employees", to: "/employees", Icon: Users2 },
     { title: "Training", to: "/training", Icon: GraduationCap },
@@ -13,6 +17,11 @@ export default function AppSidebar() {
     { title: "Completions", to: "/completions", Icon: FileText },
     { title: "Award Readiness", to: "/employee-data", Icon: Database },
   ];
+
+  // Only show Audit Log for users with edit-completed-date permission
+  const items = hasAuditAccess 
+    ? [...baseItems, { title: "Audit Log", to: "/audit-log", Icon: ClipboardList }]
+    : baseItems;
 
   return (
     <div className="h-full flex flex-col">
