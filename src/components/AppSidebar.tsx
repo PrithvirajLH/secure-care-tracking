@@ -40,7 +40,7 @@ export default function AppSidebar() {
              to={to}
              end={to === "/"}
                            className={({ isActive }) =>
-                `flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm transition-colors w-full max-w-[220px] ${
+                `flex items-center justify-start gap-2 rounded-md px-3 py-2 text-sm transition-colors w-full max-w-[220px] ${
                   isActive ? "bg-purple-100 text-purple-700 shadow-sm" : "hover:bg-purple-50"
                 }`
               }
