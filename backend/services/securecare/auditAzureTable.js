@@ -1,17 +1,6 @@
-const { TableClient, TableServiceClient } = require('@azure/data-tables');
+const { TableClient } = require('@azure/data-tables');
 require('dotenv').config();
-
-// Action type constants for consistency
-const AuditActions = {
-  TRAINING_SCHEDULED: 'TRAINING_SCHEDULED',
-  TRAINING_COMPLETED: 'TRAINING_COMPLETED',
-  DATE_EDITED: 'DATE_EDITED',
-  CONFERENCE_APPROVED: 'CONFERENCE_APPROVED',
-  CONFERENCE_REJECTED: 'CONFERENCE_REJECTED',
-  NOTES_UPDATED: 'NOTES_UPDATED',
-  ADVISOR_CHANGED: 'ADVISOR_CHANGED',
-  ADVISOR_ADDED: 'ADVISOR_ADDED',
-};
+const { AuditActions } = require('./auditConstants');
 
 // Configuration
 const AZURE_STORAGE_CONNECTION_STRING = process.env.AZURE_STORAGE_CONNECTION_STRING;
@@ -64,6 +53,19 @@ function generateRowKey() {
  */
 function generatePartitionKey(date = new Date()) {
   return date.toISOString().substring(0, 7); // YYYY-MM
+}
+
+/**
+ * Sanitize input for OData queries to prevent injection attacks
+ * Escapes single quotes by doubling them (OData standard)
+ */
+function sanitizeODataInput(input) {
+  if (typeof input !== 'string') return input;
+  // Escape single quotes by doubling them
+  // Also remove any potentially dangerous characters
+  return input
+    .replace(/'/g, "''")           // Escape single quotes
+    .replace(/[\x00-\x1f]/g, '');  // Remove control characters
 }
 
 // Helper to get employee info for audit logging (uses SQL Server)
@@ -156,50 +158,67 @@ module.exports = {
       let filterParts = [];
       
       // Date range filter using partition keys for efficiency
+      // Validate and sanitize date inputs
       if (filters.startDate) {
-        const startPartition = filters.startDate.substring(0, 7); // YYYY-MM
-        filterParts.push(`PartitionKey ge '${startPartition}'`);
-        filterParts.push(`timestamp ge datetime'${filters.startDate}T00:00:00Z'`);
+        const startDateParsed = new Date(filters.startDate);
+        if (!isNaN(startDateParsed.getTime())) {
+          const startPartition = startDateParsed.toISOString().substring(0, 7); // YYYY-MM
+          filterParts.push(`PartitionKey ge '${startPartition}'`);
+          filterParts.push(`Timestamp ge datetime'${startDateParsed.toISOString()}'`);
+        }
       }
       
       if (filters.endDate) {
-        const endDate = new Date(filters.endDate);
-        endDate.setDate(endDate.getDate() + 1);
-        const endPartition = endDate.toISOString().substring(0, 7);
-        filterParts.push(`PartitionKey le '${endPartition}'`);
-        filterParts.push(`timestamp lt datetime'${endDate.toISOString()}'`);
+        const endDateParsed = new Date(filters.endDate);
+        if (!isNaN(endDateParsed.getTime())) {
+          endDateParsed.setDate(endDateParsed.getDate() + 1);
+          const endPartition = endDateParsed.toISOString().substring(0, 7);
+          filterParts.push(`PartitionKey le '${endPartition}'`);
+          filterParts.push(`Timestamp lt datetime'${endDateParsed.toISOString()}'`);
+        }
       }
       
-      // User filter
+      // User filter (sanitized to prevent OData injection)
       if (filters.user && filters.user !== 'all') {
-        filterParts.push(`userIdentifier eq '${filters.user}'`);
+        filterParts.push(`userIdentifier eq '${sanitizeODataInput(filters.user)}'`);
       }
       
-      // Action filter
+      // Action filter (sanitized to prevent OData injection)
       if (filters.action && filters.action !== 'all') {
-        filterParts.push(`action eq '${filters.action}'`);
+        filterParts.push(`action eq '${sanitizeODataInput(filters.action)}'`);
       }
       
       const filterQuery = filterParts.length > 0 ? filterParts.join(' and ') : undefined;
       
       // Query entities
-      const queryOptions = filterQuery ? { filter: filterQuery } : {};
+      const queryOptions = filterQuery ? { queryOptions: { filter: filterQuery } } : {};
       
       const entities = [];
       const iterator = client.listEntities(queryOptions);
       
-      // Collect all matching entities (we need to do client-side pagination and search)
+      // Maximum entities to load to prevent memory issues
+      const MAX_ENTITIES = 10000;
+      
+      // Collect matching entities (we need to do client-side pagination and search)
       for await (const entity of iterator) {
         // Client-side search filter (Azure Tables doesn't support LIKE/contains)
         if (filters.search) {
           const searchLower = filters.search.toLowerCase();
-          const nameMatch = entity.employeeName?.toLowerCase().includes(searchLower);
-          const numberMatch = entity.employeeNumber?.toLowerCase().includes(searchLower);
+          const nameValue = entity.employeeName != null ? String(entity.employeeName) : '';
+          const numberValue = entity.employeeNumber != null ? String(entity.employeeNumber) : '';
+          const nameMatch = nameValue.toLowerCase().includes(searchLower);
+          const numberMatch = numberValue.toLowerCase().includes(searchLower);
           if (!nameMatch && !numberMatch) {
             continue;
           }
         }
         entities.push(entity);
+        
+        // Safety limit to prevent memory issues with very large datasets
+        if (entities.length >= MAX_ENTITIES) {
+          console.warn(`Audit log query reached maximum entity limit (${MAX_ENTITIES}). Consider narrowing filters.`);
+          break;
+        }
       }
       
       // Sort by timestamp descending (row keys are already inverted for this)
@@ -255,7 +274,9 @@ module.exports = {
       // Query all entities and collect unique users
       // Note: In production with lots of data, you might want to maintain a separate index
       const iterator = client.listEntities({
-        select: ['userIdentifier']
+        queryOptions: {
+          select: ['userIdentifier']
+        }
       });
       
       for await (const entity of iterator) {

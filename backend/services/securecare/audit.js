@@ -1,16 +1,5 @@
 const { getPool, sql } = require('./helpers');
-
-// Action type constants for consistency
-const AuditActions = {
-  TRAINING_SCHEDULED: 'TRAINING_SCHEDULED',
-  TRAINING_COMPLETED: 'TRAINING_COMPLETED',
-  DATE_EDITED: 'DATE_EDITED',
-  CONFERENCE_APPROVED: 'CONFERENCE_APPROVED',
-  CONFERENCE_REJECTED: 'CONFERENCE_REJECTED',
-  NOTES_UPDATED: 'NOTES_UPDATED',
-  ADVISOR_CHANGED: 'ADVISOR_CHANGED',
-  ADVISOR_ADDED: 'ADVISOR_ADDED',
-};
+const { AuditActions } = require('./auditConstants');
 
 module.exports = {
   AuditActions,

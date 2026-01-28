@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { trainingAPI, AuditLogEntry, AuditLogFilters } from "@/services/api";
+import { trainingAPI, AuditLogFilters } from "@/services/api";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,87 +10,19 @@ import { CompactPagination } from "@/components/ui/compact-pagination";
 import PageHeader from "@/components/PageHeader";
 import { DatePicker } from "@/components/ui/date-picker";
 import { useEditCompletedDatePermission } from "@/hooks/usePermissions";
+import { getActionInfo, getActionTypes } from "@/config/auditConfig";
 import {
   ClipboardList,
   Search,
-  Calendar,
   User,
   Filter,
-  CheckCircle,
   XCircle,
-  Clock,
-  Edit,
-  UserPlus,
-  FileText,
-  Users,
   ChevronDown,
   ChevronUp,
   RefreshCw,
   ShieldX
 } from "lucide-react";
 import { format } from "date-fns";
-
-// Action type display configuration
-const actionConfig: Record<string, { label: string; color: string; icon: React.ElementType; bgColor: string }> = {
-  TRAINING_SCHEDULED: { 
-    label: "Training Scheduled", 
-    color: "text-yellow-700", 
-    icon: Clock,
-    bgColor: "bg-yellow-50 border-yellow-200"
-  },
-  TRAINING_COMPLETED: { 
-    label: "Training Completed", 
-    color: "text-blue-700", 
-    icon: CheckCircle,
-    bgColor: "bg-blue-50 border-blue-200"
-  },
-  DATE_EDITED: { 
-    label: "Date Edited", 
-    color: "text-orange-700", 
-    icon: Edit,
-    bgColor: "bg-orange-50 border-orange-200"
-  },
-  CONFERENCE_APPROVED: { 
-    label: "Conference Approved", 
-    color: "text-green-700", 
-    icon: CheckCircle,
-    bgColor: "bg-green-50 border-green-200"
-  },
-  CONFERENCE_REJECTED: { 
-    label: "Conference Rejected", 
-    color: "text-red-700", 
-    icon: XCircle,
-    bgColor: "bg-red-50 border-red-200"
-  },
-  NOTES_UPDATED: { 
-    label: "Notes Updated", 
-    color: "text-yellow-700", 
-    icon: FileText,
-    bgColor: "bg-yellow-50 border-yellow-200"
-  },
-  ADVISOR_CHANGED: { 
-    label: "Advisor Changed", 
-    color: "text-purple-700", 
-    icon: Users,
-    bgColor: "bg-purple-50 border-purple-200"
-  },
-  ADVISOR_ADDED: { 
-    label: "Advisor Added", 
-    color: "text-indigo-700", 
-    icon: UserPlus,
-    bgColor: "bg-indigo-50 border-indigo-200"
-  },
-};
-
-// Get action display info with fallback
-function getActionInfo(action: string) {
-  return actionConfig[action] || { 
-    label: action, 
-    color: "text-gray-700", 
-    icon: FileText,
-    bgColor: "bg-gray-50 border-gray-200"
-  };
-}
 
 // Format timestamp for display
 function formatTimestamp(timestamp: string): string {
@@ -125,11 +57,22 @@ export default function AuditLog() {
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
 
-  // Search debounce
+  // Search input with debounce
   const [searchInput, setSearchInput] = useState("");
 
+  // Debounce search input - only update filters after user stops typing
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (searchInput !== filters.search) {
+        handleFilterChange("search", searchInput);
+      }
+    }, 300);
+    
+    return () => clearTimeout(timeoutId);
+  }, [searchInput]);
+
   // Fetch audit logs
-  const { data: auditData, isLoading, isFetching, refetch } = useQuery({
+  const { data: auditData, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: ["audit-logs", filters],
     queryFn: () => trainingAPI.getAuditLogs(filters),
     staleTime: 30 * 1000, // 30 seconds
@@ -162,15 +105,6 @@ export default function AuditLog() {
     handleFilterChange("endDate", date ? format(date, "yyyy-MM-dd") : undefined);
   };
 
-  // Handle search with debounce
-  const handleSearchChange = (value: string) => {
-    setSearchInput(value);
-    // Debounce search
-    const timeoutId = setTimeout(() => {
-      handleFilterChange("search", value);
-    }, 300);
-    return () => clearTimeout(timeoutId);
-  };
 
   // Clear all filters
   const clearFilters = () => {
@@ -188,8 +122,8 @@ export default function AuditLog() {
     setSearchInput("");
   };
 
-  // Get action types for dropdown
-  const actionTypes = useMemo(() => Object.keys(actionConfig), []);
+  // Get action types for dropdown (from shared config)
+  const actionTypes = getActionTypes();
 
   const logs = auditData?.logs || [];
   const pagination = auditData?.pagination || { currentPage: 1, totalPages: 0, totalItems: 0, itemsPerPage: 20 };
@@ -218,6 +152,25 @@ export default function AuditLog() {
           You don't have permission to view the audit log. 
           Please contact your administrator if you believe this is an error.
         </p>
+      </div>
+    );
+  }
+
+  // Show error if API call failed
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] text-center">
+        <div className="bg-red-50 rounded-full p-6 mb-4">
+          <XCircle className="h-16 w-16 text-red-400" />
+        </div>
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Error Loading Audit Logs</h2>
+        <p className="text-gray-600 max-w-md mb-4">
+          {error instanceof Error ? error.message : "An unexpected error occurred while loading the audit logs."}
+        </p>
+        <Button onClick={() => refetch()} className="flex items-center gap-2">
+          <RefreshCw className="h-4 w-4" />
+          Try Again
+        </Button>
       </div>
     );
   }
@@ -253,7 +206,7 @@ export default function AuditLog() {
               <Input
                 placeholder="Name or employee number..."
                 value={searchInput}
-                onChange={(e) => handleSearchChange(e.target.value)}
+                onChange={(e) => setSearchInput(e.target.value)}
                 className="pl-10"
               />
             </div>
